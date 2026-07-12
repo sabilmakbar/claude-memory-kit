@@ -52,8 +52,11 @@ for one of:
 
 - **Accept** — the rule becomes a permanent memory. From then on, every Claude session
   starts already knowing it, and you should never have to repeat that correction again.
-- **Reject** — the proposal is filed away as rejected and will never be suggested again,
-  even if the pattern reappears.
+- **Reject** — the proposal is filed away. By default that's "not now": if the same
+  pattern clearly keeps happening afterwards (several separate days of fresh evidence),
+  it may come back **once**, marked as resurfaced — reject it a second time and it's
+  gone for good. If you already know it's a never, say "never" and it's final
+  immediately.
 - **Rephrase** — you like the idea but not the wording; give your own phrasing and that's
   what gets saved.
 - **Leave it** — undecided items simply stay in the list and keep collecting evidence.

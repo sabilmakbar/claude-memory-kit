@@ -55,8 +55,11 @@ and adjust anything inflated or understated; write a one-line judge note per ent
 - **Match first** against ALL existing entries (Pending, Accepted, Rejected):
   - Matches **Pending** → append new evidence (max 3 quotes kept, ≤140 chars each,
     count the rest), update `last_seen`, increment `days_seen`, rescore, re-judge.
-  - Matches **Rejected** → do NOT re-propose. Optionally add one `resurfaced:` line
-    under the rejected entry with the new date.
+  - Matches **Rejected** → append a `resurfaced:` date line under the entry, but keep it
+    in Rejected — with ONE exception: if the entry is NOT marked `(final)` and its
+    resurfaced dates span ≥3 distinct days *after* the rejection date, move it back to
+    `## Pending` once, prefixed **[resurfaced]** in the title, keeping the rejection
+    history visible. An entry rejected twice, or marked `(final)`, is never re-proposed.
   - Matches **Accepted** → skip.
 - New candidates get the next `P-NNN` id.
 - Keep `## Pending` sorted by total score, descending (the session-start ping shows the top one).
@@ -78,8 +81,10 @@ and adjust anything inflated or understated; write a one-line judge note per ent
 > Then ask accept / reject / rephrase. **Accept** → create
 > the rule in the user's global memory (follow their memory-file conventions), then move
 > the entry to `## Accepted` with date + destination file. **Reject** → move it to
-> `## Rejected` with date + one-line reason. Never delete `## Rejected` entries — the
-> miner uses them to avoid re-proposing.
+> `## Rejected` with date + one-line reason; ask whether it's "not now" (default — may
+> resurface once if the pattern clearly persists) or "never" (append `(final)` — gone for
+> good). A second rejection of a resurfaced item is automatically `(final)`. Never delete
+> `## Rejected` entries — the miner uses them to avoid re-proposing.
 
 ## Pending
 
