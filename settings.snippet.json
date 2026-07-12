@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.claude/scripts/feedback-proposals-ping.sh\" 2>/dev/null || true"
+          },
+          {
+            "type": "command",
+            "command": "( \"$HOME/.claude/scripts/run-feedback-miner.sh\" >/dev/null 2>&1 & ) ; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}
