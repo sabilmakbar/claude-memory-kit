@@ -71,6 +71,12 @@ That's the whole loop: **notice → check → propose → you decide → Claude 
   become memory. The miner writes to exactly one file: the tracker.
 - **Cost is small.** One short Claude call per day, reading only what you typed
   (typically a few dozen messages).
+- **Telling Claude directly still works — and wins.** Saying "remember this" /
+  "add this to feedback" in any session saves a preference immediately, no review needed.
+  The miner only fills the gaps you *didn't* think to dictate: anything already in memory
+  is never proposed, and if you manually add something that was sitting in the proposal
+  list, the proposal quietly retires itself. Rules that arrived via the miner carry a
+  small provenance marker, so you can always tell the two apart.
 - **"Nothing today" is normal.** On most days everything you emphasized is either
   project-specific or already in memory — the tracker just logs "0 new" and moves on.
 - **You can always just read the file.** The tracker is plain markdown at

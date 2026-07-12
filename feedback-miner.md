@@ -52,6 +52,9 @@ and adjust anything inflated or understated; write a one-line judge note per ent
 
 ## Updating the tracker
 
+- **Retire solved proposals:** if a **Pending** entry is now fully covered by memory or
+  CLAUDE.md (the user added it manually since the last run), move it to `## Accepted`
+  with the note `covered manually on <date>` — never keep proposing what's already solved.
 - **Match first** against ALL existing entries (Pending, Accepted, Rejected):
   - Matches **Pending** → append new evidence (max 3 quotes kept, ≤140 chars each,
     count the rest), update `last_seen`, increment `days_seen`, rescore, re-judge.
@@ -79,8 +82,10 @@ and adjust anything inflated or understated; write a one-line judge note per ent
 > the question text itself must embed the rule + in-practice + evidence (the dialog is
 > what the user reads — it must be self-contained, not rely on chat text above it).
 > Then ask accept / reject / rephrase. **Accept** → create
-> the rule in the user's global memory (follow their memory-file conventions), then move
-> the entry to `## Accepted` with date + destination file. **Reject** → move it to
+> the rule in the user's global memory (follow their memory-file conventions), marking
+> its provenance in the file (e.g. a `source: feedback-miner (P-NNN, accepted YYYY-MM-DD)`
+> metadata line) so mined rules stay distinguishable from manually-dictated ones; then
+> move the entry to `## Accepted` with date + destination file. **Reject** → move it to
 > `## Rejected` with date + one-line reason; ask whether it's "not now" (default — may
 > resurface once if the pattern clearly persists) or "never" (append `(final)` — gone for
 > good). A second rejection of a resurfaced item is automatically `(final)`. Never delete
