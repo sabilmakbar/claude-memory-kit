@@ -69,8 +69,10 @@ and adjust anything inflated or understated; write a one-line judge note per ent
 # Feedback proposals (auto-mined daily)
 > Say **"review feedback proposals"** in any Claude session to accept/reject pending items.
 >
-> Review protocol (for the assisting Claude): walk `## Pending` top-down, presenting each
-> item's rule, scores, and evidence; ask accept / reject / rephrase. **Accept** → create
+> Review protocol (for the assisting Claude): walk `## Pending` top-down. Present each
+> item IN FULL — the complete rule text, what it means in practice (when it fires, when
+> it doesn't), scores, and evidence — never just the title; the user should not have to
+> ask what a proposal is. Then ask accept / reject / rephrase. **Accept** → create
 > the rule in the user's global memory (follow their memory-file conventions), then move
 > the entry to `## Accepted` with date + destination file. **Reject** → move it to
 > `## Rejected` with date + one-line reason. Never delete `## Rejected` entries — the
@@ -92,6 +94,7 @@ and adjust anything inflated or understated; write a one-line judge note per ent
 ```markdown
 ### P-001 · total 21.5 · <short title>
 - **proposed rule:** <one/two sentences, written as a feedback memory would be>
+- **in practice:** <when it fires; what's exempt — concrete enough to judge without asking>
 - **kind:** new-rule | amendment(<existing_file.md>: <gap>)
 - **scores:** freq N · intensity N · novelty N · generality N — **judge:** <one line>
 - **evidence:** [YYYY-MM-DD proj/sess] "quote" · [..] "quote" (+K more)
