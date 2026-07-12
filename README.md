@@ -10,6 +10,9 @@ Everything runs and stays **on your machine**: transcripts are read locally, the
 LLM call per day goes through your own `claude` CLI, and the proposals tracker is a
 local file.
 
+**New to this? Read [HOW-IT-WORKS.md](HOW-IT-WORKS.md)** — the full flow in
+non-technical language.
+
 ## How it works
 
 ```
