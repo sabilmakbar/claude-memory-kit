@@ -72,7 +72,10 @@ and adjust anything inflated or understated; write a one-line judge note per ent
 > Review protocol (for the assisting Claude): walk `## Pending` top-down. Present each
 > item IN FULL — the complete rule text, what it means in practice (when it fires, when
 > it doesn't), scores, and evidence — never just the title; the user should not have to
-> ask what a proposal is. Then ask accept / reject / rephrase. **Accept** → create
+> ask what a proposal is. If decisions are collected via an interactive question dialog,
+> the question text itself must embed the rule + in-practice + evidence (the dialog is
+> what the user reads — it must be self-contained, not rely on chat text above it).
+> Then ask accept / reject / rephrase. **Accept** → create
 > the rule in the user's global memory (follow their memory-file conventions), then move
 > the entry to `## Accepted` with date + destination file. **Reject** → move it to
 > `## Rejected` with date + one-line reason. Never delete `## Rejected` entries — the
