@@ -68,8 +68,13 @@ and adjust anything inflated or understated; write a one-line judge note per ent
 ```markdown
 # Feedback proposals (auto-mined daily)
 > Say **"review feedback proposals"** in any Claude session to accept/reject pending items.
-> Accepted → add it to your global Claude memory (or CLAUDE.md). Rejected → stays here
-> so it is never re-proposed.
+>
+> Review protocol (for the assisting Claude): walk `## Pending` top-down, presenting each
+> item's rule, scores, and evidence; ask accept / reject / rephrase. **Accept** → create
+> the rule in the user's global memory (follow their memory-file conventions), then move
+> the entry to `## Accepted` with date + destination file. **Reject** → move it to
+> `## Rejected` with date + one-line reason. Never delete `## Rejected` entries — the
+> miner uses them to avoid re-proposing.
 
 ## Pending
 

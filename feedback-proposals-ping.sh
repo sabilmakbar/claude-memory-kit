@@ -11,4 +11,4 @@ N=$(printf '%s' "$PENDING" | grep -c '^### P-')
 [ "$N" -gt 0 ] || exit 0
 
 TOP=$(printf '%s\n' "$PENDING" | head -1 | sed 's/^### //; s/["\\]//g')
-printf '{"systemMessage": "%s feedback proposal(s) pending (top: %s). Say: review feedback proposals."}\n' "$N" "$TOP"
+printf '{"systemMessage": "%s feedback proposal(s) pending (top: %s). Say: review feedback proposals (tracker: ~/.local/share/claude-feedback/proposals.md)."}\n' "$N" "$TOP"
