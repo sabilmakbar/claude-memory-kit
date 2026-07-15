@@ -22,6 +22,10 @@ install -m 0755 "$REPO/run-feedback-miner.sh"      "$CLAUDE/scripts/run-feedback
 install -m 0755 "$REPO/feedback-proposals-ping.sh" "$CLAUDE/scripts/feedback-proposals-ping.sh"
 install -m 0644 "$REPO/feedback-miner.md"          "$CLAUDE/scripts/feedback-miner.md"
 
+echo "→ installing the review skill"
+mkdir -p "$CLAUDE/skills"
+cp -r "$REPO/skills/review-feedback-proposals" "$CLAUDE/skills/"
+
 echo "→ wiring SessionStart hooks into settings.json"
 [ -f "$SETT" ] || echo '{}' > "$SETT"
 if jq -e '.hooks.SessionStart[]?.hooks[]? | select(.command | contains("run-feedback-miner"))' "$SETT" >/dev/null 2>&1; then

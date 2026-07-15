@@ -78,23 +78,11 @@ and adjust anything inflated or understated; write a one-line judge note per ent
 
 ```markdown
 # Feedback proposals (auto-mined daily)
-> Say **"review feedback proposals"** in any Claude session to accept/reject pending items.
->
-> Review protocol (for the assisting Claude): walk `## Pending` top-down. Present each
-> item IN FULL — the complete rule text, what it means in practice (when it fires, when
-> it doesn't), scores, and evidence — never just the title; the user should not have to
-> ask what a proposal is. If decisions are collected via an interactive question dialog,
-> the question text itself must embed the rule + in-practice + evidence (the dialog is
-> what the user reads — it must be self-contained, not rely on chat text above it).
-> Then ask accept / reject / rephrase. **Accept** → create
-> the rule in the user's global memory (follow their memory-file conventions), marking
-> its provenance in the file (e.g. a `source: feedback-miner (P-NNN, accepted YYYY-MM-DD)`
-> metadata line) so mined rules stay distinguishable from manually-dictated ones; then
-> move the entry to `## Accepted` with date + destination file. **Reject** → move it to
-> `## Rejected` with date + one-line reason; ask whether it's "not now" (default — may
-> resurface once if the pattern clearly persists) or "never" (append `(final)` — gone for
-> good). A second rejection of a resurfaced item is automatically `(final)`. Never delete
-> `## Rejected` entries — the miner uses them to avoid re-proposing.
+> Say **"review feedback proposals"** (or run `/review-feedback-proposals`) to
+> accept/reject pending items — the full review protocol lives in that skill.
+> Accepted → the user's global memory; rejected → filed here (two-strike: may resurface
+> once on fresh evidence, final on second rejection or an explicit "never"). Never
+> delete `## Rejected` entries — the miner uses them to avoid re-proposing.
 
 ## Pending
 

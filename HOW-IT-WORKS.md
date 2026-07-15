@@ -46,7 +46,7 @@ Whenever proposals are waiting, each new Claude session starts with a note like:
 
 Ignore it as long as you like — nothing happens without you.
 
-**6. When you're ready, say "review feedback proposals".**
+**6. When you're ready, say "review feedback proposals"** (or run `/review-feedback-proposals`)**.**
 Claude shows you each proposal in full — the rule, when it fires, the evidence — and asks
 for one of:
 
