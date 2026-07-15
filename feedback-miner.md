@@ -20,7 +20,12 @@ A **system-wide behavioral rule** the user seems to want from Claude in general 
 task instruction for one session. Signals, strongest first:
 
 - **Corrections / rejections**: "no, do X instead", a rejected edit followed by a
-  re-instruction, "I told you", "again".
+  re-instruction, "I told you", "again". The digest also contains
+  `[user rejected a tool call]` / `[user interrupted]` markers — a marker immediately
+  before a user message means that message is a live correction of a declined action:
+  treat it as high intensity. Consecutive markers within the same minute are one decline
+  event (parallel tool calls), not several. Bare markers with no user text nearby carry
+  no mineable content on their own — never fabricate a rule from markers alone.
 - **Repetition**: the same instruction phrased across ≥2 sessions or days.
 - **Emotional emphasis**: frustration, exclamations, ALL-CAPS, "always"/"never" phrasing.
 - **Stated preferences**: "I want…", "from now on…", "by default…".
