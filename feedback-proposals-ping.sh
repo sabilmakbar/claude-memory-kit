@@ -11,4 +11,7 @@ N=$(printf '%s' "$PENDING" | grep -c '^### P-')
 [ "$N" -gt 0 ] || exit 0
 
 TOP=$(printf '%s\n' "$PENDING" | head -1 | sed 's/^### //; s/["\\]//g')
-printf '{"systemMessage": "%s feedback proposal(s) pending (top: %s). Say: review feedback proposals (tracker: ~/.local/share/claude-feedback/proposals.md)."}\n' "$N" "$TOP"
+MSG="$N feedback proposal(s) pending (top: $TOP). Say: review feedback proposals (tracker: ~/.local/share/claude-feedback/proposals.md)."
+# emit both: systemMessage = user-facing toast (not all UIs show it);
+# additionalContext = injected into Claude's context so it can relay the ping in-reply
+printf '{"systemMessage": "%s", "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "%s Mention this to the user at the start of your next reply."}}\n' "$MSG" "$MSG"
