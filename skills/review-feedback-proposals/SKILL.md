@@ -20,9 +20,11 @@ read the chat text above it. Options: Accept / Reject / Rephrase first / Leave p
 
 ## Executing decisions
 
-- **Accept** → create the rule in the user's global memory, following their memory-file
-  conventions (check their memory dir and index for the format). Mark provenance in the
-  file's metadata: `source: feedback-miner (P-NNN, accepted YYYY-MM-DD)`. Then move the
+- **Accept** → create the rule in the user's global memory, following the memory-authoring
+  conventions: **What / Why / How** format, stated **project-agnostic**, with **no in-file
+  Evidence section** — the incident (quotes, repo, paths) stays in this tracker and git
+  history, never in the synced memory file. Mark provenance
+  in the file's metadata: `source: feedback-miner (P-NNN, accepted YYYY-MM-DD)`. Then move the
   tracker entry to `## Accepted`, appending `- **reviewed:** <date> · accepted → <file>`.
 - **Rephrase first** → ask for (or propose) better wording, get their confirmation, then
   follow the Accept path with their wording.
