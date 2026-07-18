@@ -34,6 +34,21 @@ Not candidates: one-off task directions, project-specific facts (those belong to
 mount-local memory, not here), anything fully covered by an existing memory file or
 CLAUDE.md section.
 
+## Phrasing a candidate rule
+
+Match how absolute the rule sounds to how strong the evidence is. A single, calmly-stated
+remark should not become an "always" or "never" — save that strength for preferences the
+user stated firmly or repeated across sessions.
+
+Be especially careful with a one-off permissive remark like "no need", "leave it", or
+"don't bother". That almost always means the user judged this specific case not worth the
+effort, not that they want a standing rule against ever doing it. Turning it into a
+blanket "never do X" is risky when X is a safety, cleanup, or correcting action, because
+the rule would then hold Claude back even in a later case where the action clearly
+matters. When the preference feels real but tied to the situation, write it as a
+case-by-case judgment, or as "ask first and show the trade-off", rather than an absolute —
+and leave the final call to the reviewer.
+
 ## Complementarity check (do this per candidate, before scoring)
 
 Compare against memory + CLAUDE.md:
