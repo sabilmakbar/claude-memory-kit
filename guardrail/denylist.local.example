@@ -1,0 +1,11 @@
+# Copy this to `denylist.local` (untracked) and add your private terms.
+# One term/regex per line; blank lines and #-comments are ignored.
+# These are blocked IN ADDITION to the hook's built-in generic patterns
+# (home paths, emails, mount sections) — so no identifying info lives in the tracked repo.
+#
+# Alternatively, set an env var instead of this file:
+#   export CLAUDE_CONFIG_DENYLIST="term1|term2"
+#
+# Examples (replace with your own):
+#   my-employer-name
+#   /my-data-mount

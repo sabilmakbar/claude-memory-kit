@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Commit guardrail: block staged *content* that leaks PII / machine paths / private terms.
+# Scans only synced content (CLAUDE.md, README.md, memory/, reference/); infra is excluded.
+#
+# Built-in patterns are GENERIC (any home path, any email, a mount section) so THIS file
+# carries no identifying info. Add your own private terms (employer, mount names, ...) via:
+#   - env var:  export CLAUDE_CONFIG_DENYLIST="term1|term2"   (regex, |-separated)
+#   - and/or an untracked file .githooks/denylist.local       (one term/regex per line)
+set -u
+
+hookdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# generic, non-identifying leak signals: absolute home paths, any email, a mount section
+generic='(/home/|/Users/)[a-z][a-z0-9._/-]*|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|^\+## Mount:'
+
+priv="${CLAUDE_CONFIG_DENYLIST:-}"
+if [ -f "$hookdir/denylist.local" ]; then
+  extra="$(grep -vE '^[[:space:]]*(#|$)' "$hookdir/denylist.local" | paste -sd'|' -)"
+  [ -n "$extra" ] && priv="${priv:+$priv|}$extra"
+fi
+pattern="$generic${priv:+|$priv}"
+
+mapfile -t files < <(git diff --cached --name-only --diff-filter=ACM \
+  | grep -E '^(CLAUDE\.md|DEPENDENCIES\.md|README\.md|memory/|reference/)')
+[ "${#files[@]}" -eq 0 ] && exit 0
+
+added="$(git diff --cached -U0 --no-color -- "${files[@]}" | grep -E '^\+' | grep -vE '^\+\+\+')"
+# drop known-safe SSH remote URLs (git@github.com etc.) so they don't trip the email pattern
+leaks="$(printf '%s\n' "$added" | grep -nEi "$pattern" | grep -vEi 'git@(github|gitlab|bitbucket)\.')"
+
+if [ -n "$leaks" ]; then
+  { echo "✖ commit blocked — staged content looks like a private/machine leak:"
+    printf '%s\n' "$leaks" | sed 's/^/   /'
+    echo ""
+    echo "Genericize or unstage. Override (discouraged): git commit --no-verify"
+  } >&2
+  exit 1
+fi
+
+# --- memory frontmatter lint: enforce naming convention + required fields ---
+memfiles="$(git diff --cached --name-only --diff-filter=ACM \
+  | grep -E '^memory/[^/]+\.md$' | grep -v '^memory/MEMORY\.md$')"
+bad=""
+for f in $memfiles; do
+  slug="$(basename "$f" .md)"
+  case "$slug" in user_*|feedback_*|project_*) ;; *) bad="$bad|$f: filename must start with user_/feedback_/project_"; continue ;; esac
+  content="$(git show ":$f")"
+  name="$(printf '%s\n' "$content" | sed -n 's/^name:[[:space:]]*//p' | head -1)"
+  desc="$(printf '%s\n' "$content" | sed -n 's/^description:[[:space:]]*//p' | head -1)"
+  [ "$name" = "$slug" ] || bad="$bad|$f: name '$name' != filename slug '$slug'"
+  [ -n "$desc" ] || bad="$bad|$f: missing description:"
+done
+if [ -n "$bad" ]; then
+  { echo "✖ commit blocked — memory frontmatter issues:"
+    printf '%s' "$bad" | tr '|' '\n' | sed '/^$/d; s/^/   /'
+    echo ""
+    echo "Fix: name: must equal the filename; description: required; prefix user_/feedback_/project_."
+  } >&2
+  exit 1
+fi
+exit 0

@@ -1,79 +1,71 @@
-# claude-feedback-miner
+# claude-memory-kit
 
-A daily, self-improving feedback loop for [Claude Code](https://claude.com/claude-code):
-it mines your own messages for preferences you keep repeating — corrections, frustration,
-"always/never" instructions — that your Claude memory does **not** already capture, scores
-them, and proposes them back to you for review. Accept one and it becomes a durable memory;
-reject it and it is never proposed again.
+A self-maintaining memory system for [Claude Code](https://claude.com/claude-code). It
+keeps a durable, portable memory of your preferences, guards how that memory is written and
+committed, and — once a day — notices preferences you keep repeating and proposes them back
+to you. Everything runs on your machine.
 
-Everything runs and stays **on your machine**: transcripts are read locally, the one
-LLM call per day goes through your own `claude` CLI, and the proposals tracker is a
-local file.
-
-**New to this? Read [HOW-IT-WORKS.md](HOW-IT-WORKS.md)** — the full flow in
+**New here? Read [HOW-IT-WORKS.md](HOW-IT-WORKS.md)** for the daily feedback loop in
 non-technical language.
 
-## How it works
+## Why
 
-```
-first session of the day (SessionStart hook, backgrounded)
-  └─ run-feedback-miner.sh          daily stamp + lock; resolves your claude CLI
-       ├─ extract-user-messages.sh  user-typed messages since the last successful run,
-       │                            stripped of tool noise (transcripts → small digest)
-       └─ claude -p (headless)      follows feedback-miner.md:
-            • finds candidate system-wide preferences (repetition, corrections, emphasis)
-            • drops anything your memory/CLAUDE.md already covers ("complementarity")
-            • scores each: 2·frequency + 1.5·intensity + 1.5·novelty + generality
-            • judge pass to sanity-check its own scores
-            • updates ~/.local/share/claude-feedback/proposals.md (pending/accepted/
-              rejected + daily log; rejected items are never re-proposed)
+Claude Code stores its memory and settings under `~/.claude` — per-machine, easy to lose,
+easy to let drift, and (if you ever sync it) easy to leak private details into. This kit
+turns that loose setup into something dependable:
 
-every session start
-  └─ feedback-proposals-ping.sh     "N feedback proposal(s) pending (top: …)"
-```
+- **Memory that travels and can't drift.** Preferences live as small files; the always-loaded
+  index is regenerated from those files on every prompt, so it can never fall out of sync or
+  silently drop an entry.
+- **Guarded authoring.** A pre-commit guardrail keeps employer names, emails, and machine
+  paths out of a synced memory repo, and enforces the file conventions. An Edit-over-Write
+  hook makes every change to an existing file show up as a reviewable diff.
+- **Self-improving.** A daily miner reads your own messages, finds preferences you emphasized
+  but haven't recorded, and proposes them for one-tap review — accepted ones become permanent
+  memory.
 
-The extract window advances only after the tracker is verifiably written, so a failed
-run never loses messages — they are simply mined next time.
+## What's inside
+
+| Piece | What it does |
+|-------|--------------|
+| `scripts/ensure-memory-symlink.sh` | Symlinks the per-project memory dir to a central store and regenerates the `MEMORY.md` index from the files (drift-proof). Runs on `UserPromptSubmit`. |
+| `scripts/edit-over-write.sh` | `PreToolUse` hook that denies `Write` on a file that already exists, so edits land as auditable diffs. |
+| `scripts/memory-review-reminder.sh` · `feedback-proposals-ping.sh` | `SessionStart` notices: memory-review-due, and pending mined proposals. |
+| `scripts/run-feedback-miner.sh` · `extract-user-messages.sh` · `feedback-miner.md` | The daily miner: extract your typed messages, score preference candidates, write a proposals tracker. |
+| `guardrail/pre-commit` | Commit guardrail for a memory repo: blocks PII/machine-path leaks and enforces frontmatter conventions. |
+| `skills/review-feedback-proposals` · `skills/review-memories` | Interactive review flows (accept/reject proposals; periodic memory health-check). |
+| `seed-memories/` | The memory-authoring conventions (What/Why/How format, naming, no in-file evidence) — installed into your memory so any session follows them. |
 
 ## Install
 
-Requirements: `jq`, and the `claude` CLI (a VS Code extension's bundled binary is
-auto-detected as fallback).
+Requirements: `jq` (required), plus `git`, `gh`, and the `claude` CLI for the miner and
+sync — see [DEPENDENCIES.md](DEPENDENCIES.md).
 
 ```bash
-git clone https://github.com/sabilmakbar/claude-feedback-miner.git ~/claude-feedback-miner
-~/claude-feedback-miner/install.sh
+git clone https://github.com/sabilmakbar/claude-memory-kit.git ~/claude-memory-kit
+~/claude-memory-kit/install.sh
 ```
 
-The installer copies the scripts to `~/.claude/scripts/` and **appends** two
-`SessionStart` hooks to `~/.claude/settings.json` (existing hooks are left intact;
-re-running is a no-op).
+The installer copies the scripts to `~/.claude/scripts`, the skills to `~/.claude/skills`,
+seeds the authoring conventions into `~/.claude/memory`, and **appends** its hooks to
+`~/.claude/settings.json` (existing hooks are left intact; re-running is a no-op). Start a
+new Claude Code session to load everything.
 
-## Reviewing proposals
+## Using the guardrail with your memory repo
 
-At session start you'll see: `2 feedback proposal(s) pending (top: P-003 · total 21.5 · …)`.
-Say **"review feedback proposals"** — Claude reads the tracker with you; accepted items go
-into your global memory, rejected ones are remembered as rejected.
+If you keep your actual memories in their own git repo (recommended, so they sync across
+machines), point that repo's git hooks at the kit's guardrail:
 
-## Configuration
+```bash
+git -C ~/your-memory-repo config core.hooksPath ~/claude-memory-kit/guardrail
+```
 
-- `FEEDBACK_MINER_MODEL` — model for the daily run (default `sonnet`).
-- Cost/footprint: one headless call per day over a digest of your typed messages only
-  (typically tens of KB, capped at 300 KB), with tools restricted to `Read,Write,Edit`
-  and a 10-minute timeout.
+Add your private terms (employer, machine mounts) to `~/claude-memory-kit/guardrail/denylist.local`
+(gitignored) or export `CLAUDE_CONFIG_DENYLIST="term1|term2"`. The built-in patterns are
+generic, so the kit itself carries no identifying information.
 
 ## Uninstall
 
-Remove the two `SessionStart` hooks from `~/.claude/settings.json`, then:
-
-```bash
-rm ~/.claude/scripts/{extract-user-messages.sh,run-feedback-miner.sh,feedback-proposals-ping.sh,feedback-miner.md}
-rm -rf ~/.local/share/claude-feedback   # tracker + state
-```
-
-## Privacy notes
-
-- The digest and tracker can quote what you typed to Claude — they live in
-  `~/.local/share/claude-feedback/` and are never transmitted anywhere by this tool.
-- The tracker sits outside `~/.claude` deliberately: headless Claude sessions are not
-  allowed to write inside it (sensitive-file protection).
+Remove the kit's hooks from `~/.claude/settings.json`, then delete the installed scripts,
+skills, and seed memories from `~/.claude`, and `rm -rf ~/.local/share/claude-feedback`
+(the miner's tracker and state).

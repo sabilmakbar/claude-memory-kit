@@ -1,8 +1,34 @@
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.claude/scripts/ensure-memory-symlink.sh\" 2>/dev/null || true",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.claude/scripts/edit-over-write.sh\""
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.claude/scripts/memory-review-reminder.sh\" 2>/dev/null || true"
+          },
           {
             "type": "command",
             "command": "\"$HOME/.claude/scripts/feedback-proposals-ping.sh\" 2>/dev/null || true"

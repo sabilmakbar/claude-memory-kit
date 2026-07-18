@@ -1,44 +1,60 @@
 #!/usr/bin/env bash
-# Install the feedback miner: scripts into ~/.claude/scripts, hooks into settings.json.
-#   git clone <repo> ~/claude-feedback-miner && ~/claude-feedback-miner/install.sh
-# Idempotent: safe to re-run (e.g. after updating the repo).
+# claude-memory-kit installer.
+#   git clone <repo> ~/claude-memory-kit && ~/claude-memory-kit/install.sh
+# Deploys the memory engine, hooks, miner, skills, and seed memories into ~/.claude.
+# Idempotent: safe to re-run after updating the repo.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE="$HOME/.claude"
 SETT="$CLAUDE/settings.json"
-mkdir -p "$CLAUDE/scripts"
+mkdir -p "$CLAUDE/scripts" "$CLAUDE/skills" "$CLAUDE/memory"
 
-echo "→ checking prerequisites"
-command -v jq >/dev/null 2>&1 || { echo "  ✗ jq missing — install it first"; exit 1; }
-if ! command -v claude >/dev/null 2>&1 \
-   && ! ls "$HOME"/.vscode-server/extensions/anthropic.claude-code-*/resources/native-binary/claude >/dev/null 2>&1; then
-  echo "  ! claude CLI not found on PATH or in a VS Code extension — the miner will no-op until it is"
+echo "→ checking prerequisites (see DEPENDENCIES.md)"
+command -v jq >/dev/null 2>&1 || { echo "  ✗ jq required — install it and re-run"; exit 1; }
+for t in git gh; do command -v "$t" >/dev/null 2>&1 && echo "  ✓ $t" || echo "  ✗ $t missing"; done
+if command -v claude >/dev/null 2>&1 || ls "$HOME"/.vscode-server/extensions/anthropic.claude-code-*/resources/native-binary/claude >/dev/null 2>&1; then
+  echo "  ✓ claude CLI"
+else
+  echo "  ! claude CLI not found on PATH or in a VS Code extension — the miner no-ops until it is"
 fi
 
 echo "→ installing scripts to ~/.claude/scripts"
-install -m 0755 "$REPO/extract-user-messages.sh"   "$CLAUDE/scripts/extract-user-messages.sh"
-install -m 0755 "$REPO/run-feedback-miner.sh"      "$CLAUDE/scripts/run-feedback-miner.sh"
-install -m 0755 "$REPO/feedback-proposals-ping.sh" "$CLAUDE/scripts/feedback-proposals-ping.sh"
-install -m 0644 "$REPO/feedback-miner.md"          "$CLAUDE/scripts/feedback-miner.md"
+for f in "$REPO"/scripts/*.sh; do install -m 0755 "$f" "$CLAUDE/scripts/$(basename "$f")"; done
+for f in "$REPO"/scripts/*.md; do install -m 0644 "$f" "$CLAUDE/scripts/$(basename "$f")"; done
 
-echo "→ installing the review skill"
-mkdir -p "$CLAUDE/skills"
-cp -r "$REPO/skills/review-feedback-proposals" "$CLAUDE/skills/"
+echo "→ installing skills to ~/.claude/skills"
+cp -r "$REPO"/skills/* "$CLAUDE/skills/"
 
-echo "→ wiring SessionStart hooks into settings.json"
+echo "→ seeding memory-authoring conventions into ~/.claude/memory"
+for f in "$REPO"/seed-memories/*.md; do install -m 0644 "$f" "$CLAUDE/memory/$(basename "$f")"; done
+
+echo "→ wiring hooks into settings.json (append-only, deduped by command)"
 [ -f "$SETT" ] || echo '{}' > "$SETT"
-if jq -e '.hooks.SessionStart[]?.hooks[]? | select(.command | contains("run-feedback-miner"))' "$SETT" >/dev/null 2>&1; then
-  echo "  already wired — skipping"
-else
-  cp "$SETT" "$SETT.bak"
-  tmp="$(mktemp)"
-  # APPEND our hook group (never replace the array — other tools' hooks stay intact)
-  jq --slurpfile snip "$REPO/settings.snippet.json" \
-     '.hooks.SessionStart = ((.hooks.SessionStart // []) + $snip[0].hooks.SessionStart)' \
-     "$SETT" > "$tmp" && mv "$tmp" "$SETT"
-  echo "  appended (backup: $SETT.bak)"
-fi
+cp "$SETT" "$SETT.bak"
+tmp="$(mktemp)"
+jq -s '
+  .[0] as $live | .[1] as $snip
+  | $live
+  | .hooks = (reduce ($snip.hooks | keys[]) as $k (($live.hooks // {});
+      ($snip.hooks[$k]) as $groups
+      | (.[$k] // []) as $existing
+      | ([$existing[].hooks[]?.command // ""]) as $cmds
+      | ($groups | map(
+          ((.hooks[0].command) as $cmd
+           | (try ($cmd | capture("(?<f>[A-Za-z0-9_.-]+\\.(sh|md))").f) catch $cmd)) as $sig
+          | select([ $cmds[] | select(contains($sig)) ] | length == 0)
+        )) as $new
+      | .[$k] = ($existing + $new)
+    ))
+' "$SETT" "$REPO/settings.snippet.json" > "$tmp" && mv "$tmp" "$SETT"
+echo "  merged (backup: $SETT.bak)"
 
-echo "✓ done — the miner runs in the background once per day, on your first session start."
-echo "  tracker: ~/.local/share/claude-feedback/proposals.md"
+# The commit guardrail is used by a *consuming* repo (e.g. your private memory repo) via
+#   git -C <repo> config core.hooksPath <this-kit>/guardrail
+# Seed the private denylist next to it (gitignored) if absent.
+[ -f "$REPO/guardrail/denylist.local" ] || cp "$REPO/guardrail/denylist.local.example" "$REPO/guardrail/denylist.local"
+echo "→ commit guardrail available at: $REPO/guardrail"
+echo "    add private terms to $REPO/guardrail/denylist.local (or set \$CLAUDE_CONFIG_DENYLIST)"
+
+echo "✓ done — start a new Claude Code session to load memory, hooks, and skills."
