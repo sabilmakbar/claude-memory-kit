@@ -41,8 +41,8 @@ just grow.
 **5. You get a one-line nudge.**
 Whenever proposals are waiting, each new Claude session starts with a note like:
 
-> *2 feedback proposal(s) pending (top: P-901 · Show cost estimate before batch jobs).
-> Say: review feedback proposals.*
+> *2 feedback proposal(s) pending (top: P-901 · total 24 · Show cost estimate before
+> batch jobs). Say: review feedback proposals (tracker: ~/.local/share/claude-feedback/proposals.md).*
 
 Ignore it as long as you like — nothing happens without you.
 
@@ -69,8 +69,9 @@ That's the whole loop: **notice → check → propose → you decide → Claude 
   files. The daily analysis runs through your own Claude account, like any other session.
 - **It never changes Claude's behavior by itself.** Only proposals you explicitly accept
   become memory. The miner writes to exactly one file: the tracker.
-- **Cost is small.** One short Claude call per day, reading only what you typed
-  (typically a few dozen messages).
+- **Cost is small.** One short Claude call per day. It reads what you typed (typically a
+  few dozen messages) plus your existing memory files and guidelines — that's how it can
+  tell what's already known.
 - **Telling Claude directly still works — and wins.** Saying "remember this" /
   "add this to feedback" in any session saves a preference immediately, no review needed.
   The miner only fills the gaps you *didn't* think to dictate: anything already in memory

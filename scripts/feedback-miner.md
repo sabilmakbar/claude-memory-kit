@@ -7,8 +7,8 @@ other file except the tracker. Be terse.
 ## Inputs (read all before writing anything)
 
 1. `~/.local/share/claude-feedback/digest-latest.txt` — user-typed messages since the last
-   run, tagged `[project/session timestamp]`. If missing/empty: append a Daily-log row
-   noting 0 messages and stop.
+   run, tagged `[project/session timestamp]`. If missing/empty: stop without touching the
+   tracker (the runner normally short-circuits before invoking you in that case).
 2. `~/.claude/memory/MEMORY.md` and every `~/.claude/memory/*.md` — current memory.
 3. `~/.claude/CLAUDE.md` — current global guidelines.
 4. `~/.local/share/claude-feedback/proposals.md` — the tracker (create from the template

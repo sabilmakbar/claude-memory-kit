@@ -15,8 +15,9 @@ mount's entries under `~/.claude/memory-mounts/` if present).
   contradicted by newer feedback files.
 - **Broken structure** — `[[wikilinks]]` that don't resolve to an existing `name:`,
   descriptions that no longer match the body, missing frontmatter fields.
-- **Over-specific rationales** — "why" lines tied to one incident that should be
-  generalized (keep the incident as an example, not as the rule).
+- **Over-specific rationales** — "why" lines tied to one incident: generalize the reason
+  into a system-wide one and remove the incident citation (quotes, repo, and paths belong
+  in the miner tracker and git history, never in a synced memory file).
 
 ## How to proceed
 

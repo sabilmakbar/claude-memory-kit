@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Commit guardrail: block staged *content* that leaks PII / machine paths / private terms.
-# Scans only synced content (CLAUDE.md, README.md, memory/, reference/); infra is excluded.
+# Scans only synced content (CLAUDE.md, DEPENDENCIES.md, README.md, memory/, reference/); infra is excluded.
 #
 # Built-in patterns are GENERIC (any home path, any email, a mount section) so THIS file
 # carries no identifying info. Add your own private terms (employer, mount names, ...) via:
 #   - env var:  export CLAUDE_CONFIG_DENYLIST="term1|term2"   (regex, |-separated)
-#   - and/or an untracked file .githooks/denylist.local       (one term/regex per line)
+#   - and/or an untracked denylist.local next to this hook    (one term/regex per line)
 set -u
 
 hookdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

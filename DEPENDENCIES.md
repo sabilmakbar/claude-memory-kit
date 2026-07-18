@@ -14,5 +14,7 @@ External tools this kit expects. `install.sh` checks them and warns about anythi
 - **gh** (GitHub CLI) — only if you sync your memory repo to GitHub.
 
 ## Platform
-- Scripts assume **GNU coreutils** behavior (`df --output`, `sed -E`, `stat -c`). Default on
-  Linux; on macOS install `coreutils`/`gnu-sed` or adjust the calls.
+- Scripts assume a **GNU userland**: coreutils (`df --output`, `stat -c`, `date -Is`),
+  GNU sed (`\b` word boundaries in the index generator), and **bash ≥ 4** (`mapfile` in
+  the commit guardrail). Default on Linux; on macOS install `coreutils`, `gnu-sed`, and a
+  newer `bash` via Homebrew, or adjust the calls.
