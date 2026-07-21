@@ -8,6 +8,15 @@ to you. Everything runs on your machine.
 **New here? Read [HOW-IT-WORKS.md](HOW-IT-WORKS.md)** for the daily feedback loop in
 non-technical language.
 
+## Who this is for
+
+Anyone who runs Claude Code on a machine they control — the CLI, the desktop app, or an
+IDE extension — since everything here lives in local `~/.claude` hooks and scripts (it
+can't help web-only sessions on claude.ai). It pays off most once you've used Claude Code
+enough to feel the pains it fixes: preferences that don't survive a new machine, an index
+that drifts, the same correction typed for the third time. If you're brand new to Claude
+Code, it will still work, but you may want to build those scars first.
+
 ## Why
 
 Claude Code stores its memory and settings under `~/.claude` — per-machine, easy to lose,
