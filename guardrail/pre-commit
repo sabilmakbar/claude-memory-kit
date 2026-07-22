@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Commit guardrail: block staged *content* that leaks PII / machine paths / private terms.
-# Scans only synced content (CLAUDE.md, DEPENDENCIES.md, README.md, memory/, reference/); infra is excluded.
+# Scans every staged .md file — memory repos keep files at the root or under memory/, so
+# no path layout is assumed. Non-markdown infra is excluded.
 #
 # Built-in patterns are GENERIC (any home path, any email, a mount section) so THIS file
 # carries no identifying info. Add your own private terms (employer, mount names, ...) via:
@@ -20,8 +21,7 @@ if [ -f "$hookdir/denylist.local" ]; then
 fi
 pattern="$generic${priv:+|$priv}"
 
-mapfile -t files < <(git diff --cached --name-only --diff-filter=ACM \
-  | grep -E '^(CLAUDE\.md|DEPENDENCIES\.md|README\.md|memory/|reference/)')
+mapfile -t files < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.md$')
 [ "${#files[@]}" -eq 0 ] && exit 0
 
 added="$(git diff --cached -U0 --no-color -- "${files[@]}" | grep -E '^\+' | grep -vE '^\+\+\+')"
@@ -38,8 +38,10 @@ if [ -n "$leaks" ]; then
 fi
 
 # --- memory frontmatter lint: enforce naming convention + required fields ---
+# memory files live at the repo root or under memory/; known non-memory docs are exempt
 memfiles="$(git diff --cached --name-only --diff-filter=ACM \
-  | grep -E '^memory/[^/]+\.md$' | grep -v '^memory/MEMORY\.md$')"
+  | grep -E '^(memory/)?[^/]+\.md$' \
+  | grep -vE '(^|/)(MEMORY|README|CLAUDE|DEPENDENCIES|HOW-IT-WORKS)\.md$')"
 bad=""
 for f in $memfiles; do
   slug="$(basename "$f" .md)"
