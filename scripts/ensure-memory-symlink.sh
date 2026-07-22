@@ -17,7 +17,9 @@ if ! { [ -L "$MEMORY_DIR" ] && [ "$(readlink "$MEMORY_DIR")" = "$CENTRAL" ]; }; 
     mkdir -p "$(dirname "$MEMORY_DIR")"
     if [ -d "$MEMORY_DIR" ] && [ ! -L "$MEMORY_DIR" ]; then
         find "$MEMORY_DIR" -maxdepth 1 -type f -exec cp -n {} "$CENTRAL/" \; 2>/dev/null || true
-        rm -rf "$MEMORY_DIR"
+        # keep the old dir as a backup: cp -n skips name collisions and never copies
+        # subdirs, so deleting here would silently destroy them
+        mv "$MEMORY_DIR" "$MEMORY_DIR.pre-kit.$(date +%s).bak"
     fi
     ln -sfn "$CENTRAL" "$MEMORY_DIR"
 fi
