@@ -64,6 +64,17 @@ for f in $(ls "$CENTRAL"/user_*.md 2>/dev/null) $(ls "$CENTRAL"/feedback_*.md 2>
     printf -- '- [%s](%s) — %s\n' "$title" "$b" "$desc" >> "$CENTRAL_MD"
 done
 
+# Surface non-conforming .md files so adopted memories can't silently drop out of recall
+unindexed=""
+for f in "$CENTRAL"/*.md; do
+    [ -f "$f" ] || continue
+    b=$(basename "$f")
+    case "$b" in MEMORY.md|user_*.md|feedback_*.md) ;; *) unindexed="$unindexed${unindexed:+, }$b" ;; esac
+done
+if [ -n "$unindexed" ]; then
+    printf '\n> ⚠ Unindexed files in ~/.claude/memory — not loaded into any session. Rename to user_*/feedback_* (project files belong in memory-mounts): %s\n' "$unindexed" >> "$CENTRAL_MD"
+fi
+
 # Collect non-MEMORY.md files in mount memory dir and append section
 MOUNT_MD="$MOUNT_MEMORY/MEMORY.md"
 if [ -f "$MOUNT_MD" ] && find "$MOUNT_MEMORY" -maxdepth 1 -name "*.md" ! -name "MEMORY.md" | grep -q .; then

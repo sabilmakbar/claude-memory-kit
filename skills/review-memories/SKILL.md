@@ -18,6 +18,11 @@ mount's entries under `~/.claude/memory-mounts/` if present).
 - **Over-specific rationales** — "why" lines tied to one incident: generalize the reason
   into a system-wide one and remove the incident citation (quotes, repo, and paths belong
   in the miner tracker and git history, never in a synced memory file).
+- **Non-conforming / unindexed files** — files flagged by the index's "Unindexed files"
+  warning, or any memory file with a non-conforming name or missing frontmatter (typical
+  after adopting pre-kit memories): propose renames to `user_*`/`feedback_*` (move
+  project-specific ones to the mount dir) and fill in `name:`/`description:` so they
+  (re)enter the index.
 
 ## How to proceed
 
