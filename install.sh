@@ -26,8 +26,11 @@ for f in "$REPO"/scripts/*.md; do install -m 0644 "$f" "$CLAUDE/scripts/$(basena
 echo "→ installing skills to ~/.claude/skills"
 cp -r "$REPO"/skills/* "$CLAUDE/skills/"
 
-echo "→ seeding memory-authoring conventions into ~/.claude/memory"
-for f in "$REPO"/seed-memories/*.md; do install -m 0644 "$f" "$CLAUDE/memory/$(basename "$f")"; done
+echo "→ seeding memory-authoring conventions into ~/.claude/memory (existing files kept)"
+for f in "$REPO"/seed-memories/*.md; do
+  t="$CLAUDE/memory/$(basename "$f")"
+  [ -f "$t" ] || install -m 0644 "$f" "$t"
+done
 
 echo "→ wiring hooks into settings.json (append-only, deduped by command)"
 [ -f "$SETT" ] || echo '{}' > "$SETT"
