@@ -60,6 +60,21 @@ seeds the authoring conventions into `~/.claude/memory`, and **appends** its hoo
 `~/.claude/settings.json` (existing hooks are left intact; re-running is a no-op). Start a
 new Claude Code session to load everything.
 
+## Adopting with existing memories
+
+The installer never overwrites memory files you already have — it only adds the two seed
+conventions when absent. Adoption then happens on your first prompt in each project: the
+hook merges that project's old memory files into the central store. Top-level files are
+copied in (on a name collision the central copy wins), and the old directory is kept next
+to the new symlink as `memory.pre-kit.<timestamp>.bak`, so nothing is ever destroyed —
+delete the backups once you're satisfied.
+
+Files whose names don't match the indexed patterns (`user_*`/`feedback_*`) survive on
+disk but are flagged in the regenerated index with an "Unindexed files" warning: they are
+invisible to recall until renamed. So after installing, run `/review-memories` once — it
+walks those warnings and proposes the renames and frontmatter fixes that bring adopted
+files into the index and up to the authoring conventions.
+
 ## Using the guardrail with your memory repo
 
 If you keep your actual memories in their own git repo (recommended, so they sync across
@@ -69,9 +84,39 @@ machines), point that repo's git hooks at the kit's guardrail:
 git -C ~/your-memory-repo config core.hooksPath ~/claude-memory-kit/guardrail
 ```
 
+No memory repo yet? The central store itself is the natural place — turn it into one:
+
+```bash
+cd ~/.claude/memory
+git init
+git config core.hooksPath ~/claude-memory-kit/guardrail
+git add . && git commit -m "Initial memory"
+gh repo create <your-user>/claude-memories --private --source . --push
+```
+
+The guardrail vets that very first commit, so a leak can't slip in at bootstrap time.
+
 Add your private terms (employer, machine mounts) to `~/claude-memory-kit/guardrail/denylist.local`
 (gitignored) or export `CLAUDE_CONFIG_DENYLIST="term1|term2"`. The built-in patterns are
 generic, so the kit itself carries no identifying information.
+
+## FAQ
+
+**Does this conflict with MCP servers?** No — the kit registers no MCP surface at all.
+It is built from harness lifecycle hooks (`UserPromptSubmit`, `SessionStart`, one
+`PreToolUse` matcher on the built-in `Write` tool), plain files, and a git pre-commit
+hook; MCP tools are neither wrapped nor intercepted. One practical caveat: running a
+memory-flavored MCP server *alongside* the kit gives you two memories that can disagree,
+and things saved to the MCP store are invisible to the miner and guardrail — pick one.
+
+**Does it conflict with Claude Code's built-in memory?** It *is* the built-in per-project
+memory, redirected: the symlink hook points each project's memory directory at one
+central store and regenerates the index from the files there. That makes it a dependency
+rather than a conflict — if Claude Code reshapes its memory layout, the kit will need a
+patch.
+
+**Web-only sessions?** Everything lives in local `~/.claude` hooks and scripts, so
+sessions on claude.ai without a local harness can't use it (see "Who this is for").
 
 ## Uninstall
 
