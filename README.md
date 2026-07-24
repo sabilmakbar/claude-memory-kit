@@ -84,7 +84,11 @@ machines), point that repo's git hooks at the kit's guardrail:
 git -C ~/your-memory-repo config core.hooksPath ~/claude-memory-kit/guardrail
 ```
 
-No memory repo yet? The central store itself is the natural place — turn it into one:
+No memory repo yet? The fastest start is the
+[claude-memories-template](https://github.com/sabilmakbar/claude-memories-template) —
+click "Use this template", create a **private** repo, and clone it to `~/.claude/memory`;
+it ships the layout, example files, and gitignore ready-made. Or turn the central store
+into a repo by hand:
 
 ```bash
 cd ~/.claude/memory
