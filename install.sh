@@ -53,7 +53,15 @@ jq -s '
 ' "$SETT" "$REPO/settings.snippet.json" > "$tmp" && mv "$tmp" "$SETT"
 echo "  merged (backup: $SETT.bak)"
 
-# The commit guardrail is used by a *consuming* repo (e.g. your private memory repo) via
+# Auto-wire the guardrail when the memory dir is itself a git repo (the README's
+# recommended setup), and hide index churn from its diffs.
+if [ -d "$CLAUDE/memory/.git" ]; then
+  git -C "$CLAUDE/memory" config core.hooksPath "$REPO/guardrail"
+  git -C "$CLAUDE/memory" update-index --skip-worktree MEMORY.md 2>/dev/null || true
+  echo "→ guardrail wired into the memory repo at ~/.claude/memory"
+fi
+
+# The commit guardrail can also be used by any other consuming repo via
 #   git -C <repo> config core.hooksPath <this-kit>/guardrail
 # Seed the private denylist next to it (gitignored) if absent.
 [ -f "$REPO/guardrail/denylist.local" ] || cp "$REPO/guardrail/denylist.local.example" "$REPO/guardrail/denylist.local"
