@@ -97,15 +97,16 @@ re-run `install.sh`. Or turn your existing memory folder into the repo by hand:
 ```bash
 cd ~/.claude/memory
 git init
-git add . && git commit -m "Initial memory"     # ← the guardrail vets even this commit
+git config core.hooksPath ~/claude-memory-kit/guardrail   # wire the guardrail FIRST
+git add . && git commit -m "Initial memory"               # ← now genuinely vetted
 gh repo create <your-user>/claude-memories --private --source . --push
 ```
 
-The installer detects when `~/.claude/memory` is a git repo and wires the guardrail (and
-hides index churn from your diffs) automatically — re-run `~/claude-memory-kit/install.sh`
-after creating the repo and you're done. The manual wiring line
-(`git config core.hooksPath ~/claude-memory-kit/guardrail`) is only needed for a memory
-repo kept somewhere other than `~/.claude/memory`.
+Wire the guardrail **before** the first commit — that commit carries your accumulated,
+never-vetted memories, so it's the one that needs checking most. Afterwards, re-running
+`~/claude-memory-kit/install.sh` keeps things wired automatically whenever
+`~/.claude/memory` is a git repo (and hides index churn from your diffs); the manual
+line is also how you wire a memory repo kept somewhere other than `~/.claude/memory`.
 
 ### Every other machine — join the existing repo
 
@@ -121,6 +122,22 @@ Then compare `~/.claude/memory.local-backup/` against the clone: copy in any mem
 this machine had that the repo lacks, commit (the guardrail checks it), and delete the
 backup. From here on, `git pull`/`git push` in `~/.claude/memory` is how machines share
 what they learn — run `/review-memories` occasionally to keep the merged set tidy.
+
+Two small extras for the join:
+
+- **If the repo carries a global `CLAUDE.md`** (the template ships one), link it:
+  `ln -sfn ~/.claude/memory/CLAUDE.md ~/.claude/CLAUDE.md`.
+- **If this machine's `gh`/git is logged into a different account** (e.g. a work one),
+  give the memory repo its own credentials so pushes go out under the account that owns
+  it — keep the username in the remote URL
+  (`https://<personal-user>@github.com/...`) and set a repo-local helper:
+
+  ```bash
+  cd ~/.claude/memory
+  git config credential.https://github.com.helper ''
+  git config --add credential.https://github.com.helper \
+    '!f() { test "$1" = get && echo "password=$(gh auth token --user <personal-user>)"; }; f'
+  ```
 
 ## FAQ
 
