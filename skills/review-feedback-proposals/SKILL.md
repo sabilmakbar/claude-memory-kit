@@ -20,6 +20,12 @@ read the chat text above it. Options: Accept / Reject / Rephrase first / Leave p
 
 ## Executing decisions
 
+Before executing any **Accept**, sync the memory repo if it has a remote
+(`git -C ~/.claude/memory pull --ff-only`) so the new rule lands on top of other
+machines' latest memories — then re-check the accepted rule isn't already covered by a
+freshly pulled file (if it is, follow the Accept bookkeeping but point the tracker entry
+at the existing file instead of writing a duplicate).
+
 - **Accept** → create the rule in the user's global memory, following the memory-authoring
   conventions: **What / Why / How** format, stated **project-agnostic**, with **no in-file
   Evidence section** — the incident (quotes, repo, paths) stays in this tracker and git
@@ -38,4 +44,5 @@ read the chat text above it. Options: Accept / Reject / Rephrase first / Leave p
 ## Wrap up
 
 Summarize what was decided in one short list. If the user's memory lives in a git repo,
-offer to commit the new memory files (following their commit workflow).
+offer to commit the new memory files (following their commit workflow), and to push so
+other machines' miners see the accepted rules on their next daily pull.
