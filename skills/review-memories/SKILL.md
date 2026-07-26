@@ -23,6 +23,15 @@ mount's entries under `~/.claude/memory-mounts/` if present).
   after adopting pre-kit memories): propose renames to `user_*`/`feedback_*` (move
   project-specific ones to the mount dir) and fill in `name:`/`description:` so they
   (re)enter the index.
+- **CLAUDE.md guideline hygiene** — if the memory repo carries a `CLAUDE.md`, review its
+  `## Source:` sections too: attribution follows the header's convention (publicly
+  available → cite name + URL; otherwise "distilled internally" / "created manually",
+  never naming a private origin), and no section carries project- or work-specific
+  content that belongs in the owning repo's own `CLAUDE.md`.
+- **Stable-fact creep in project memories** — mount project files accumulating durable
+  facts (run commands, layout rules, infra details, settled findings): propose
+  graduating those into that project's own repo `CLAUDE.md` and shrinking the memory
+  file back to volatile state (current progress, pending decisions) plus a pointer.
 
 ## How to proceed
 
