@@ -21,10 +21,22 @@ read the chat text above it. Options: Accept / Reject / Rephrase first / Leave p
 ## Executing decisions
 
 Before executing any **Accept**, sync the memory repo if it has a remote
-(`git -C ~/.claude/memory pull --ff-only`) so the new rule lands on top of other
-machines' latest memories — then re-check the accepted rule isn't already covered by a
-freshly pulled file (if it is, follow the Accept bookkeeping but point the tracker entry
-at the existing file instead of writing a duplicate).
+(`git -C ~/.claude/memory pull --ff-only`), then reconcile three inputs before writing
+anything: the proposed rule, the related local memory as it stood before the pull, and
+whatever the pull just brought in.
+
+- **No related memory anywhere** → plain Accept below.
+- **Fully aligned** — an existing file already says the same thing, no wider and no
+  narrower → follow the Accept bookkeeping but point the tracker entry at the existing
+  file instead of writing a duplicate.
+- **Partial overlap or conflict** — different scope, strength, or direction; including a
+  freshly pulled file disagreeing with local state → never pick a side silently. Present
+  the versions side by side, explain where they diverge, give pros/cons of each
+  resolution, and recommend one. Ask via a self-contained question dialog (rule,
+  versions, and trade-offs embedded in the question text). Assist the user in refining
+  wording that reconciles them, then route their decision: **accept** (write the refined
+  rule — as an edit to the existing file when it amends one), **reject**, or **leave
+  pending** for a later pass. No accepted rule is written until this reconcile resolves.
 
 - **Accept** → create the rule in the user's global memory, following the memory-authoring
   conventions: **What / Why / How** format, stated **project-agnostic**, with **no in-file
