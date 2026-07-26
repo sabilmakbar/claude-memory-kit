@@ -25,7 +25,7 @@ if ! { [ -L "$MEMORY_DIR" ] && [ "$(readlink "$MEMORY_DIR")" = "$CENTRAL" ]; }; 
 fi
 
 # Step 2: Detect current mount point
-MOUNT=$(df --output=target "$PROJECT_DIR" 2>/dev/null | tail -1)
+MOUNT=$(df -P "$PROJECT_DIR" 2>/dev/null | awk 'NR==2 {print $NF}')
 [ -z "$MOUNT" ] && exit 0
 
 # Root mount uses $HOME as the identifier (more meaningful than "/")
@@ -58,7 +58,8 @@ for f in $(ls "$CENTRAL"/user_*.md 2>/dev/null) $(ls "$CENTRAL"/feedback_*.md 2>
     case "$slug" in
         user_*) title="User profile" ;;
         *) t=${slug#feedback_}
-           title=$(printf '%s' "$t" | tr '_' ' ' | sed 's/\bgh\b/GitHub/g; s/\bgpu\b/GPU/g')
+           title=$(printf '%s' "$t" | tr '_' ' ' \
+               | awk '{for(i=1;i<=NF;i++){if($i=="gh")$i="GitHub";else if($i=="gpu")$i="GPU"}}1')
            title="$(printf '%s' "${title:0:1}" | tr '[:lower:]' '[:upper:]')${title:1}" ;;
     esac
     printf -- '- [%s](%s) — %s\n' "$title" "$b" "$desc" >> "$CENTRAL_MD"

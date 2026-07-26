@@ -9,12 +9,13 @@ External tools this kit expects. `install.sh` checks them and warns about anythi
 ## For the miner and cross-machine sync
 - **claude** CLI, runnable headless (`claude -p`) — the daily miner spawns it. If it isn't
   on `PATH`, the miner falls back to the newest VS Code extension's bundled binary
-  (`~/.vscode-server/extensions/anthropic.claude-code-*/resources/native-binary/claude`).
+  (`~/.vscode-server/extensions/…` on Linux/remote, `~/.vscode/extensions/…` on desktop
+  incl. macOS).
 - **git** — the commit guardrail runs as a git hook; syncing a memory repo needs git.
 - **gh** (GitHub CLI) — only if you sync your memory repo to GitHub.
 
 ## Platform
-- Scripts assume a **GNU userland**: coreutils (`df --output`, `stat -c`, `date -Is`),
-  GNU sed (`\b` word boundaries in the index generator), and **bash ≥ 4** (`mapfile` in
-  the commit guardrail). Default on Linux; on macOS install `coreutils`, `gnu-sed`, and a
-  newer `bash` via Homebrew, or adjust the calls.
+- Linux and macOS, stock userland. The scripts stick to POSIX-portable calls (or dual
+  GNU/BSD fallbacks, e.g. `stat -c || stat -f`) and run on **bash ≥ 3.2** (macOS's
+  default shell) — no Homebrew coreutils needed. `timeout` is used when present and
+  skipped when not. CI runs the test suite on both `ubuntu` and `macos`.

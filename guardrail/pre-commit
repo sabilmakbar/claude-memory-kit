@@ -21,7 +21,9 @@ if [ -f "$hookdir/denylist.local" ]; then
 fi
 pattern="$generic${priv:+|$priv}"
 
-mapfile -t files < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.md$')
+files=()
+while IFS= read -r f; do files+=("$f"); done \
+  < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.md$')
 [ "${#files[@]}" -eq 0 ] && exit 0
 
 added="$(git diff --cached -U0 --no-color -- "${files[@]}" | grep -E '^\+' | grep -vE '^\+\+\+')"

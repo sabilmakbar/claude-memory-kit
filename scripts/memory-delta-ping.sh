@@ -25,7 +25,7 @@ if [ ! -f "$marker" ]; then
 fi
 
 now=$(date +%s)
-last=$(stat -c %Y "$marker" 2>/dev/null || echo 0)
+last=$(stat -c %Y "$marker" 2>/dev/null || stat -f %m "$marker" 2>/dev/null || echo 0)
 [ $((now - last)) -lt "$THROTTLE" ] && exit 0
 
 # MEMORY.md is excluded — it regenerates every prompt and would fire forever

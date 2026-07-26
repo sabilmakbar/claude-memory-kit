@@ -13,7 +13,9 @@ mkdir -p "$CLAUDE/scripts" "$CLAUDE/skills" "$CLAUDE/memory"
 echo "→ checking prerequisites (see DEPENDENCIES.md)"
 command -v jq >/dev/null 2>&1 || { echo "  ✗ jq required — install it and re-run"; exit 1; }
 for t in git gh; do command -v "$t" >/dev/null 2>&1 && echo "  ✓ $t" || echo "  ✗ $t missing"; done
-if command -v claude >/dev/null 2>&1 || ls "$HOME"/.vscode-server/extensions/anthropic.claude-code-*/resources/native-binary/claude >/dev/null 2>&1; then
+if command -v claude >/dev/null 2>&1 \
+   || ls "$HOME"/.vscode-server/extensions/anthropic.claude-code-*/resources/native-binary/claude >/dev/null 2>&1 \
+   || ls "$HOME"/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude >/dev/null 2>&1; then
   echo "  ✓ claude CLI"
 else
   echo "  ! claude CLI not found on PATH or in a VS Code extension — the miner no-ops until it is"

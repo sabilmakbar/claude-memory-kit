@@ -16,7 +16,9 @@ mkdir -p "$PROP"
 # resolve the claude CLI: PATH first, else the newest VS Code extension's bundled binary
 CLAUDE_BIN=$(command -v claude 2>/dev/null)
 if [ -z "$CLAUDE_BIN" ]; then
-    CLAUDE_BIN=$(ls -t "$HOME"/.vscode-server/extensions/anthropic.claude-code-*/resources/native-binary/claude 2>/dev/null | head -1)
+    # remote/Linux VS Code uses ~/.vscode-server; desktop (incl. macOS) uses ~/.vscode
+    CLAUDE_BIN=$(ls -t "$HOME"/.vscode-server/extensions/anthropic.claude-code-*/resources/native-binary/claude \
+                       "$HOME"/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude 2>/dev/null | head -1)
 fi
 [ -x "$CLAUDE_BIN" ] || exit 0
 [ -f "$MINER_DOC" ] || exit 0
@@ -38,13 +40,15 @@ if [ ! -s "$PROP/digest-latest.txt" ]; then
 fi
 
 cd "$PROP" || exit 0
-timeout 600 "$CLAUDE_BIN" -p "Read $MINER_DOC and follow it exactly. [feedback-miner]" \
+TIMEOUT=""; command -v timeout >/dev/null 2>&1 && TIMEOUT="timeout 600"  # absent on stock macOS
+$TIMEOUT "$CLAUDE_BIN" -p "Read $MINER_DOC and follow it exactly. [feedback-miner]" \
       --model "$MODEL" --allowedTools "Read,Write,Edit" \
       >> "$PROP/miner.log" 2>&1
 # success = the tracker was actually (re)written this run — exit code alone lies
 # (a session can exit 0 with its Write denied). Only then advance the extract window.
-if [ -f "$PROP/proposals.md" ] && [ "$(stat -c %Y "$PROP/proposals.md")" -ge "$now" ]; then
+tracker_mtime=$(stat -c %Y "$PROP/proposals.md" 2>/dev/null || stat -f %m "$PROP/proposals.md" 2>/dev/null || echo 0)
+if [ "$tracker_mtime" -ge "$now" ]; then
     echo "$now" > "$STATE"                   # promote window only on success — no lost messages
 else
-    echo "[$(date -Is)] miner run left no updated tracker; window not advanced" >> "$PROP/miner.log"
+    echo "[$(date +%Y-%m-%dT%H:%M:%S%z)] miner run left no updated tracker; window not advanced" >> "$PROP/miner.log"
 fi

@@ -7,9 +7,14 @@ SINCE="${1:?usage: extract-user-messages.sh <since_epoch>}"
 PROJECTS="$HOME/.claude/projects"
 MAX_BYTES=300000   # defensive cap; miner also sees a truncation marker if hit
 
+# -newermt is GNU-only: compare against a reference file stamped with the epoch instead
+REF=$(mktemp); trap 'rm -f "$REF"' EXIT
+ts=$(date -d "@$SINCE" +%Y%m%d%H%M.%S 2>/dev/null || date -r "$SINCE" +%Y%m%d%H%M.%S 2>/dev/null)
+[ -n "$ts" ] && touch -t "$ts" "$REF"
+
 # miner sessions run with cwd inside claude-feedback — skip their project dirs entirely
 find "$PROJECTS" -mindepth 2 -maxdepth 2 -name '*.jsonl' ! -name 'agent-*.jsonl' \
-     -newermt "@$SINCE" 2>/dev/null \
+     -newer "$REF" 2>/dev/null \
 | grep -v 'claude-feedback' | sort \
 | while IFS= read -r f; do
     proj=$(basename "$(dirname "$f")"); sess=$(basename "$f" .jsonl | cut -c1-8)
