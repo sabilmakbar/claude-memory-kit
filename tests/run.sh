@@ -82,6 +82,40 @@ sleep 1; printf '# regen\n' > "$DH/.claude/memory/MEMORY.md"
 [ -z "$(ping '../../../tmp/evil')" ] && [ ! -e "$DH/tmp" ] \
   && ok "session_id traversal sanitized" || fail "traversal"
 
+# ---------- edit-over-write ----------
+echo "scripts/edit-over-write.sh:"
+EF="$TMP/existing.txt"; touch "$EF"
+out=$(echo "{\"tool_input\":{\"file_path\":\"$EF\"}}" | bash "$KIT/scripts/edit-over-write.sh")
+echo "$out" | grep -q '"permissionDecision":"deny"' && ok "denies Write on existing file" || fail "deny existing"
+out=$(echo "{\"tool_input\":{\"file_path\":\"$TMP/brand-new.txt\"}}" | bash "$KIT/scripts/edit-over-write.sh")
+[ -z "$out" ] && ok "allows Write on new file" || fail "allow new"
+out=$(echo 'not json' | bash "$KIT/scripts/edit-over-write.sh" 2>/dev/null); rc=$?
+[ -z "$out" ] && [ "$rc" = 0 ] && ok "fails open on garbage input" || fail "fail-open"
+
+# ---------- session-start reminders ----------
+echo "scripts/memory-review-reminder.sh:"
+RH="$TMP/home4"; mkdir -p "$RH/.claude/memory"
+date +%s > "$RH/.claude/memory/.last-review"
+out=$(HOME="$RH" bash "$KIT/scripts/memory-review-reminder.sh")
+[ -z "$out" ] && ok "fresh stamp: silent" || fail "fresh stamp"
+echo $(( $(date +%s) - 9*86400 )) > "$RH/.claude/memory/.last-review"
+out=$(HOME="$RH" bash "$KIT/scripts/memory-review-reminder.sh")
+echo "$out" | grep -q '"additionalContext".*9 days' && ok "9-day-old stamp: reminder with day count" || fail "overdue ($out)"
+rm "$RH/.claude/memory/.last-review"
+out=$(HOME="$RH" bash "$KIT/scripts/memory-review-reminder.sh")
+echo "$out" | grep -q 'Memory review due' && ok "missing stamp: reminder" || fail "missing stamp"
+
+echo "scripts/feedback-proposals-ping.sh:"
+PH="$TMP/home5"; mkdir -p "$PH/.local/share/claude-feedback"
+out=$(HOME="$PH" bash "$KIT/scripts/feedback-proposals-ping.sh")
+[ -z "$out" ] && ok "no tracker: silent" || fail "no tracker"
+printf '## Pending\n\n## Accepted\n\n### P-001 · accepted · x\n' > "$PH/.local/share/claude-feedback/proposals.md"
+out=$(HOME="$PH" bash "$KIT/scripts/feedback-proposals-ping.sh")
+[ -z "$out" ] && ok "empty Pending: silent (Accepted not counted)" || fail "empty pending ($out)"
+printf '## Pending\n\n### P-009 · total 9 · Rule A\n### P-010 · total 5 · Rule B\n\n## Accepted\n' > "$PH/.local/share/claude-feedback/proposals.md"
+out=$(HOME="$PH" bash "$KIT/scripts/feedback-proposals-ping.sh")
+echo "$out" | grep -q '2 feedback proposal(s) pending (top: P-009' && ok "counts pending, names top proposal" || fail "pending count ($out)"
+
 # ---------- installer ----------
 echo "install.sh:"
 IH="$TMP/home3"; mkdir -p "$IH/.claude/memory"
