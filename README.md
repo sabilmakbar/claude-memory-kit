@@ -1,4 +1,4 @@
-# claude-memory-kit
+# Claude Memory Kit
 
 A self-maintaining memory system for [Claude Code](https://claude.com/claude-code). It
 keeps a durable, portable memory of your preferences, guards how that memory is written and
