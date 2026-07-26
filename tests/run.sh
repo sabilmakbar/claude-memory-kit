@@ -117,6 +117,25 @@ printf '## Pending\n\n### P-009 · total 9 · Rule A\n### P-010 · total 5 · Ru
 out=$(HOME="$PH" bash "$KIT/scripts/feedback-proposals-ping.sh")
 echo "$out" | grep -q '2 feedback proposal(s) pending (top: P-009' && ok "counts pending, names top proposal" || fail "pending count ($out)"
 
+# ---------- feedback miner: remote sync ----------
+echo "scripts/run-feedback-miner.sh:"
+SB="$TMP/stub"; mkdir -p "$SB"; printf '#!/bin/sh\nexit 0\n' > "$SB/claude"; chmod +x "$SB/claude"
+git init -q "$TMP/mem-src" && ( cd "$TMP/mem-src" && git config user.email t@t && git config user.name t \
+  && printf 'seed\n' > seed.md && git add seed.md && git commit -qm seed )
+git clone -q --bare "$TMP/mem-src" "$TMP/mem-origin.git"
+MH="$TMP/home6"; mkdir -p "$MH/.claude"
+git clone -q "$TMP/mem-origin.git" "$MH/.claude/memory"
+git clone -q "$TMP/mem-origin.git" "$TMP/mem-other"
+( cd "$TMP/mem-other" && git config user.email t@t && git config user.name t \
+  && printf 'remote rule\n' > feedback_remote.md && git add . && git commit -qm remote && git push -q )
+HOME="$MH" PATH="$SB:$PATH" bash "$KIT/scripts/run-feedback-miner.sh" >/dev/null 2>&1
+[ -f "$MH/.claude/memory/feedback_remote.md" ] && ok "daily run pulls memory repo first" || fail "pull missing"
+UH="$TMP/home7"; mkdir -p "$UH/.claude"
+git clone -q "$TMP/mem-origin.git" "$UH/.claude/memory"
+git -C "$UH/.claude/memory" remote set-url origin "$TMP/nonexistent.git"
+HOME="$UH" PATH="$SB:$PATH" bash "$KIT/scripts/run-feedback-miner.sh" >/dev/null 2>&1
+check "unreachable origin: miner run still succeeds" 0 $?
+
 # ---------- installer ----------
 echo "install.sh:"
 IH="$TMP/home3"; mkdir -p "$IH/.claude/memory"

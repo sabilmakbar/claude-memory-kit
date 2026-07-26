@@ -29,6 +29,11 @@ mkdir "$LOCK" 2>/dev/null || exit 0          # concurrent-session mutex
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 echo "$today" > "$STAMP"                     # stamp BEFORE spawning: miner session can't re-trigger
 
+# sync memory from remote first so the complementarity check sees other machines'
+# memories, not yesterday's local copy. Never blocks the run: ff-only (no merges),
+# no credential prompts, quiet failure on offline / dirty tree / not-a-repo.
+GIT_TERMINAL_PROMPT=0 git -C "$HOME/.claude/memory" pull --ff-only --quiet >/dev/null 2>&1 || true
+
 # window = since last successful extract; first run defaults to 26h back
 now=$(date +%s)
 if [ -f "$STATE" ]; then since=$(cat "$STATE"); else since=$(( now - 93600 )); fi

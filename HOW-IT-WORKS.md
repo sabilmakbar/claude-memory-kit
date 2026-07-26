@@ -87,7 +87,8 @@ a moment of autopilot.
   become memory. The miner writes to exactly one file: the tracker.
 - **Cost is small.** One short Claude call per day. It reads what you typed (typically a
   few dozen messages) plus your existing memory files and guidelines — that's how it can
-  tell what's already known.
+  tell what's already known. If your memory repo has a remote, the miner pulls it first,
+  so "already known" includes what your other machines recorded since yesterday.
 - **Telling Claude directly still works — and wins.** Saying "remember this" /
   "add this to feedback" in any session saves a preference immediately, no review needed.
   The miner only fills the gaps you *didn't* think to dictate: anything already in memory
