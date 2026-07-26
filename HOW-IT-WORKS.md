@@ -63,6 +63,22 @@ for one of:
 
 That's the whole loop: **notice → check → propose → you decide → Claude remembers.**
 
+## Where your memories live (and how they follow you)
+
+Each preference is a small text file in one folder on your machine. On every prompt, the
+kit rebuilds the index Claude loads from whatever files are actually there — so the index
+can never drift out of date.
+
+Syncing is optional. If you turn that folder into a **private** GitHub repo (the README
+shows how), your memories survive a dead laptop and follow you to new machines: the first
+machine creates the repo, every later machine clones the same one. There is only ever one
+repo — a second machine that creates its own would end up with two disagreeing memories.
+
+Because synced memories leave your machine, a **guardrail** checks every commit before it
+happens: emails, home paths, private terms you list (like your employer's name), and
+malformed memory files all block the commit until fixed. Nothing sensitive can slip out in
+a moment of autopilot.
+
 ## Things worth knowing
 
 - **Nothing leaves your machine.** Your messages, the digest, and the tracker are local

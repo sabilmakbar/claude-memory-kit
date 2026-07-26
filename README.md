@@ -75,34 +75,52 @@ invisible to recall until renamed. So after installing, run `/review-memories` o
 walks those warnings and proposes the renames and frontmatter fixes that bring adopted
 files into the index and up to the authoring conventions.
 
-## Using the guardrail with your memory repo
+## Syncing memories across machines (optional)
 
-If you keep your actual memories in their own git repo (recommended, so they sync across
-machines), point that repo's git hooks at the kit's guardrail:
+Without this step everything works, but your memories live on one disk. With it, they
+live in a **private GitHub repo**: a dead laptop loses nothing, and a new machine starts
+with everything you've ever taught Claude. You create the repo **once**, on your first
+machine — every other machine joins the same repo, never creates a second one.
 
-```bash
-git -C ~/your-memory-repo config core.hooksPath ~/claude-memory-kit/guardrail
-```
+**Before the first push, on every machine:** add your private terms (employer name,
+anything identifying) to `~/claude-memory-kit/guardrail/denylist.local` (gitignored), or
+export `CLAUDE_CONFIG_DENYLIST="term1|term2"`. The built-in guardrail patterns catch
+generic leaks (emails, home paths); only you know what else is sensitive.
 
-No memory repo yet? The fastest start is the
+### First machine — create the repo
+
+Fastest: use the
 [claude-memories-template](https://github.com/sabilmakbar/claude-memories-template) —
-click "Use this template", create a **private** repo, and clone it to `~/.claude/memory`;
-it ships the layout, example files, and gitignore ready-made. Or turn the central store
-into a repo by hand:
+click "Use this template", create a **private** repo, clone it to `~/.claude/memory`, and
+re-run `install.sh`. Or turn your existing memory folder into the repo by hand:
 
 ```bash
 cd ~/.claude/memory
 git init
-git config core.hooksPath ~/claude-memory-kit/guardrail
-git add . && git commit -m "Initial memory"
+git add . && git commit -m "Initial memory"     # ← the guardrail vets even this commit
 gh repo create <your-user>/claude-memories --private --source . --push
 ```
 
-The guardrail vets that very first commit, so a leak can't slip in at bootstrap time.
+The installer detects when `~/.claude/memory` is a git repo and wires the guardrail (and
+hides index churn from your diffs) automatically — re-run `~/claude-memory-kit/install.sh`
+after creating the repo and you're done. The manual wiring line
+(`git config core.hooksPath ~/claude-memory-kit/guardrail`) is only needed for a memory
+repo kept somewhere other than `~/.claude/memory`.
 
-Add your private terms (employer, machine mounts) to `~/claude-memory-kit/guardrail/denylist.local`
-(gitignored) or export `CLAUDE_CONFIG_DENYLIST="term1|term2"`. The built-in patterns are
-generic, so the kit itself carries no identifying information.
+### Every other machine — join the existing repo
+
+Do **not** create a new repo or reuse the template here; clone the one you already have:
+
+```bash
+mv ~/.claude/memory ~/.claude/memory.local-backup    # keep anything this machine learned
+git clone <your-existing-memories-repo> ~/.claude/memory
+~/claude-memory-kit/install.sh                       # wires the guardrail automatically
+```
+
+Then compare `~/.claude/memory.local-backup/` against the clone: copy in any memory file
+this machine had that the repo lacks, commit (the guardrail checks it), and delete the
+backup. From here on, `git pull`/`git push` in `~/.claude/memory` is how machines share
+what they learn — run `/review-memories` occasionally to keep the merged set tidy.
 
 ## FAQ
 
