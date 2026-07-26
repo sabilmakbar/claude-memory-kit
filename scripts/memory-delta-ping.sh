@@ -30,7 +30,7 @@ last=$(stat -c %Y "$marker" 2>/dev/null || stat -f %m "$marker" 2>/dev/null || e
 
 # MEMORY.md is excluded — it regenerates every prompt and would fire forever
 changed=$(find "$MEM" "$MOUNTS" -maxdepth 2 -name '*.md' ! -name 'MEMORY.md' -newer "$marker" 2>/dev/null \
-    | sed "s|$HOME/.claude/||" | sort -u | paste -sd, - | sed 's/,/, /g')
+    | sed "s|$HOME/.claude/||" | LC_ALL=C sort -u | paste -sd, - | sed 's/,/, /g')
 [ -z "$changed" ] && exit 0
 
 touch "$marker"

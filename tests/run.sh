@@ -71,7 +71,8 @@ sleep 1
 [ -z "$(ping s1)" ] && ok "no change: silent" || fail "quiet"
 touch "$DH/.claude/memory/feedback_x.md" "$DH/.claude/memory-mounts/-m/project_y.md"
 out=$(ping s1)
-echo "$out" | grep -q "feedback_x.md, memory-mounts/-m/project_y.md" && ok "change: notice lists both files" || fail "notice ($out)"
+echo "$out" | grep -q "memory/feedback_x.md" && echo "$out" | grep -q "memory-mounts/-m/project_y.md" \
+  && ok "change: notice lists both files" || fail "notice ($out)"
 [ -z "$(ping s1)" ] && ok "same change: announced once" || fail "dedup"
 sleep 1; touch "$DH/.claude/memory/feedback_x.md"
 [ -z "$(ping s1 3600)" ] && ok "inside throttle: silent" || fail "throttle"
