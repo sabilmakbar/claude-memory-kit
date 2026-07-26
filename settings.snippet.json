@@ -9,6 +9,14 @@
             "async": true
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.claude/scripts/memory-delta-ping.sh\" 2>/dev/null || true"
+          }
+        ]
       }
     ],
     "PreToolUse": [
