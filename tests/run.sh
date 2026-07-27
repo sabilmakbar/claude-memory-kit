@@ -106,6 +106,28 @@ rm "$RH/.claude/memory/.last-review"
 out=$(HOME="$RH" bash "$KIT/scripts/memory-review-reminder.sh")
 echo "$out" | grep -q 'Memory review due' && ok "missing stamp: reminder" || fail "missing stamp"
 
+RG="$TMP/home8"; mkdir -p "$RG/.claude/memory"
+git init -q "$RG/.claude/memory"
+git -C "$RG/.claude/memory" config user.email t@t && git -C "$RG/.claude/memory" config user.name t
+remind() { HOME="$RG" MEMORY_MACHINE_LABEL=testbox bash "$KIT/scripts/memory-review-reminder.sh"; }
+out=$(remind)
+echo "$out" | grep -q 'never recorded' && ok "git repo, no marker: honest never-reviewed nag" || fail "no marker ($out)"
+git -C "$RG/.claude/memory" commit -q --allow-empty -m "memory review (otherbox): no changes"
+[ -z "$(remind)" ] && ok "git: fresh marker by ANY machine silences nag" || fail "any-machine marker"
+mkdir -p "$RG/.claude/memory-mounts/-m" && printf 'x\n' > "$RG/.claude/memory-mounts/-m/project_x.md"
+out=$(remind)
+echo "$out" | grep -q 'mount-local memories never reviewed' && ok "git: mounts need THIS machine's marker" || fail "mount scope ($out)"
+git -C "$RG/.claude/memory" commit -q --allow-empty -m "memory review (testbox): no changes"
+[ -z "$(remind)" ] && ok "git: own marker silences mount nag" || fail "own marker"
+RG9="$TMP/home9"; mkdir -p "$RG9/.claude/memory"
+git init -q "$RG9/.claude/memory"
+git -C "$RG9/.claude/memory" config user.email t@t && git -C "$RG9/.claude/memory" config user.name t
+old_epoch=$(( $(date +%s) - 9*86400 ))
+GIT_COMMITTER_DATE="@$old_epoch +0000" GIT_AUTHOR_DATE="@$old_epoch +0000" \
+    git -C "$RG9/.claude/memory" commit -q --allow-empty -m "memory review (otherbox): tidy"
+out=$(HOME="$RG9" MEMORY_MACHINE_LABEL=testbox bash "$KIT/scripts/memory-review-reminder.sh")
+echo "$out" | grep -q '9 days since last, any machine' && ok "git: stale marker: day count from history" || fail "stale marker ($out)"
+
 echo "scripts/feedback-proposals-ping.sh:"
 PH="$TMP/home5"; mkdir -p "$PH/.local/share/claude-feedback"
 out=$(HOME="$PH" bash "$KIT/scripts/feedback-proposals-ping.sh")

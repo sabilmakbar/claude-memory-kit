@@ -43,7 +43,16 @@ editing files in place; the index regenerates automatically from the files.
 
 ## Wrap up (always, even if nothing changed)
 
-1. Reset the reminder stamp: `date +%s > ~/.claude/memory/.last-review`
-2. If changes were made, offer to commit them in the memory repo (one logical change
-   per commit, staging and committing as separate steps), and to push so other
-   machines pick the cleaned-up memories on their next pull.
+Record the review in the single source of truth:
+
+- **Memory repo has git:** commit the approved changes (one logical change per commit,
+  staging and committing as separate steps). The **last** commit's subject must be a
+  review marker: `memory review (<machine-label>): <one-line summary>` — machine-label
+  is `$MEMORY_MACHINE_LABEL` if set, else the short hostname (`hostname -s`). If the
+  review changed nothing, record it anyway:
+  `git commit --allow-empty -m "memory review (<machine-label>): no changes"`.
+  Then offer to push — the reminder on every machine reads these markers from git
+  history (a marker by any machine covers the synced memories; only a marker from this
+  machine's label covers its mount-local memories), so an unpushed marker silences
+  only this machine.
+- **No git repo:** reset the local stamp instead: `date +%s > ~/.claude/memory/.last-review`

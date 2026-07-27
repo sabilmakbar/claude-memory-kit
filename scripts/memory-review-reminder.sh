@@ -1,21 +1,51 @@
 #!/bin/bash
-# Shows a memory review reminder banner if 7+ days have passed since last review.
-# Runs via SessionStart hook. Outputs JSON systemMessage when reminder is due.
+# Memory review reminder (SessionStart hook). Single source of truth: review-marker
+# commits in the memory repo's history — subjects starting `memory review (<label>): `.
+#  - a marker by ANY machine silences the synced-memories nag everywhere (history
+#    arrives via the pulls the miner and skills already do; this hook stays offline)
+#  - mount-local memories still need a marker from THIS machine's label
+# No git repo → falls back to the machine-local .last-review stamp (no sync problem
+# exists without a remote, so the stamp is not a second source of truth there).
 
-LAST_REVIEW="$HOME/.claude/memory/.last-review"
+MEM="$HOME/.claude/memory"
 WEEK_SECS=$((7 * 24 * 3600))
 NOW=$(date +%s)
+LABEL="${MEMORY_MACHINE_LABEL:-$(hostname -s)}"
 
-if [ ! -f "$LAST_REVIEW" ]; then
-    ELAPSED=$((WEEK_SECS + 1))
+overdue() { # <epoch-or-empty> → "never" | days-overdue | "" (fresh)
+    [ -z "$1" ] && { echo never; return; }
+    local e=$((NOW - $1))
+    [ "$e" -gt "$WEEK_SECS" ] && echo $((e / 86400))
+}
+
+if [ -d "$MEM/.git" ]; then
+    ANY=$(git -C "$MEM" log --grep='^memory review' -1 --format=%ct 2>/dev/null)
+    HERE=$(git -C "$MEM" log --grep="^memory review ($LABEL)" -1 --format=%ct 2>/dev/null)
 else
-    LAST=$(cat "$LAST_REVIEW")
-    ELAPSED=$((NOW - LAST))
+    ANY=""; [ -f "$MEM/.last-review" ] && ANY=$(cat "$MEM/.last-review")
+    HERE="$ANY"
 fi
 
-if [ "$ELAPSED" -gt "$WEEK_SECS" ]; then
-    DAYS=$(( ELAPSED / 86400 ))
-    MSG="Memory review due (${DAYS} days since last). Ask me: review my memories and update preferences."
-    # systemMessage = user-facing toast (not all UIs show it); additionalContext reaches Claude
-    printf '{"systemMessage": "%s", "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "%s Mention this to the user at the start of your next reply."}}\n' "$MSG" "$MSG"
+MSG=""
+case "$(overdue "$ANY")" in
+    never) MSG="Memory review due (never recorded on any machine)";;
+    "") ;;
+    *) MSG="Memory review due ($(overdue "$ANY") days since last, any machine)";;
+esac
+
+if ls "$HOME/.claude/memory-mounts"/*/*.md >/dev/null 2>&1; then
+    LMSG=""
+    case "$(overdue "$HERE")" in
+        never) LMSG="mount-local memories never reviewed on this machine";;
+        "") ;;
+        *) LMSG="mount-local memories on this machine unreviewed for $(overdue "$HERE") days";;
+    esac
+    if [ -n "$LMSG" ]; then
+        if [ -n "$MSG" ]; then MSG="$MSG; $LMSG"; else MSG="Memory review due ($LMSG)"; fi
+    fi
 fi
+
+[ -z "$MSG" ] && exit 0
+MSG="$MSG. Ask me: review my memories and update preferences."
+# systemMessage = user-facing toast (not all UIs show it); additionalContext reaches Claude
+printf '{"systemMessage": "%s", "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "%s Mention this to the user at the start of your next reply."}}\n' "$MSG" "$MSG"
