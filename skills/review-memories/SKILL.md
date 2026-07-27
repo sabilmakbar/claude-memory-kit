@@ -5,7 +5,9 @@ description: Periodic health check of Claude's memory files — merge overlaps, 
 
 # Review memories
 
-Read `~/.claude/memory/MEMORY.md` and every memory file it lists (plus the current
+Sync first if the repo has a remote (`git -C ~/.claude/memory pull --ff-only`) so the
+review covers the latest memories, not this machine's possibly-stale copies — then read
+`~/.claude/memory/MEMORY.md` and every memory file it lists (plus the current
 mount's entries under `~/.claude/memory-mounts/` if present).
 
 ## What to look for
@@ -43,4 +45,5 @@ editing files in place; the index regenerates automatically from the files.
 
 1. Reset the reminder stamp: `date +%s > ~/.claude/memory/.last-review`
 2. If changes were made, offer to commit them in the memory repo (one logical change
-   per commit, staging and committing as separate steps).
+   per commit, staging and committing as separate steps), and to push so other
+   machines pick the cleaned-up memories on their next pull.
