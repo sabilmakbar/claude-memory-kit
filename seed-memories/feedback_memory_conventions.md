@@ -16,9 +16,8 @@ Structural conventions for every memory file written, in global memory AND memor
 - **Body = What → Why → How.** State the rule/fact directly (the *what*), then `**Why:**`
   (the generalized reason it matters) and `**How to apply:**` (when it fires, what's
   exempt) — for an inherently prescriptive rule, the rule statement itself can carry the
-  how, no separate header needed. Do **not** add an `**Evidence**` section or cite a specific incident in a synced
-  file — distill any incident's generalizable lesson into Why/How and leave the actual
-  quotes, repo, and paths to the miner tracker and git history. Link related memories with
+  how, no separate header needed. No `**Evidence**` section or cited incident in a synced file — see
+  [[feedback_memory_generality]] for that content rule. Link related memories with
   `[[name]]` targeting their `name:` field.
 - **Provenance:** miner-accepted rules carry `source: feedback-miner (P-NNN, accepted date)`
   in metadata; manual saves carry none.
