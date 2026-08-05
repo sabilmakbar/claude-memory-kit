@@ -45,9 +45,14 @@ if [ ! -s "$PROP/digest-latest.txt" ]; then
 fi
 
 cd "$PROP" || exit 0
+# one run of log history, bounded: previous run's log -> miner.log.1, fresh log this run
+[ -f "$PROP/miner.log" ] && mv -f "$PROP/miner.log" "$PROP/miner.log.1"
 TIMEOUT=""; command -v timeout >/dev/null 2>&1 && TIMEOUT="timeout 600"  # absent on stock macOS
+# stream-json --verbose = full turn-by-turn trace in the log (plain --verbose adds
+# nothing in text mode); this is what makes the session transcript redundant below
 $TIMEOUT "$CLAUDE_BIN" -p "Read $MINER_DOC and follow it exactly. [feedback-miner]" \
       --model "$MODEL" --allowedTools "Read,Write,Edit" \
+      --output-format stream-json --verbose \
       >> "$PROP/miner.log" 2>&1
 # success = the tracker was actually (re)written this run — exit code alone lies
 # (a session can exit 0 with its Write denied). Only then advance the extract window.
@@ -57,3 +62,12 @@ if [ "$tracker_mtime" -ge "$now" ]; then
 else
     echo "[$(date +%Y-%m-%dT%H:%M:%S%z)] miner run left no updated tracker; window not advanced" >> "$PROP/miner.log"
 fi
+
+# the headless run above wrote a session transcript that is title-less, byte-identical
+# to every other miner session, and fully redundant with the verbose log — delete, so
+# miner runs never clutter session listings. Covers both project-dir encodings ('.'
+# kept vs mapped to '-'; varies by Claude Code version). All sessions in these dirs
+# are miner-owned: the tracker dir is the miner's cwd and nothing else runs there.
+for enc in "$(echo "$PROP" | tr '/' '-')" "$(echo "$PROP" | tr '/.' '--')"; do
+    rm -f "$HOME/.claude/projects/$enc"/*.jsonl 2>/dev/null
+done
