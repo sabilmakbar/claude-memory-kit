@@ -19,8 +19,10 @@ Structural conventions for every memory file written, in global memory AND memor
   how, no separate header needed. No `**Evidence**` section or cited incident in a synced file — see
   [[feedback_memory_generality]] for that content rule. Link related memories with
   `[[name]]` targeting their `name:` field.
-- **Provenance:** miner-accepted rules carry `source: feedback-miner (P-NNN, accepted date)`
-  in metadata; manual saves carry none.
+- **No provenance field in metadata.** Don't record `source:` or proposal ids in a memory
+  file; the proposal tracker (which logs `accepted → <file>` for every accepted rule) and
+  git history are the record. A hand-copied id drifts out of sync with the tracker, is
+  never read at recall time, and a wrong one actively misleads a later review.
 - **Never hand-edit `MEMORY.md` content** — it is regenerated from the files each prompt;
   change a file's `description:` instead.
 
