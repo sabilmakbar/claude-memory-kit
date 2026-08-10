@@ -73,11 +73,15 @@ cd ~/.claude/memory
 git init
 git config core.hooksPath ~/.claude/memory-kit/guardrail  # wire the guardrail FIRST
 git add . && git commit -m "Initial memory"               # now genuinely vetted
-gh repo create <your-user>/claude-memories --private --source . --push
+git remote add origin https://github.com/<your-user>/claude-memories.git  # create it first
+git push -u origin main
 ```
 
 Wire the guardrail before the first commit. That commit carries everything you have
 accumulated unchecked, so it is the one that needs vetting most.
+
+With the GitHub CLI installed, `gh repo create <your-user>/claude-memories --private
+--source . --push` replaces those last two lines and creates the repo for you.
 </details>
 
 **On every other machine**, never create a second repo. Join the one you have:
@@ -111,6 +115,10 @@ git config credential.https://github.com.helper ''
 git config --add credential.https://github.com.helper \
   '!f() { test "$1" = get && echo "password=$(gh auth token --user <personal-user>)"; }; f'
 ```
+
+That version borrows the token from the GitHub CLI. If you prefer SSH, a host alias in
+`~/.ssh/config` pointing at your personal key does the same job with no helper at all,
+and nothing to expire.
 </details>
 
 ## How it stays trustworthy
