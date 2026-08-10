@@ -24,6 +24,31 @@ if ! { [ -L "$MEMORY_DIR" ] && [ "$(readlink "$MEMORY_DIR")" = "$CENTRAL" ]; }; 
     ln -sfn "$CENTRAL" "$MEMORY_DIR"
 fi
 
+# Strip harness-stamped frontmatter keys (issue #16). Claude Code's native memory
+# writer adds node_type / originSessionId / modified on every save; none carry
+# cross-machine value, and `modified` churns on every write (commit noise, merge
+# friction). Manual strips don't stick — the next native save re-adds them — so the
+# index pass heals files automatically. Only well-formed frontmatter is touched, and
+# a file is rewritten only when a stamped key is actually present: one heal per
+# stamped file, then a no-op.
+STAMPED='^[[:space:]]*(node_type|originSessionId|modified):'
+normalize_frontmatter() { # <dir> — heal root-level .md files in place
+    for f in $(grep -lE "$STAMPED" "$1"/*.md 2>/dev/null); do
+        case "$(basename "$f")" in MEMORY.md) continue ;; esac
+        [ "$(head -1 "$f")" = "---" ] || continue
+        end=$(awk 'NR>1 && /^---$/ {print NR; exit}' "$f")
+        [ -n "$end" ] && [ "$end" -gt 2 ] || continue
+        # candidate grep saw the whole file; confirm the stamp is in the frontmatter, not the body
+        sed -n "2,$((end-1))p" "$f" | grep -qE "$STAMPED" || continue
+        awk -v end="$end" -v re="$STAMPED" '
+            NR>1 && NR<end && $0 ~ re { next }
+            NR>1 && NR<end && /^metadata:[[:space:]]+$/ { print "metadata:"; next }  # the writer also leaves a trailing space here
+            { print }
+        ' "$f" > "$f.norm.$$" && mv "$f.norm.$$" "$f"
+    done
+}
+normalize_frontmatter "$CENTRAL"
+
 # Step 2: Detect current mount point
 MOUNT=$(df -P "$PROJECT_DIR" 2>/dev/null | awk 'NR==2 {print $NF}')
 [ -z "$MOUNT" ] && exit 0
@@ -38,6 +63,7 @@ else
 fi
 MOUNT_MEMORY="$MOUNTS_BASE/$MOUNT_ENCODED"
 mkdir -p "$MOUNT_MEMORY"
+normalize_frontmatter "$MOUNT_MEMORY"
 
 # Step 3: Rebuild MEMORY.md = fixed header + index generated from the memory files.
 # The index is derived from each file's frontmatter, so it can never drift out of

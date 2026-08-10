@@ -64,6 +64,37 @@ HOME="$FH" CLAUDE_PROJECT_DIR="$FH/proj" bash "$KIT/scripts/ensure-memory-symlin
 grep "Unindexed" "$FH/.claude/memory/MEMORY.md" | grep -qE "README|CLAUDE" \
   && fail "known docs wrongly flagged" || ok "README/CLAUDE.md exempt from unindexed warning"
 
+# --- stamped-frontmatter normalization (issue #16) ---
+# fixture mirrors the harness writer byte-for-byte: node_type/originSessionId nested
+# under a `metadata: ` line with a trailing space, `modified` at the top level
+NH="$TMP/home-norm"; mkdir -p "$NH/.claude/memory" "$NH/proj"
+SF="$NH/.claude/memory/feedback_stamped.md"
+printf -- '---\nname: feedback_stamped\ndescription: "keeps this"\nmetadata: \n  node_type: memory\n  type: feedback\n  originSessionId: cc6d0e44-5eaa-4a7b-8eff-28a7a81a4562\nmodified: 2026-08-10T08:00:00.000Z\n---\n\nBody keeps\nmodified: mentions.\n' > "$SF"
+CF="$NH/.claude/memory/feedback_clean.md"
+printf -- '---\nname: feedback_clean\ndescription: "c"\nmetadata:\n  type: feedback\n---\nmodified: in body only.\n' > "$CF"
+REF1="$TMP/norm-ref1"; touch "$REF1"; sleep 1   # any rewrite lands strictly after REF1
+HOME="$NH" CLAUDE_PROJECT_DIR="$NH/proj" bash "$KIT/scripts/ensure-memory-symlink.sh" >/dev/null 2>&1
+
+fm() { sed -n '2,/^---$/p' "$1"; }   # frontmatter block of a file
+fm "$SF" | grep -q 'node_type'        && fail "node_type stripped" || ok "node_type stripped"
+fm "$SF" | grep -q 'originSessionId'  && fail "originSessionId stripped" || ok "originSessionId stripped"
+fm "$SF" | grep -q '^modified:'       && fail "modified stripped from frontmatter" || ok "modified stripped from frontmatter"
+grep -q '^modified: mentions' "$SF"   && ok "body text left alone" || fail "body text left alone"
+grep -q '^metadata:$' "$SF" && grep -q '^  type: feedback$' "$SF" && grep -q '^name: feedback_stamped$' "$SF" \
+  && ok "kept fields intact, metadata trailing space healed" || fail "kept fields intact"
+grep -q 'feedback_stamped.md) — keeps this' "$NH/.claude/memory/MEMORY.md" \
+  && ok "normalized file still indexed" || fail "normalized file still indexed"
+[ "$CF" -nt "$REF1" ] && fail "stamp-free file never rewritten" || ok "stamp-free file never rewritten"
+
+# second run: central file already healed must not be rewritten again (mtime churn
+# would re-trigger delta pings and dirty the repo); a freshly stamped mount file heals
+MNT=$(ls -d "$NH/.claude/memory-mounts"/*/ 2>/dev/null | head -1)
+printf -- '---\nname: proj_note\ndescription: "m"\nmetadata: \n  node_type: memory\n  type: project\n---\nb\n' > "$MNT/proj_note.md"
+REF2="$TMP/norm-ref2"; touch "$REF2"; sleep 1
+HOME="$NH" CLAUDE_PROJECT_DIR="$NH/proj" bash "$KIT/scripts/ensure-memory-symlink.sh" >/dev/null 2>&1
+[ "$SF" -nt "$REF2" ] && fail "healed file not rewritten again" || ok "healed file not rewritten again"
+fm "$MNT/proj_note.md" | grep -q 'node_type' && fail "mount-side file healed too" || ok "mount-side file healed too"
+
 # ---------- memory-delta-ping ----------
 echo "scripts/memory-delta-ping.sh:"
 DH="$TMP/home2"; mkdir -p "$DH/.claude/memory" "$DH/.claude/memory-mounts/-m"
