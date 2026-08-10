@@ -10,9 +10,15 @@ to remember them for you.
 
 Everything runs on your machine, and nothing is saved without your approval.
 
-New here? [HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md) explains the daily loop in plain language.
-Engineers who want the architecture and the reasoning behind it should read
-[DESIGN.md](docs/DESIGN.md).
+Three docs form the reading path, shortest first. New here?
+[HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md) explains the daily loop in plain language, and it is
+the only one you need in order to use the kit. [FLOWS.md](docs/FLOWS.md) is the next step
+down: diagrams of what runs when, with the specifics the plain-language version leaves out.
+[DESIGN.md](docs/DESIGN.md) is for anyone changing the kit rather than running it: every rule
+in the code with the reason it exists.
+
+If something is broken rather than unclear, go straight to
+[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ## What you get
 
@@ -44,13 +50,16 @@ have. Re-running it is always safe.
 
 Start a new Claude Code session, then confirm the index got built:
 
-```bash
-head -3 ~/.claude/memory/MEMORY.md
+```
+$ head -3 ~/.claude/memory/MEMORY.md
+# Memory Index
+> Two-tier system: global memories always load; mount-specific appear in "## Mount:" section below.
+> Write global preferences/feedback to ~/.claude/memory/; write filesystem/project-specific memories to ~/.claude/memory-mounts/<encoded-mount>/ (mount path with `/` replaced by `-`).
 ```
 
-You should see a `# Memory Index` heading and a line for each memory file you have. That
-file is regenerated on every prompt, so if it is missing or empty after a fresh session,
-the hooks did not run and nothing else will work either.
+Below those lines you get one entry per memory file you have. The index is regenerated on
+every prompt, so if the file is missing or empty after a fresh session, the hooks did not
+run and nothing else will work either.
 
 If you had memories before installing, run `/review-memories` once. It finds files the
 index cannot see yet and proposes the small renames that fix them.
@@ -171,6 +180,30 @@ whatever this machine defaults to.
 When a sync fails, the kit's own message names the mechanism your repo is configured
 with, which tells you where to look.
 
+## Is it working?
+
+If something seems off, or Claude Code has just updated itself, run the smoke suite. It
+checks the installed kit against this machine's real data rather than against fixtures:
+
+```
+$ bash ~/.claude/memory-kit/tests/smoke.sh
+syntax (tested on bash 3.2.57(1)-release):
+  ✓ all entrypoints parse
+extract-user-messages.sh (real transcripts, 7-day window):
+  ✓ block headers have [project/session timestamp] shape (441 msgs)
+...
+smoke: 25 passed, 0 failed, 1 skipped
+smoke: stamped .verified = 2.1.222
+```
+
+`0 failed` is the answer you want. A skip is normal and means a check had nothing on this
+machine to run against. The last line records which Claude Code version the kit has been
+checked against here, and it is what the daily version check compares against.
+
+There is nothing to redact before sharing this. The output is check names, counts, and version
+strings, plus the name of the credential helper your memory repo uses if you sync one. No
+memory file names, no memory contents, no paths, no username. Paste it as it is.
+
 ## How it stays trustworthy
 
 Two test suites cover the kit: a fixture suite that gates every install and every push,
@@ -213,12 +246,26 @@ worth knowing: code you paste into a message is part of what you typed, so it ca
 in the digest. The digest is a plain text file at
 `~/.local/share/claude-feedback/digest-latest.txt` if you want to look.
 
-**How do I know it is working?** Open the tracker at
+**How do I know the daily miner is running?** Open the tracker at
 `~/.local/share/claude-feedback/proposals.md` and look at the `## Daily log` table near
 the bottom. One row per run, with how many messages and sessions it read. A row for today
 or yesterday means it is running; `0 new` is the normal result on most days. If something
 has stopped it from running at all, the kit tells you once a day rather than staying
 quiet.
+
+**What if two machines mine on the same day?** Nothing collides. The miner's tracker lives
+outside your memory folder, so it is never synced: each machine keeps its own window and
+its own proposal list, and each reads only the transcripts on that machine. The one shared
+thing is the memory files themselves. So if you accept a preference on one machine and pull
+it on the other, the second machine's miner sees it is already covered and retires its own
+copy of that proposal instead of asking you twice.
+
+**Can I edit a memory file by hand?** Yes, and it takes effect on your next prompt, because
+the index is rebuilt from whatever files are actually on disk rather than from a cached
+list. Two things to keep right: the `name` in the frontmatter has to match the filename, and
+the file needs its `description`. If either is off, the file is invisible to the index;
+`/review-memories` finds those and proposes the rename that fixes them. On a synced folder
+the commit guardrail checks the same fields, so a malformed file cannot leave the machine.
 
 **Web-only sessions?** No. Everything lives in local hooks and scripts.
 

@@ -19,6 +19,10 @@ rather than one-off instructions. The signs it watches for:
 - you said the same thing on different days or in different projects
 - you sounded frustrated, or used words like "always", "never", "from now on"
 
+The full brief that session works from is checked into the repo at
+[scripts/feedback-miner.md](../scripts/feedback-miner.md), if you want to read exactly what
+it is told to look for and how it scores what it finds.
+
 **3. It checks whether Claude already knows.**
 Each candidate is compared against your existing memory. Anything already recorded is
 dropped. If a preference is partly known, only the missing piece is proposed.
@@ -29,6 +33,9 @@ the rule in a sentence or two, when it applies, how often and how strongly you s
 and your own words as evidence. A score puts the strongest patterns on top. Seeing the
 same pattern again later doesn't create a duplicate; the existing proposal just gains
 evidence.
+
+If you would rather see all of that as a picture, [FLOWS.md](FLOWS.md) has the same loop as
+a diagram, along with what runs at which point in a session.
 
 ## Your part (the only part that needs you)
 
