@@ -193,6 +193,28 @@ exists to surface exactly that.
 the index, and the guardrail carry on. Saying it explicitly matters, because the kit
 treats a feature that goes quiet for days as a fault and tells you about it once a day.
 
+**What does the daily miner cost?** One Claude call a day, on Sonnet by default. It reads
+what you typed since the last run plus your memory files and global `CLAUDE.md`, which on
+a mature setup is roughly 25,000 input tokens and a couple of thousand out. It runs
+through your own Claude account, so on a subscription plan that is a small slice of your
+daily usage rather than a separate bill; on an API key it works out to a few cents a day.
+The number grows with your memory folder, not with how much you used Claude. Override the
+model with `FEEDBACK_MINER_MODEL`.
+
+**Does it read my code?** No. The digest contains only messages you typed. Claude's
+replies, tool output, command output, and your editor selection are all stripped out
+before the miner sees anything, and it is never pointed at your repository. The one thing
+worth knowing: code you paste into a message is part of what you typed, so it can appear
+in the digest. The digest is a plain text file at
+`~/.local/share/claude-feedback/digest-latest.txt` if you want to look.
+
+**How do I know it is working?** Open the tracker at
+`~/.local/share/claude-feedback/proposals.md` and look at the `## Daily log` table near
+the bottom. One row per run, with how many messages and sessions it read. A row for today
+or yesterday means it is running; `0 new` is the normal result on most days. If something
+has stopped it from running at all, the kit tells you once a day rather than staying
+quiet.
+
 **Web-only sessions?** No. Everything lives in local hooks and scripts.
 
 ## Uninstall
