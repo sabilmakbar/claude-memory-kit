@@ -135,6 +135,14 @@ c2=$(jq -r '[.hooks[]?[]?.hooks[]?.command] | length' "$FH/.claude/settings.json
 jq -e . "$FH/.claude/settings.json" >/dev/null 2>&1 && ok "merged settings still valid JSON" || bad "merged settings invalid"
 [ -x "$FH/.claude/scripts/run-feedback-miner.sh" ] && [ -f "$FH/.claude/scripts/feedback-miner.md" ] \
     && ok "scripts + miner brief deployed as siblings" || bad "deployed scripts incomplete"
+# upgrade path: a hook removed from an existing group must be re-appended, not
+# dropped as a "duplicate" of the group it belongs to
+jq '.hooks.SessionStart[0].hooks |= map(select(.command | contains("memory-kit-version-check") | not))
+    | .hooks.SessionStart |= map(select((.hooks|length) > 0))' \
+    "$FH/.claude/settings.json" > "$FH/.claude/settings.json.t" && mv "$FH/.claude/settings.json.t" "$FH/.claude/settings.json"
+HOME="$FH" bash "$KIT/install.sh" >/dev/null 2>&1
+grep -q 'memory-kit-version-check' "$FH/.claude/settings.json" \
+    && ok "upgrade re-adds a hook missing from an existing group" || bad "upgrade path drops new hooks in existing groups"
 
 # ---------- 5. real state untouched ----------
 AFTER=$(snap)
