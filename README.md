@@ -223,3 +223,18 @@ Remove the kit's hooks from `~/.claude/settings.json`, then delete
 `~/.claude/memory-kit`, the kit's skills in `~/.claude/skills`, the two seed convention
 files in `~/.claude/memory`, and `~/.local/share/claude-feedback` (the miner's tracker).
 Your memory files themselves are yours and stay where they are.
+
+## Related projects
+
+- **[claude-setup-template](https://github.com/sabilmakbar/claude-setup-template)**: one
+  manifest for a whole Claude Code setup. You declare the kits, CLI tools, plugins, and
+  hooks a machine should have, and its `setup.sh` converges the machine onto it. Its
+  example manifest installs this kit, so start there if you are setting up a machine
+  rather than adding one piece.
+- **[claude-session-kit](https://github.com/sabilmakbar/claude-session-kit)**: the sibling
+  kit. It gives sessions real names, leaves you a note for next time, and moves or splits
+  them cleanly, where this kit looks after what Claude remembers about you.
+- **[claude-memories-template](https://github.com/sabilmakbar/claude-memories-template)**:
+  the starting point for the private memory repo described above.
+
+MIT licensed, see [LICENSE](LICENSE).
