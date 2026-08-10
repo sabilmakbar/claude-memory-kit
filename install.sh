@@ -28,7 +28,7 @@ fi
 # this installer with the guard variable set, so gating cannot recurse.
 if [ -z "${MEMORY_KIT_INSTALL_GATED:-}" ] && [ -r "$REPO/tests/run.sh" ]; then
   echo "→ gating on the test suite"
-  if MEMORY_KIT_INSTALL_GATED=1 bash "$REPO/tests/run.sh" >/dev/null 2>&1; then
+  if MEMORY_KIT_INSTALL_GATED=1 bash "$REPO/tests/run.sh" >/dev/null 2>&1 </dev/null; then
     echo "  ✓ tests pass"
   else
     echo "  ✗ tests fail — refusing to deploy an untested tree. Run: bash $REPO/tests/run.sh"
