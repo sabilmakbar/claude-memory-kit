@@ -13,7 +13,7 @@ DEST="$CLAUDE/memory-kit"
 SETT="$CLAUDE/settings.json"
 mkdir -p "$CLAUDE/skills" "$CLAUDE/memory"
 
-echo "→ checking prerequisites (see DEPENDENCIES.md)"
+echo "→ checking prerequisites (see docs/DEPENDENCIES.md)"
 command -v jq >/dev/null 2>&1 || { echo "  ✗ jq required — install it and re-run"; exit 1; }
 for t in git gh; do command -v "$t" >/dev/null 2>&1 && echo "  ✓ $t" || echo "  ✗ $t missing"; done
 if command -v claude >/dev/null 2>&1 \
