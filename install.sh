@@ -39,17 +39,22 @@ echo "→ wiring hooks into settings.json (append-only, deduped by command)"
 cp "$SETT" "$SETT.bak"
 tmp="$(mktemp)"
 jq -s '
+  # dedup is PER HOOK (by script filename), not per group: a group keyed on its first
+  # hook silently drops any new hook later added to that group, so upgrades never land
   .[0] as $live | .[1] as $snip
   | $live
   | .hooks = (reduce ($snip.hooks | keys[]) as $k (($live.hooks // {});
       ($snip.hooks[$k]) as $groups
       | (.[$k] // []) as $existing
       | ([$existing[].hooks[]?.command // ""]) as $cmds
-      | ($groups | map(
-          ((.hooks[0].command) as $cmd
-           | (try ($cmd | capture("(?<f>[A-Za-z0-9_.-]+\\.(sh|md))").f) catch $cmd)) as $sig
-          | select([ $cmds[] | select(contains($sig)) ] | length == 0)
-        )) as $new
+      | ($groups
+         | map(.hooks |= map(
+             ((.command) as $cmd
+              | (try ($cmd | capture("(?<f>[A-Za-z0-9_.-]+\\.(sh|md))").f) catch $cmd)) as $sig
+             | select([ $cmds[] | select(contains($sig)) ] | length == 0)
+           ))
+         | map(select((.hooks | length) > 0))
+        ) as $new
       | .[$k] = ($existing + $new)
     ))
 ' "$SETT" "$REPO/settings.snippet.json" > "$tmp" && mv "$tmp" "$SETT"
