@@ -27,7 +27,7 @@ or an IDE extension. It cannot help web-only sessions on claude.ai.
 
 ## Install
 
-You need `jq`. The miner and sync also use `git`, `gh`, and the `claude` CLI. Details in
+You need `jq`. The miner and sync also use `git` and the `claude` CLI. Details in
 [DEPENDENCIES.md](docs/DEPENDENCIES.md).
 
 ```bash
@@ -38,7 +38,17 @@ git clone https://github.com/sabilmakbar/claude-memory-kit.git ~/claude-memory-k
 The installer runs its own test suite first and refuses to install if anything fails.
 It then places the kit in `~/.claude/memory-kit`, adds its hooks to your Claude Code
 settings without touching hooks from other tools, and keeps any memory files you already
-have. Re-running it is always safe. Start a new Claude Code session afterwards.
+have. Re-running it is always safe.
+
+Start a new Claude Code session, then confirm the index got built:
+
+```bash
+head -3 ~/.claude/memory/MEMORY.md
+```
+
+You should see a `# Memory Index` heading and a line for each memory file you have. That
+file is regenerated on every prompt, so if it is missing or empty after a fresh session,
+the hooks did not run and nothing else will work either.
 
 If you had memories before installing, run `/review-memories` once. It finds files the
 index cannot see yet and proposes the small renames that fix them.
