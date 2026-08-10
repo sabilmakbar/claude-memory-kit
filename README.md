@@ -10,9 +10,12 @@ to remember them for you.
 
 Everything runs on your machine, and nothing is saved without your approval.
 
-New here? [HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md) explains the daily loop in plain language.
-Engineers who want the architecture and the reasoning behind it should read
-[DESIGN.md](docs/DESIGN.md).
+Three docs, in the order you would want them. New here?
+[HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md) explains the daily loop in plain language, and it is
+the only one you need in order to use the kit. [FLOWS.md](docs/FLOWS.md) is the next step
+down: diagrams of what runs when, with the specifics the plain-language version leaves out.
+[DESIGN.md](docs/DESIGN.md) is for anyone changing the kit rather than running it: every rule
+in the code with the reason it exists.
 
 ## What you get
 
