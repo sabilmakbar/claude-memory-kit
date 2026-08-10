@@ -47,13 +47,16 @@ have. Re-running it is always safe.
 
 Start a new Claude Code session, then confirm the index got built:
 
-```bash
-head -3 ~/.claude/memory/MEMORY.md
+```
+$ head -3 ~/.claude/memory/MEMORY.md
+# Memory Index
+> Two-tier system: global memories always load; mount-specific appear in "## Mount:" section below.
+> Write global preferences/feedback to ~/.claude/memory/; write filesystem/project-specific memories to ~/.claude/memory-mounts/<encoded-mount>/ (mount path with `/` replaced by `-`).
 ```
 
-You should see a `# Memory Index` heading and a line for each memory file you have. That
-file is regenerated on every prompt, so if it is missing or empty after a fresh session,
-the hooks did not run and nothing else will work either.
+Below those lines you get one entry per memory file you have. The index is regenerated on
+every prompt, so if the file is missing or empty after a fresh session, the hooks did not
+run and nothing else will work either.
 
 If you had memories before installing, run `/review-memories` once. It finds files the
 index cannot see yet and proposes the small renames that fix them.
@@ -173,6 +176,26 @@ whatever this machine defaults to.
 
 When a sync fails, the kit's own message names the mechanism your repo is configured
 with, which tells you where to look.
+
+## Is it working?
+
+If something seems off, or Claude Code has just updated itself, run the smoke suite. It
+checks the installed kit against this machine's real data rather than against fixtures:
+
+```
+$ bash ~/.claude/memory-kit/tests/smoke.sh
+syntax (tested on bash 3.2.57(1)-release):
+  ✓ all entrypoints parse
+extract-user-messages.sh (real transcripts, 7-day window):
+  ✓ block headers have [project/session timestamp] shape (441 msgs)
+...
+smoke: 25 passed, 0 failed, 1 skipped
+smoke: stamped .verified = 2.1.222
+```
+
+`0 failed` is the answer you want. A skip is normal and means a check had nothing on this
+machine to run against. The last line records which Claude Code version the kit has been
+checked against here, and it is what the daily version check compares against.
 
 ## How it stays trustworthy
 

@@ -54,7 +54,7 @@ snap() {
 BEFORE=$(snap)
 
 # ---------- 0. every shell entrypoint parses under THIS machine's bash ----------
-say "syntax (this machine's bash: $(bash --version | head -1 | awk '{print $4}')):"
+say "syntax (tested on bash $(bash --version | head -1 | awk '{print $4}')):"
 SYNTAX_OK=1
 for f in "$KIT"/scripts/*.sh "$KIT"/guardrail/pre-commit "$KIT"/install.sh "$KIT"/hooks/*.sh; do
     [ -f "$f" ] || continue
