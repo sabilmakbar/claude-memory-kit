@@ -149,7 +149,34 @@ last moment before content becomes irreversible history.
 every change lands as a reviewable diff. Memory told the agent to prefer Edit; memory is
 advisory and was eventually ignored. The hook is not advisory.
 
+## Code layout
+
+**One accessor layer (`core/lib.sh`).** Every path into Claude Code internals —
+transcript layout, session ids from hook stdin, binary and version discovery — and every
+behavior shared by more than one script (notice markers, dual-audience emission, the
+GNU/BSD `stat` shim) lives in a single sourceable file; scripts stay thin. Before the
+lib, the same logic existed in two or three slightly different copies (two different
+binary resolvers, three session-id parsers), and each harness change had to be found and
+fixed per script. Functions fail quiet — empty and non-zero, never an error — so a
+harness change degrades hooks to "no data" instead of breaking prompts.
+
 ## Installing and upgrading
+
+**Deployment is a test-gated whole-tree copy.** The installer runs the fixture suite
+first and refuses to deploy a tree the tests reject; what ships is always a tested
+snapshot. It then replaces `~/.claude/memory-kit` as one unit — scripts, their core lib,
+hooks, guardrail, and tests move together — so a script can never run against a stale
+sibling. The earlier layout scattered loose script copies into a shared directory, which
+drifted piecemeal from the checkout four separate times during development. Run-in-place
+(hooks pointing at the checkout) was considered and rejected: `git pull` would ship an
+untested working tree into live sessions, where the gate makes that impossible. The
+deployed tree also accumulates machine state (`.verified`, the private denylist) that a
+redeploy deliberately preserves.
+
+**Upgrades migrate, then merge.** Old-layout hook commands are re-pointed onto the tree
+first — matched strictly by our script basenames, so other tools' hooks in the same
+directories are never touched — then the normal append/dedup merge runs, and finally the
+stale legacy copies (exactly ours, nothing else) are removed.
 
 **The settings merge is append-only, deduped per hook, by script filename.** Merging by
 deep-merge replaced other tools' hook arrays; deduping by exact command string broke on
