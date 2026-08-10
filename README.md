@@ -243,7 +243,7 @@ worth knowing: code you paste into a message is part of what you typed, so it ca
 in the digest. The digest is a plain text file at
 `~/.local/share/claude-feedback/digest-latest.txt` if you want to look.
 
-**How do I know it is working?** Open the tracker at
+**How do I know the daily miner is running?** Open the tracker at
 `~/.local/share/claude-feedback/proposals.md` and look at the `## Daily log` table near
 the bottom. One row per run, with how many messages and sessions it read. A row for today
 or yesterday means it is running; `0 new` is the normal result on most days. If something
