@@ -197,6 +197,10 @@ smoke: stamped .verified = 2.1.222
 machine to run against. The last line records which Claude Code version the kit has been
 checked against here, and it is what the daily version check compares against.
 
+There is nothing to redact before sharing this. The output is check names, counts, and version
+strings, plus the name of the credential helper your memory repo uses if you sync one. No
+memory file names, no memory contents, no paths, no username. Paste it as it is.
+
 ## How it stays trustworthy
 
 Two test suites cover the kit: a fixture suite that gates every install and every push,
