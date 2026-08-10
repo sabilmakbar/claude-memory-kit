@@ -141,6 +141,10 @@ per-project memory, redirected to one central folder and given a generated index
 Claude Code reshapes its memory layout, the kit needs a patch, and the version check
 exists to surface exactly that.
 
+**Can I turn the daily miner off on one machine?** Set `MEMORY_KIT_NO_MINER=1`. Memory,
+the index, and the guardrail carry on. Saying it explicitly matters, because the kit
+treats a feature that goes quiet for days as a fault and tells you about it once a day.
+
 **Web-only sessions?** No. Everything lives in local hooks and scripts.
 
 ## Uninstall

@@ -150,6 +150,24 @@ guardrail`), where it adds a style rule: no em-dashes on lines added to `README.
 serves both kits. Code, tests, and memory files are outside the scope on purpose;
 only reader-facing prose is checked.
 
+**A blocked feature records why, and says so once a day.** The background work fails
+quiet, because a hook cannot tell a machine that skips a feature from one that is broken,
+and a warning at every session start becomes noise you learn to ignore. Quiet alone was
+not enough though: a miner with no `claude` CLI used to exit before writing even a log
+line, so months of no proposals looked exactly like months of nothing worth saving. Now
+each feature records the reason it could not run, a notice fires once a day only after
+the block has lasted a few days, and any successful run clears its own record, so a fixed
+machine goes quiet without anyone dismissing anything. Set `MEMORY_KIT_NO_MINER=1` to
+skip the miner deliberately, which is what makes every other silence a fault worth
+reporting.
+
+**Sync failures are classified, not swallowed.** A pull that fails is sorted into
+offline, refused credentials, or diverged history, because each one sends you somewhere
+different. For refused credentials the message reads the repo's own configuration to name
+the mechanism in use, whether that is an SSH key, a keychain, or a helper. That detection
+only words the message. Nothing in the kit checks for a credential tool or gates a sync
+on one.
+
 **Edit-over-Write.** A `PreToolUse` hook denies the `Write` tool on any existing file,
 so every change lands as a reviewable diff. Memory used to tell the agent to prefer
 Edit. Memory is advisory, and it was eventually ignored. The hook is not advisory.
