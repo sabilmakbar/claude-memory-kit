@@ -1,0 +1,20 @@
+# Dependencies
+
+Tools the kit expects. `install.sh` checks for them and tells you what is missing.
+
+## Required
+- **jq**. Merges the kit's hooks into `~/.claude/settings.json` and parses hook input.
+
+## For the miner and cross-machine sync
+- **claude** CLI, runnable headless (`claude -p`). The daily miner spawns it. If it is
+  not on `PATH`, the miner falls back to the newest VS Code extension's bundled binary
+  (under `~/.vscode-server/extensions` on Linux/remote, `~/.vscode/extensions` on
+  desktop including macOS).
+- **git**. The commit guardrail runs as a git hook, and syncing a memory repo needs it.
+- **gh** (GitHub CLI). Only if you sync your memory repo to GitHub.
+
+## Platform
+Linux and macOS with their stock userland. The scripts stick to portable calls (with
+dual GNU/BSD fallbacks such as `stat -c || stat -f`) and run on bash 3.2, the macOS
+default. No Homebrew coreutils needed. `timeout` is used when present and skipped when
+not. CI runs the test suite on both `ubuntu` and `macos`.

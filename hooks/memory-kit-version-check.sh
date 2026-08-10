@@ -34,5 +34,5 @@ mark="$cur $(date +%F)"
 [ -r "$KIT/.smoke-attempt" ] && [ "$(cat "$KIT/.smoke-attempt" 2>/dev/null)" = "$mark" ] && exit 0
 printf '%s\n' "$mark" > "$KIT/.smoke-attempt"
 
-( bash "$KIT/tests/smoke.sh" --quiet > "$KIT/.smoke-last.log" 2>&1 & ) >/dev/null 2>&1
+( bash "$KIT/tests/smoke.sh" --quiet > "$KIT/.smoke-last.log" 2>&1 </dev/null & ) >/dev/null 2>&1
 exit 0

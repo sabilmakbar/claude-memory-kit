@@ -13,7 +13,7 @@ DEST="$CLAUDE/memory-kit"
 SETT="$CLAUDE/settings.json"
 mkdir -p "$CLAUDE/skills" "$CLAUDE/memory"
 
-echo "→ checking prerequisites (see DEPENDENCIES.md)"
+echo "→ checking prerequisites (see docs/DEPENDENCIES.md)"
 command -v jq >/dev/null 2>&1 || { echo "  ✗ jq required — install it and re-run"; exit 1; }
 for t in git gh; do command -v "$t" >/dev/null 2>&1 && echo "  ✓ $t" || echo "  ✗ $t missing"; done
 if command -v claude >/dev/null 2>&1 \
@@ -28,7 +28,7 @@ fi
 # this installer with the guard variable set, so gating cannot recurse.
 if [ -z "${MEMORY_KIT_INSTALL_GATED:-}" ] && [ -r "$REPO/tests/run.sh" ]; then
   echo "→ gating on the test suite"
-  if MEMORY_KIT_INSTALL_GATED=1 bash "$REPO/tests/run.sh" >/dev/null 2>&1; then
+  if MEMORY_KIT_INSTALL_GATED=1 bash "$REPO/tests/run.sh" >/dev/null 2>&1 </dev/null; then
     echo "  ✓ tests pass"
   else
     echo "  ✗ tests fail — refusing to deploy an untested tree. Run: bash $REPO/tests/run.sh"

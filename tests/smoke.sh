@@ -25,6 +25,11 @@
 
 set -u
 
+# Never block on ambient stdin: hook scripts read stdin for a session id when it is
+# not a tty, and an invoking environment that holds stdin open (some CI runners and
+# tool harnesses do) would hang them forever. Checks that need stdin pipe it in.
+exec </dev/null
+
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
