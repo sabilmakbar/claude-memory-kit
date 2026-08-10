@@ -2,9 +2,10 @@
 # hooks/memory-kit-version-check.sh — SessionStart hook: re-verify the kit after Claude Code
 # updates, so nobody has to remember to.
 #
-# Wire it as:  "$HOME/claude-memory-kit/hooks/memory-kit-version-check.sh" 2>/dev/null || true
+# Wire it as:  "$HOME/.claude/memory-kit/hooks/memory-kit-version-check.sh" 2>/dev/null || true
 # (the name is kit-prefixed so settings dedup-by-basename never collides with a
-#  sibling kit's version-check; runs from the kit checkout — the smoke suite and stamp live here, not in ~/.claude)
+#  sibling kit's version-check; it runs from whichever tree it lives in — the
+#  deployed tree in normal use — and stamps .verified next to itself)
 #
 # Normal case costs one version lookup and one file read, then exit. When the version
 # moved, the smoke suite runs ONCE per version per day, backgrounded, so session start
@@ -16,9 +17,11 @@ set -u
 
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)"
 [ -r "$KIT/tests/smoke.sh" ] || exit 0
+[ -r "$KIT/core/lib.sh" ] || exit 0
 command -v jq >/dev/null 2>&1 || exit 0
+. "$KIT/core/lib.sh"
 
-cur=$(bash "$KIT/scripts/claude-version.sh" 2>/dev/null)
+cur=$(mk_claude_version 2>/dev/null)
 [ -n "$cur" ] || exit 0
 
 seen=""

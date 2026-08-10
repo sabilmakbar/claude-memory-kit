@@ -38,6 +38,7 @@ turns that loose setup into something dependable:
 
 | Piece | What it does |
 |-------|--------------|
+| `core/lib.sh` | The single accessor layer: every path into Claude Code internals (transcripts, session ids, binary/version discovery) and every shared behavior, so a harness change is a one-file fix. |
 | `scripts/ensure-memory-symlink.sh` | Symlinks the per-project memory dir to a central store and regenerates the `MEMORY.md` index from the files (drift-proof). Runs on `UserPromptSubmit`. |
 | `scripts/edit-over-write.sh` | `PreToolUse` hook that denies `Write` on a file that already exists, so edits land as auditable diffs. |
 | `scripts/memory-review-reminder.sh` · `feedback-proposals-ping.sh` | `SessionStart` notices: memory-review-due, and pending mined proposals. |
@@ -56,10 +57,13 @@ git clone https://github.com/sabilmakbar/claude-memory-kit.git ~/claude-memory-k
 ~/claude-memory-kit/install.sh
 ```
 
-The installer copies the scripts to `~/.claude/scripts`, the skills to `~/.claude/skills`,
-seeds the authoring conventions into `~/.claude/memory`, and **appends** its hooks to
-`~/.claude/settings.json` (existing hooks are left intact; re-running is a no-op). Start a
-new Claude Code session to load everything.
+The installer first runs the test suite and **refuses to deploy a tree the tests
+reject**. It then deploys the kit as one tree to `~/.claude/memory-kit` (scripts, their
+core lib, hooks, guardrail, and tests move together — no partially-stale copies), puts
+the skills in `~/.claude/skills`, seeds the authoring conventions into `~/.claude/memory`,
+and **appends** its hooks to `~/.claude/settings.json` (existing hooks are left intact,
+old-layout hook paths are migrated, re-running is a no-op). Start a new Claude Code
+session to load everything.
 
 ## Adopting with existing memories
 
@@ -84,7 +88,7 @@ with everything you've ever taught Claude. You create the repo **once**, on your
 machine — every other machine joins the same repo, never creates a second one.
 
 **Before the first push, on every machine:** add your private terms (employer name,
-anything identifying) to `~/claude-memory-kit/guardrail/denylist.local` (gitignored), or
+anything identifying) to `~/.claude/memory-kit/guardrail/denylist.local` (gitignored), or
 export `CLAUDE_CONFIG_DENYLIST="term1|term2"`. The built-in guardrail patterns catch
 generic leaks (emails, home paths); only you know what else is sensitive.
 
@@ -98,7 +102,7 @@ re-run `install.sh`. Or turn your existing memory folder into the repo by hand:
 ```bash
 cd ~/.claude/memory
 git init
-git config core.hooksPath ~/claude-memory-kit/guardrail   # wire the guardrail FIRST
+git config core.hooksPath ~/.claude/memory-kit/guardrail  # wire the guardrail FIRST
 git add . && git commit -m "Initial memory"               # ← now genuinely vetted
 gh repo create <your-user>/claude-memories --private --source . --push
 ```
@@ -183,6 +187,7 @@ sessions on claude.ai without a local harness can't use it (see "Who this is for
 
 ## Uninstall
 
-Remove the kit's hooks from `~/.claude/settings.json`, then delete the installed scripts,
-skills, and seed memories from `~/.claude`, and `rm -rf ~/.local/share/claude-feedback`
-(the miner's tracker and state).
+Remove the kit's hooks from `~/.claude/settings.json`, then
+`rm -rf ~/.claude/memory-kit` (the deployed tree), delete the kit's skills from
+`~/.claude/skills` and the seed conventions from `~/.claude/memory`, and
+`rm -rf ~/.local/share/claude-feedback` (the miner's tracker and state).

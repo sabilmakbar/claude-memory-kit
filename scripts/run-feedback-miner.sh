@@ -4,23 +4,20 @@
 # Invoked (backgrounded) from a SessionStart hook; guards make it run ≤ once per day.
 # Tracker lives OUTSIDE ~/.claude — headless sessions can't write there (sensitive-file rule).
 
-PROP="$HOME/.local/share/claude-feedback"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_LIB="$SCRIPT_DIR/../core/lib.sh"
+[ -r "$_LIB" ] || exit 0
+. "$_LIB"
+
+PROP="$(mk_tracker_dir)"
 STAMP="$PROP/.last-run-date"
 STATE="$PROP/.last-extract-epoch"
 LOCK="$PROP/.lock"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MINER_DOC="$SCRIPT_DIR/feedback-miner.md"    # installed alongside this script
+MINER_DOC="$SCRIPT_DIR/feedback-miner.md"    # ships alongside this script
 MODEL="${FEEDBACK_MINER_MODEL:-sonnet}"
 mkdir -p "$PROP"
 
-# resolve the claude CLI: PATH first, else the newest VS Code extension's bundled binary
-CLAUDE_BIN=$(command -v claude 2>/dev/null)
-if [ -z "$CLAUDE_BIN" ]; then
-    # remote/Linux VS Code uses ~/.vscode-server; desktop (incl. macOS) uses ~/.vscode
-    CLAUDE_BIN=$(ls -t "$HOME"/.vscode-server/extensions/anthropic.claude-code-*/resources/native-binary/claude \
-                       "$HOME"/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude 2>/dev/null | head -1)
-fi
-[ -x "$CLAUDE_BIN" ] || exit 0
+CLAUDE_BIN=$(mk_claude_bin) || exit 0
 [ -f "$MINER_DOC" ] || exit 0
 
 today=$(date +%F)
@@ -56,7 +53,7 @@ $TIMEOUT "$CLAUDE_BIN" -p "Read $MINER_DOC and follow it exactly. [feedback-mine
       >> "$PROP/miner.log" 2>&1
 # success = the tracker was actually (re)written this run — exit code alone lies
 # (a session can exit 0 with its Write denied). Only then advance the extract window.
-tracker_mtime=$(stat -c %Y "$PROP/proposals.md" 2>/dev/null || stat -f %m "$PROP/proposals.md" 2>/dev/null || echo 0)
+tracker_mtime=$(mk_mtime "$PROP/proposals.md")
 if [ "$tracker_mtime" -ge "$now" ]; then
     echo "$now" > "$STATE"                   # promote window only on success — no lost messages
 else

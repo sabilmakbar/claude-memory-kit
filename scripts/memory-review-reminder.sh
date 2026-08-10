@@ -6,8 +6,19 @@
 #  - mount-local memories still need a marker from THIS machine's label
 # No git repo → falls back to the machine-local .last-review stamp (no sync problem
 # exists without a remote, so the stamp is not a second source of truth there).
+#
+# Repeats are bounded: the notice fires once per session per day (resumes and
+# compactions stay silent; a new day re-notices). No readable session id → fail
+# open and notice, exactly the pre-marker behavior.
 
-MEM="$HOME/.claude/memory"
+_LIB="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)/core/lib.sh"
+[ -r "$_LIB" ] || exit 0
+. "$_LIB"
+
+SID=$(mk_session_id)
+mk_notice_due "$SID" review || exit 0
+
+MEM="$(mk_memory_dir)"
 WEEK_SECS=$((7 * 24 * 3600))
 NOW=$(date +%s)
 LABEL="${MEMORY_MACHINE_LABEL:-$(hostname -s)}"
@@ -46,6 +57,6 @@ if ls "$HOME/.claude/memory-mounts"/*/*.md >/dev/null 2>&1; then
 fi
 
 [ -z "$MSG" ] && exit 0
+mk_notice_stamp "$SID" review   # written only when a notice is actually emitted
 MSG="$MSG. Ask me: review my memories and update preferences."
-# systemMessage = user-facing toast (not all UIs show it); additionalContext reaches Claude
-printf '{"systemMessage": "%s", "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "%s Mention this to the user at the start of your next reply."}}\n' "$MSG" "$MSG"
+mk_emit_notice "$MSG"

@@ -6,12 +6,15 @@
 #   - at most one notice per THROTTLE seconds (default 1h) — bursts collapse into one
 # stdout (exit 0) is appended to the prompt context by the harness.
 
-input=$(cat)
-sid=$(jq -r '.session_id // empty' <<<"$input" 2>/dev/null | tr -cd 'A-Za-z0-9_-')
+_LIB="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)/core/lib.sh"
+[ -r "$_LIB" ] || exit 0
+. "$_LIB"
+
+sid=$(mk_session_id)
 [ -z "$sid" ] && exit 0
 
-MEM="$HOME/.claude/memory"
-MOUNTS="$HOME/.claude/memory-mounts"
+MEM="$(mk_memory_dir)"
+MOUNTS="$(mk_mounts_dir)"
 MARKERS="$HOME/.claude/.memory-delta"
 THROTTLE="${MEMORY_DELTA_THROTTLE:-3600}"
 mkdir -p "$MARKERS"
@@ -25,7 +28,7 @@ if [ ! -f "$marker" ]; then
 fi
 
 now=$(date +%s)
-last=$(stat -c %Y "$marker" 2>/dev/null || stat -f %m "$marker" 2>/dev/null || echo 0)
+last=$(mk_mtime "$marker")
 [ $((now - last)) -lt "$THROTTLE" ] && exit 0
 
 # MEMORY.md is excluded — it regenerates every prompt and would fire forever
