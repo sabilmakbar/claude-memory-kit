@@ -1,6 +1,8 @@
 # Dependencies
 
-Tools the kit expects. `install.sh` checks for them and tells you what is missing.
+Tools the kit expects. `install.sh` checks for them before it does anything: a missing
+`jq` stops the install, and the others are only reported, because the kit still works
+without them. The report tells you which features will sit idle.
 
 ## Required
 - **jq**. Merges the kit's hooks into `~/.claude/settings.json` and parses hook input.
@@ -11,7 +13,6 @@ Tools the kit expects. `install.sh` checks for them and tells you what is missin
   (under `~/.vscode-server/extensions` on Linux/remote, `~/.vscode/extensions` on
   desktop including macOS).
 - **git**. The commit guardrail runs as a git hook, and syncing a memory repo needs it.
-- **gh** (GitHub CLI). Only if you sync your memory repo to GitHub.
 
 ## Platform
 Linux and macOS with their stock userland. The scripts stick to portable calls (with

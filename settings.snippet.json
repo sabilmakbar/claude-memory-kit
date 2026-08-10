@@ -48,6 +48,10 @@
           {
             "type": "command",
             "command": "\"$HOME/.claude/memory-kit/hooks/memory-kit-version-check.sh\" 2>/dev/null || true"
+          },
+          {
+            "type": "command",
+            "command": "\"$HOME/.claude/memory-kit/hooks/memory-kit-health.sh\" 2>/dev/null || true"
           }
         ]
       }

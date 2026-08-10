@@ -57,6 +57,95 @@ mk_emit_notice() {
     printf '{"systemMessage": "%s", "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "%s Mention this to the user at the start of your next reply."}}\n' "$1" "$1"
 }
 
+# ---- feature health ----------------------------------------------------------
+
+# A feature that cannot run must leave a trace. Without one, "nothing happened"
+# and "nothing could happen" look identical, and a machine can sit half working
+# for months. One file per feature: first-seen epoch on line 1, reason on line 2.
+# Lives beside the tracker, outside ~/.claude, so headless sessions can write it.
+
+mk_health_dir() { printf '%s/health' "$(mk_tracker_dir)"; }
+
+# mk_health_record <feature> <reason> — the first-seen epoch survives repeated
+# records of the same reason, so "blocked since" is real and not reset each run.
+mk_health_record() {
+    _mk_hd="$(mk_health_dir)"; mkdir -p "$_mk_hd" 2>/dev/null || return 1
+    _mk_hf="$_mk_hd/$1"; _mk_since=$(date +%s)
+    if [ -r "$_mk_hf" ] && [ "$(sed -n '2p' "$_mk_hf" 2>/dev/null)" = "$2" ]; then
+        _mk_prev=$(head -1 "$_mk_hf" 2>/dev/null)
+        case "$_mk_prev" in ''|*[!0-9]*) ;; *) _mk_since="$_mk_prev" ;; esac
+    fi
+    printf '%s\n%s\n' "$_mk_since" "$2" > "$_mk_hf"
+}
+
+# Called on every success: recovery must be as automatic as detection, or a
+# fixed machine keeps nagging.
+mk_health_clear() { rm -f "$(mk_health_dir)/$1" 2>/dev/null; return 0; }
+
+# mk_health_blocked <feature> → "<days> <reason>", rc 1 when nothing is on record.
+mk_health_blocked() {
+    _mk_hf="$(mk_health_dir)/$1"
+    [ -r "$_mk_hf" ] || return 1
+    _mk_since=$(head -1 "$_mk_hf" 2>/dev/null)
+    case "$_mk_since" in ''|*[!0-9]*) return 1 ;; esac
+    printf '%s %s\n' "$(( ( $(date +%s) - _mk_since ) / 86400 ))" \
+                     "$(sed -n '2p' "$_mk_hf" 2>/dev/null)"
+}
+
+# ---- memory repo sync --------------------------------------------------------
+
+# mk_git_reason <stderr-text> → offline | credentials | diverged | other.
+# Matching git's prose is unavoidable here, so the classes stay coarse: each one
+# points at a different thing to go and check, and anything unrecognised says so
+# rather than guessing.
+mk_git_reason() {
+    case "$1" in
+        *"Could not resolve host"*|*"could not resolve"*|*"name resolution"*|\
+        *"Network is unreachable"*|*"Failed to connect"*|*"Connection refused"*|*"timed out"*)
+            printf 'offline' ;;
+        *"Authentication failed"*|*"could not read Username"*|*"could not read Password"*|\
+        *"terminal prompts disabled"*|*"Permission denied (publickey)"*|*"Invalid username or password"*)
+            printf 'credentials' ;;
+        *"non-fast-forward"*|*"Not possible to fast-forward"*|*"diverged"*|*"unrelated histories"*)
+            printf 'diverged' ;;
+        *)  printf 'other' ;;
+    esac
+}
+
+# Names how git authenticates for the memory repo, so a refused sync can say what
+# to check. Read from the repo's own config, since the mechanism differs per
+# machine. Wording only: nothing here decides whether a sync runs.
+mk_credential_hint() {
+    _mk_url=$(git -C "$(mk_memory_dir)" remote get-url origin 2>/dev/null)
+    case "$_mk_url" in
+        git@*|ssh://*) printf 'check the SSH key for that host'; return 0 ;;
+    esac
+    _mk_h=$(git -C "$(mk_memory_dir)" config --get-urlmatch credential.helper "$_mk_url" 2>/dev/null)
+    case "$_mk_h" in
+        '')   printf 'no credential helper is configured' ;;
+        *gh*) printf 'credentials come from the GitHub CLI' ;;
+        *)    printf 'credential helper: %s' "$_mk_h" ;;
+    esac
+}
+
+# Pull the memory repo. Silent rc 0 when it worked or there was nothing to do;
+# rc 1 and a human-readable reason otherwise. Never merges, never prompts.
+# A repo with no remote, or no repo at all, is a valid setup and not a failure.
+mk_memory_pull() {
+    _mk_mem="$(mk_memory_dir)"
+    [ -d "$_mk_mem/.git" ] || return 0
+    command -v git >/dev/null 2>&1 || { printf 'git is not installed, so memory cannot sync'; return 1; }
+    git -C "$_mk_mem" remote get-url origin >/dev/null 2>&1 || return 0
+    _mk_err=$(GIT_TERMINAL_PROMPT=0 git -C "$_mk_mem" pull --ff-only --quiet 2>&1) && return 0
+    case "$(mk_git_reason "$_mk_err")" in
+        offline)     printf 'memory sync cannot reach the remote' ;;
+        credentials) printf 'memory sync was refused by the remote: %s' "$(mk_credential_hint)" ;;
+        diverged)    printf 'memory history has diverged, so a fast-forward pull is not possible' ;;
+        *)           printf 'memory sync failed' ;;
+    esac
+    return 1
+}
+
 # ---- Claude Code discovery ---------------------------------------------------
 
 # The claude CLI: PATH first, else the newest VS Code extension's bundled binary

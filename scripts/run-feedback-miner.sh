@@ -17,8 +17,21 @@ MINER_DOC="$SCRIPT_DIR/feedback-miner.md"    # ships alongside this script
 MODEL="${FEEDBACK_MINER_MODEL:-sonnet}"
 mkdir -p "$PROP"
 
-CLAUDE_BIN=$(mk_claude_bin) || exit 0
-[ -f "$MINER_DOC" ] || exit 0
+# A machine can skip the miner on purpose. Saying so explicitly is what lets the
+# health notice treat every other silence as a fault worth reporting.
+if [ -n "${MEMORY_KIT_NO_MINER:-}" ]; then
+    mk_health_clear miner
+    exit 0
+fi
+
+CLAUDE_BIN=$(mk_claude_bin) || {
+    mk_health_record miner "the feedback miner cannot run: no claude CLI on PATH or in a VS Code extension"
+    exit 0
+}
+[ -f "$MINER_DOC" ] || {
+    mk_health_record miner "the feedback miner cannot run: its brief is missing from the kit"
+    exit 0
+}
 
 today=$(date +%F)
 [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$today" ] && exit 0
@@ -28,8 +41,13 @@ echo "$today" > "$STAMP"                     # stamp BEFORE spawning: miner sess
 
 # sync memory from remote first so the complementarity check sees other machines'
 # memories, not yesterday's local copy. Never blocks the run: ff-only (no merges),
-# no credential prompts, quiet failure on offline / dirty tree / not-a-repo.
-GIT_TERMINAL_PROMPT=0 git -C "$HOME/.claude/memory" pull --ff-only --quiet >/dev/null 2>&1 || true
+# no credential prompts. A failure is recorded rather than swallowed, because an
+# unreachable remote looks exactly like a healthy one from in here.
+if sync_reason=$(mk_memory_pull); then
+    mk_health_clear sync
+else
+    mk_health_record sync "$sync_reason"
+fi
 
 # window = since last successful extract; first run defaults to 26h back
 now=$(date +%s)
@@ -38,6 +56,7 @@ if [ -f "$STATE" ]; then since=$(cat "$STATE"); else since=$(( now - 93600 )); f
 "$SCRIPT_DIR/extract-user-messages.sh" "$since" > "$PROP/digest-latest.txt"
 if [ ! -s "$PROP/digest-latest.txt" ]; then
     echo "$now" > "$STATE"                   # nothing to mine; advance window
+    mk_health_clear miner                    # it ran fine, there was just nothing to do
     exit 0
 fi
 
@@ -56,8 +75,10 @@ $TIMEOUT "$CLAUDE_BIN" -p "Read $MINER_DOC and follow it exactly. [feedback-mine
 tracker_mtime=$(mk_mtime "$PROP/proposals.md")
 if [ "$tracker_mtime" -ge "$now" ]; then
     echo "$now" > "$STATE"                   # promote window only on success — no lost messages
+    mk_health_clear miner
 else
     echo "[$(date +%Y-%m-%dT%H:%M:%S%z)] miner run left no updated tracker; window not advanced" >> "$PROP/miner.log"
+    mk_health_record miner "the feedback miner ran but wrote no tracker update; see miner.log"
 fi
 
 # the headless run above wrote a session transcript that is title-less, byte-identical

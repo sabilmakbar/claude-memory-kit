@@ -15,7 +15,9 @@ mkdir -p "$CLAUDE/skills" "$CLAUDE/memory"
 
 echo "→ checking prerequisites (see docs/DEPENDENCIES.md)"
 command -v jq >/dev/null 2>&1 || { echo "  ✗ jq required — install it and re-run"; exit 1; }
-for t in git gh; do command -v "$t" >/dev/null 2>&1 && echo "  ✓ $t" || echo "  ✗ $t missing"; done
+# no gh check: nothing in the kit calls it
+command -v git >/dev/null 2>&1 && echo "  ✓ git" \
+  || echo "  ! git missing — the guardrail and memory sync stay idle until it is installed"
 if command -v claude >/dev/null 2>&1 \
    || ls "$HOME"/.vscode-server/extensions/anthropic.claude-code-*/resources/native-binary/claude >/dev/null 2>&1 \
    || ls "$HOME"/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude >/dev/null 2>&1; then

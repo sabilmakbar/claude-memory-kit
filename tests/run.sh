@@ -233,6 +233,79 @@ git -C "$UH/.claude/memory" remote set-url origin "$TMP/nonexistent.git"
 HOME="$UH" PATH="$SB:$PATH" bash "$KIT/scripts/run-feedback-miner.sh" >/dev/null 2>&1
 check "unreachable origin: miner run still succeeds" 0 $?
 
+# ---------- feature health: a blocked feature leaves a reason ----------
+echo "core/lib.sh health records:"
+HH="$TMP/home-health"; mkdir -p "$HH"
+HF="$HH/.local/share/claude-feedback/health/miner"
+libsh() { HOME="$HH" bash -c ". \"$KIT/core/lib.sh\"; $1"; }
+backdate() { printf '%s\n%s\n' "$(( $(date +%s) - $1 * 86400 ))" "$2" > "$HF"; }
+
+libsh 'mk_health_record miner "no claude CLI"'
+[ "$(libsh 'mk_health_blocked miner')" = "0 no claude CLI" ] \
+  && ok "a block is recorded with its reason" || fail "record/read"
+backdate 5 "no claude CLI"; libsh 'mk_health_record miner "no claude CLI"'
+[ "$(libsh 'mk_health_blocked miner')" = "5 no claude CLI" ] \
+  && ok "re-recording the same reason keeps blocked-since" || fail "blocked-since reset"
+libsh 'mk_health_record miner "a different fault"'
+[ "$(libsh 'mk_health_blocked miner')" = "0 a different fault" ] \
+  && ok "a new reason restarts the clock" || fail "new reason kept old date"
+libsh 'mk_health_clear miner'
+libsh 'mk_health_blocked miner' >/dev/null 2>&1 && fail "clear left a record" || ok "clearing removes the record"
+
+# git failures are classified so each class can name a different thing to check
+while IFS='|' read -r txt want; do
+  [ -n "$txt" ] || continue
+  got=$(libsh "mk_git_reason \"$txt\"")
+  [ "$got" = "$want" ] && ok "classified as $want" || fail "classifier: $txt gave $got, want $want"
+done <<'CASES'
+fatal: unable to access repo: Could not resolve host: github.com|offline
+fatal: Authentication failed for the remote|credentials
+fatal: Not possible to fast-forward, aborting.|diverged
+error: your local changes would be overwritten|other
+CASES
+
+echo "hooks/memory-kit-health.sh:"
+health() { echo "{\"session_id\":\"$1\"}" | HOME="$HH" MEMORY_KIT_HEALTH_GRACE="${2:-3}" \
+  bash "$KIT/hooks/memory-kit-health.sh"; }
+[ -z "$(health s1)" ] && ok "healthy machine: silent" || fail "noise with nothing recorded"
+libsh 'mk_health_record miner "the feedback miner cannot run: no claude CLI"'
+[ -z "$(health s1)" ] && ok "a fresh block stays inside the grace period" || fail "grace period ignored"
+backdate 5 "the feedback miner cannot run: no claude CLI"
+out=$(health s2)
+echo "$out" | jq -e '.systemMessage' >/dev/null 2>&1 && echo "$out" | grep -q "for 5 days" \
+  && ok "a persistent block notices, with its age" || fail "no notice ($out)"
+[ -z "$(health s2)" ] && ok "one notice per session per day" || fail "repeat notice same session"
+[ -n "$(health s3)" ] && ok "a different session still hears it" || fail "other session silenced"
+libsh 'mk_health_clear miner'
+[ -z "$(health s4)" ] && ok "recovery is silent, no manual dismissal" || fail "notice survived the fix"
+
+echo "run-feedback-miner.sh + memory-review-reminder.sh (blocked paths):"
+NH="$TMP/home-noclaude"; mkdir -p "$NH/.claude"
+HOME="$NH" PATH="/usr/bin:/bin" bash "$KIT/scripts/run-feedback-miner.sh" >/dev/null 2>&1
+r=$(sed -n 2p "$NH/.local/share/claude-feedback/health/miner" 2>/dev/null)
+case "$r" in *"no claude CLI"*) ok "a missing claude CLI is recorded, not swallowed";;
+             *) fail "miner left no reason ($r)";; esac
+HOME="$NH" PATH="/usr/bin:/bin" MEMORY_KIT_NO_MINER=1 bash "$KIT/scripts/run-feedback-miner.sh" >/dev/null 2>&1
+[ -f "$NH/.local/share/claude-feedback/health/miner" ] \
+  && fail "opt-out left a record behind" || ok "opting out clears the record and stays quiet"
+
+CH="$TMP/home-clear"; mkdir -p "$CH/.claude/projects" "$CH/.local/share/claude-feedback/health"
+printf '%s\nstale block\n' "$(date +%s)" > "$CH/.local/share/claude-feedback/health/miner"
+HOME="$CH" PATH="$SB:$PATH" bash "$KIT/scripts/run-feedback-miner.sh" >/dev/null 2>&1
+[ -f "$CH/.local/share/claude-feedback/health/miner" ] \
+  && fail "a working run left a stale block" || ok "a working run clears the record"
+
+# git that cannot read the repo must not be reported as "never reviewed"
+GH2="$TMP/home-nogit"; mkdir -p "$GH2/.claude"
+git init -q "$GH2/.claude/memory"
+SHIM="$TMP/gitshim"; mkdir -p "$SHIM"; printf '#!/bin/sh\nexit 1\n' > "$SHIM/git"; chmod +x "$SHIM/git"
+out=$(echo '{"session_id":"g1"}' | HOME="$GH2" PATH="$SHIM:$PATH" \
+  bash "$KIT/scripts/memory-review-reminder.sh")
+echo "$out" | grep -q "status unknown" && ok "unreadable history is reported as unknown" || fail "reminder said ($out)"
+echo "$out" | grep -q "never recorded" && fail "still claims never-recorded" || ok "no invented never-recorded claim"
+[ -f "$GH2/.local/share/claude-feedback/health/review" ] \
+  && ok "unreadable history is recorded for the health notice" || fail "no health record from the reminder"
+
 # ---------- installer ----------
 # fixtures set MEMORY_KIT_INSTALL_GATED so the installer's own test gate doesn't
 # recurse back into this suite
