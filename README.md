@@ -1,5 +1,7 @@
 # Claude Memory Kit
 
+[![tests](https://github.com/sabilmakbar/claude-memory-kit/actions/workflows/tests.yml/badge.svg)](https://github.com/sabilmakbar/claude-memory-kit/actions/workflows/tests.yml)
+
 Claude Code forgets you between sessions. Preferences you explain on Monday are gone by
 Wednesday, and nothing you teach it survives a new laptop. This kit fixes that. It keeps
 your preferences as small files that load into every session, backs them up to a private
@@ -176,6 +178,9 @@ and a smoke suite that checks the kit against your machine's real data. After a 
 Code update, a background hook re-runs the smoke suite and records the result, so a
 harness change that breaks something gets noticed instead of failing silently. The full
 story is in [DESIGN.md](docs/DESIGN.md).
+
+Verified against Claude Code 2.1.222. The smoke suite also passes over transcripts written
+by 20 versions, 2.1.177 through 2.1.222. Older versions are untested.
 
 ## FAQ
 
