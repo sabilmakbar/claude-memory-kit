@@ -44,6 +44,10 @@
           {
             "type": "command",
             "command": "( \"$HOME/.claude/scripts/run-feedback-miner.sh\" >/dev/null 2>&1 & ) ; exit 0"
+          },
+          {
+            "type": "command",
+            "command": "\"$HOME/claude-memory-kit/hooks/version-check.sh\" 2>/dev/null || true"
           }
         ]
       }

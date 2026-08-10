@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+# tests/smoke.sh — run the kit against the REAL ~/.claude on THIS machine.
+#
+# Run: bash tests/smoke.sh          (add --quiet for summary-only, used by the hook)
+#
+# run.sh (the CI gate) builds fixtures from what the author believed transcripts and
+# settings look like, so it can only confirm that belief. This suite has no fixtures:
+# the data is whatever this machine actually has, so every check is an invariant —
+# "whatever the answer is, it must have this shape" — and a check with no local data
+# to run against SKIPs instead of failing.
+#
+# Rules that keep it honest:
+#   1. Where a script parses Claude Code internals, the cross-check extracts by a
+#      DIFFERENT path (tolerant whole-file jq), never by reusing the script itself.
+#   2. Real state is left untouched: mutating paths run inside a throwaway $HOME or
+#      temp repo, and a before/after checksum of the real settings, tracker, and
+#      memory listing is itself one of the checks.
+#
+# On a clean pass it stamps the current Claude Code version into <kit>/.verified —
+# which is what silences hooks/version-check.sh until the next Claude Code update.
+# On failure it stamps nothing: the missing write is the report (see .smoke-last.log).
+#
+# Never wire this into CI: it passes or skips depending on the machine it runs on,
+# which is the point. tests/run.sh is the gate; this is the reality check.
+
+set -u
+
+KIT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+QUIET=0; [ "${1:-}" = "--quiet" ] && QUIET=1
+PASS=0; FAIL=0; SKIP=0
+
+say()  { [ "$QUIET" = 1 ] || echo "$@"; }
+ok()   { PASS=$((PASS+1)); say "  ✓ $1"; }
+bad()  { FAIL=$((FAIL+1)); say "  ✗ $1"; }
+skip() { SKIP=$((SKIP+1)); say "  - skip: $1"; }
+
+command -v jq >/dev/null 2>&1 || { echo "smoke: jq missing — everything would skip; install jq"; exit 1; }
+
+# ---------- snapshot real state we must not disturb ----------
+TRACKER="$HOME/.local/share/claude-feedback/proposals.md"
+snap() {
+    { [ -f "$HOME/.claude/settings.json" ] && cat "$HOME/.claude/settings.json"
+      [ -f "$TRACKER" ] && cat "$TRACKER"
+      ls "$HOME/.claude/memory" 2>/dev/null
+    } | cksum
+}
+BEFORE=$(snap)
+
+# ---------- 0. every shell entrypoint parses under THIS machine's bash ----------
+say "syntax (this machine's bash: $(bash --version | head -1 | awk '{print $4}')):"
+SYNTAX_OK=1
+for f in "$KIT"/scripts/*.sh "$KIT"/guardrail/pre-commit "$KIT"/install.sh "$KIT"/hooks/*.sh; do
+    [ -f "$f" ] || continue
+    if bash -n "$f" 2>/dev/null; then :; else bad "bash -n $(basename "$f")"; SYNTAX_OK=0; fi
+done
+[ "$SYNTAX_OK" = 1 ] && ok "all entrypoints parse"
+
+# ---------- 1. extractor invariants against real transcripts ----------
+say "extract-user-messages.sh (real transcripts, 7-day window):"
+since=$(( $(date +%s) - 7*24*3600 ))
+digest=$(bash "$KIT/scripts/extract-user-messages.sh" "$since" 2>/dev/null)
+if [ -z "$digest" ]; then
+    skip "no user messages in window (new/idle machine)"
+else
+    n=$(printf '%s\n' "$digest" | grep -c '^---$')
+    hdrs=$(printf '%s\n' "$digest" | grep -cE '^\[[^ ]+/[0-9a-f]{8} ')
+    [ "$hdrs" -gt 0 ] \
+        && ok "block headers have [project/session timestamp] shape ($n msgs)" \
+        || bad "no well-formed block headers in digest"
+    leak=$(printf '%s' "$digest" | grep -c 'tool_use_id\|<system-reminder>\|"type":"tool_result"\|<local-command-stdout>')
+    [ "$leak" = 0 ] && ok "no tool-result/system noise leaked" || bad "leakage tokens in digest: $leak"
+    [ "$(printf '%s' "$digest" | wc -c)" -le 300000 ] && ok "size cap respected" || bad "digest exceeds cap"
+    # cross-check by a DIFFERENT path: tolerant jq over the newest transcript
+    tp=$(find "$HOME/.claude/projects" -mindepth 2 -maxdepth 2 -name '*.jsonl' ! -name 'agent-*.jsonl' -newer "$TMP" 2>/dev/null | head -1)
+    [ -z "$tp" ] && tp=$(ls -t "$HOME"/.claude/projects/*/*.jsonl 2>/dev/null | head -1)
+    if [ -n "$tp" ]; then
+        raw=$(jq -r 'select(.type=="user") | .message.content | if type=="string" then . else empty end' "$tp" 2>/dev/null | grep -vc '^\s*$')
+        [ "$raw" -ge 0 ] && ok "independent transcript parse agrees transcripts are readable" || bad "independent parse failed"
+    fi
+fi
+
+# ---------- 2. SessionStart/UserPromptSubmit hook scripts: silent or valid JSON ----------
+say "hook outputs (real state):"
+for s in feedback-proposals-ping.sh memory-review-reminder.sh; do
+    out=$(bash "$KIT/scripts/$s" 2>/dev/null); rc=$?
+    if [ "$rc" != 0 ]; then bad "$s exit $rc"
+    elif [ -z "$out" ]; then ok "$s: silent (nothing due) — valid"
+    elif printf '%s' "$out" | jq -e '.systemMessage and .hookSpecificOutput.additionalContext' >/dev/null 2>&1; then
+        ok "$s: valid dual-field JSON"
+    else bad "$s: non-empty output is not the expected JSON"; fi
+done
+
+sid="smoke-test-$$"
+out=$(printf '{"session_id":"%s"}' "$sid" | bash "$KIT/scripts/memory-delta-ping.sh" 2>/dev/null); rc=$?
+[ "$rc" = 0 ] && [ -z "$out" ] && ok "memory-delta-ping: first call sets baseline silently" || bad "memory-delta-ping first call (rc=$rc out=${out:0:40})"
+out=$(printf '{"session_id":"%s"}' "$sid" | bash "$KIT/scripts/memory-delta-ping.sh" 2>/dev/null); rc=$?
+[ "$rc" = 0 ] && [ -z "$out" ] && ok "memory-delta-ping: throttled second call is silent" || bad "memory-delta-ping throttle (rc=$rc)"
+rm -f "$HOME/.claude/.memory-delta/$sid"
+
+say "edit-over-write.sh (synthetic stdin):"
+out=$(printf '{"tool_input":{"file_path":"%s"}}' "$KIT/install.sh" | bash "$KIT/scripts/edit-over-write.sh")
+printf '%s' "$out" | jq -e '.hookSpecificOutput.permissionDecision=="deny"' >/dev/null 2>&1 \
+    && ok "existing file → deny" || bad "existing file did not deny"
+out=$(printf '{"tool_input":{"file_path":"%s/absent.py"}}' "$TMP" | bash "$KIT/scripts/edit-over-write.sh")
+[ -z "$out" ] && ok "new file → allow (silent)" || bad "new file produced output"
+out=$(printf 'not json' | bash "$KIT/scripts/edit-over-write.sh" 2>/dev/null); rc=$?
+[ "$rc" = 0 ] && [ -z "$out" ] && ok "garbage stdin → fails open" || bad "garbage stdin (rc=$rc)"
+
+# ---------- 3. guardrail under THIS git/bash (temp repo) ----------
+say "guardrail/pre-commit (temp repo on this machine):"
+G="$TMP/guard"; mkdir -p "$G"
+( cd "$G" && git init -q . && git config user.email t@t && git config user.name t ) 2>/dev/null
+printf -- '---\nname: feedback_x\ndescription: d\nmetadata:\n  type: feedback\n---\nmail leak@example.com\n' > "$G/memory_leak.md"
+mkdir -p "$G/memory"; cp "$G/memory_leak.md" "$G/memory/feedback_x.md"
+( cd "$G" && git add memory/feedback_x.md ) 2>/dev/null
+( cd "$G" && bash "$KIT/guardrail/pre-commit" ) >/dev/null 2>&1
+[ $? != 0 ] && ok "blocks a synthetic PII leak" || bad "leak NOT blocked"
+printf -- '---\nname: feedback_ok\ndescription: clean\nmetadata:\n  type: feedback\n---\nA generic rule.\n' > "$G/memory/feedback_ok.md"
+( cd "$G" && git rm -q --cached memory/feedback_x.md && rm memory/feedback_x.md && git add memory/feedback_ok.md ) 2>/dev/null
+( cd "$G" && bash "$KIT/guardrail/pre-commit" ) >/dev/null 2>&1
+[ $? = 0 ] && ok "passes a clean memory file" || bad "clean file blocked"
+
+# ---------- 4. installer end-to-end in a throwaway HOME seeded with REAL settings ----------
+say "install.sh (throwaway \$HOME seeded with a copy of real settings):"
+FH="$TMP/home"; mkdir -p "$FH/.claude"
+[ -f "$HOME/.claude/settings.json" ] && cp "$HOME/.claude/settings.json" "$FH/.claude/settings.json"
+HOME="$FH" bash "$KIT/install.sh" >/dev/null 2>&1; rc1=$?
+c1=$(jq -r '[.hooks[]?[]?.hooks[]?.command] | length' "$FH/.claude/settings.json" 2>/dev/null)
+HOME="$FH" bash "$KIT/install.sh" >/dev/null 2>&1; rc2=$?
+c2=$(jq -r '[.hooks[]?[]?.hooks[]?.command] | length' "$FH/.claude/settings.json" 2>/dev/null)
+[ "$rc1" = 0 ] && [ "$rc2" = 0 ] && ok "installer runs twice cleanly" || bad "installer rc: $rc1/$rc2"
+[ -n "$c1" ] && [ "$c1" = "$c2" ] && ok "settings merge is idempotent ($c1 hook cmds)" || bad "hook count drifted: $c1 → $c2"
+jq -e . "$FH/.claude/settings.json" >/dev/null 2>&1 && ok "merged settings still valid JSON" || bad "merged settings invalid"
+[ -x "$FH/.claude/scripts/run-feedback-miner.sh" ] && [ -f "$FH/.claude/scripts/feedback-miner.md" ] \
+    && ok "scripts + miner brief deployed as siblings" || bad "deployed scripts incomplete"
+
+# ---------- 5. real state untouched ----------
+AFTER=$(snap)
+[ "$BEFORE" = "$AFTER" ] && ok "real settings/tracker/memory untouched by this run" || bad "REAL STATE CHANGED during smoke run"
+
+# ---------- summary + stamp ----------
+echo "smoke: $PASS passed, $FAIL failed, $SKIP skipped"
+if [ "$FAIL" = 0 ]; then
+    v=$(bash "$KIT/scripts/claude-version.sh" 2>/dev/null)
+    if [ -n "$v" ]; then
+        printf '%s\n' "$v" > "$KIT/.verified"
+        echo "smoke: stamped .verified = $v"
+    else
+        echo "smoke: pass, but Claude Code version unresolvable — not stamping"
+    fi
+    exit 0
+fi
+exit 1

@@ -139,6 +139,28 @@ Two small extras for the join:
     '!f() { test "$1" = get && echo "password=$(gh auth token --user <personal-user>)"; }; f'
   ```
 
+## Testing & self-verification
+
+Two complementary suites:
+
+- **`tests/run.sh`** — the CI gate. Self-contained fixtures in throwaway temp dirs;
+  never touches your real `~/.claude`. Runs on every push.
+- **`tests/smoke.sh`** — the reality check, run on *your* machine against your real
+  transcripts, settings, and shell. It has no fixtures, so every check is an invariant
+  ("whatever the answer is, it must have this shape"), and checks with no local data
+  skip rather than fail. Mutating steps run in a throwaway `$HOME`, and one of its own
+  checks is that your real state was left untouched. Never wire it into CI — passing
+  or skipping depends on the machine, which is the point.
+
+On a clean pass, `smoke.sh` stamps the current Claude Code version into `.verified`
+(machine-local, gitignored). The `hooks/version-check.sh` SessionStart hook compares
+that stamp against the running version: after a Claude Code update it re-runs the
+smoke suite once, in the background. Success re-stamps and everything stays quiet;
+failure stamps nothing — the missing write is the report, and `.smoke-last.log`
+holds the receipt. The kit parses undocumented Claude Code internals (transcript
+JSONL, settings layout), and this is what turns a silent format break into a
+detected one.
+
 ## FAQ
 
 **Does this conflict with MCP servers?** No — the kit registers no MCP surface at all.
@@ -152,7 +174,8 @@ and things saved to the MCP store are invisible to the miner and guardrail — p
 memory, redirected: the symlink hook points each project's memory directory at one
 central store and regenerates the index from the files there. That makes it a dependency
 rather than a conflict — if Claude Code reshapes its memory layout, the kit will need a
-patch.
+patch, and the version-check hook exists to surface exactly that (see "Testing &
+self-verification").
 
 **Web-only sessions?** Everything lives in local `~/.claude` hooks and scripts, so
 sessions on claude.ai without a local harness can't use it (see "Who this is for").
