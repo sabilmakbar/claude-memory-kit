@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$HOME/.claude/scripts/ensure-memory-symlink.sh\" 2>/dev/null || true",
+            "command": "\"$HOME/.claude/memory-kit/scripts/ensure-memory-symlink.sh\" 2>/dev/null || true",
             "async": true
           }
         ]
@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$HOME/.claude/scripts/memory-delta-ping.sh\" 2>/dev/null || true"
+            "command": "\"$HOME/.claude/memory-kit/scripts/memory-delta-ping.sh\" 2>/dev/null || true"
           }
         ]
       }
@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$HOME/.claude/scripts/edit-over-write.sh\""
+            "command": "\"$HOME/.claude/memory-kit/scripts/edit-over-write.sh\""
           }
         ]
       }
@@ -35,19 +35,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$HOME/.claude/scripts/memory-review-reminder.sh\" 2>/dev/null || true"
+            "command": "\"$HOME/.claude/memory-kit/scripts/memory-review-reminder.sh\" 2>/dev/null || true"
           },
           {
             "type": "command",
-            "command": "\"$HOME/.claude/scripts/feedback-proposals-ping.sh\" 2>/dev/null || true"
+            "command": "\"$HOME/.claude/memory-kit/scripts/feedback-proposals-ping.sh\" 2>/dev/null || true"
           },
           {
             "type": "command",
-            "command": "( \"$HOME/.claude/scripts/run-feedback-miner.sh\" >/dev/null 2>&1 & ) ; exit 0"
+            "command": "( \"$HOME/.claude/memory-kit/scripts/run-feedback-miner.sh\" >/dev/null 2>&1 & ) ; exit 0"
           },
           {
             "type": "command",
-            "command": "\"$HOME/claude-memory-kit/hooks/memory-kit-version-check.sh\" 2>/dev/null || true"
+            "command": "\"$HOME/.claude/memory-kit/hooks/memory-kit-version-check.sh\" 2>/dev/null || true"
           }
         ]
       }
