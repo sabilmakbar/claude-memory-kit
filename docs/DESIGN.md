@@ -114,8 +114,8 @@ flowchart TD
     G --> H[SessionStart ping:<br/>toast + model context]
     H --> I{you review<br/>via skill}
     I -->|accept / rephrase| J[memory file written<br/>per conventions]
-    I -->|reject: not now| K[dormant — may resurface<br/>once on fresh evidence]
-    I -->|reject: never /<br/>second reject| L[final — never again]
+    I -->|reject: not now| K[dormant, may resurface<br/>once on fresh evidence]
+    I -->|reject: never /<br/>second reject| L[final, never again]
     I -->|leave| G
     J --> M[index picks it up;<br/>guardrail vets the commit]
 ```
@@ -236,6 +236,6 @@ flowchart LR
     D -->|yes| C
     D -->|no| E[run smoke.sh<br/>backgrounded, quiet]
     E -->|all pass| F[stamp .verified<br/>= running version]
-    E -->|any fail| G[no stamp —<br/>.smoke-last.log holds the receipt]
+    E -->|any fail| G[no stamp,<br/>.smoke-last.log holds the receipt]
     F --> C
 ```
