@@ -110,6 +110,23 @@ for s in feedback-proposals-ping.sh memory-review-reminder.sh; do
     rm -f "$HOME/.claude/.notice-markers/$msid".*
 done
 
+hsid="smoke-health-$$"
+out=$(printf '{"session_id":"%s"}' "$hsid" | bash "$KIT/hooks/memory-kit-health.sh" 2>/dev/null); rc=$?
+if [ "$rc" != 0 ]; then bad "memory-kit-health exit $rc"
+elif [ -z "$out" ]; then ok "memory-kit-health: silent (nothing blocked on this machine)"
+elif printf '%s' "$out" | jq -e '.systemMessage and .hookSpecificOutput.additionalContext' >/dev/null 2>&1; then
+    ok "memory-kit-health: valid dual-field JSON ($(printf '%s' "$out" | jq -r '.systemMessage' | cut -c1-60))"
+else bad "memory-kit-health: non-empty output is not the expected JSON"; fi
+rm -f "$HOME/.claude/.notice-markers/$hsid".*
+
+# the credential hint is built from real config, so it is the one place a token could
+# leak into a message. It must name a mechanism and never carry the secret itself.
+hint=$(. "$KIT/core/lib.sh" && mk_credential_hint 2>/dev/null)
+if [ -z "$hint" ]; then skip "no memory repo remote to describe"
+elif printf '%s' "$hint" | grep -qEi 'gh[pousr]_|password=|[A-Za-z0-9_-]{32,}'; then
+    bad "credential hint may contain a secret"
+else ok "credential hint names a mechanism without a secret ($hint)"; fi
+
 sid="smoke-test-$$"
 out=$(printf '{"session_id":"%s"}' "$sid" | bash "$KIT/scripts/memory-delta-ping.sh" 2>/dev/null); rc=$?
 [ "$rc" = 0 ] && [ -z "$out" ] && ok "memory-delta-ping: first call sets baseline silently" || bad "memory-delta-ping first call (rc=$rc out=${out:0:40})"
