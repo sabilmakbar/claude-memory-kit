@@ -88,7 +88,11 @@ a moment of autopilot.
   session saves a preference immediately, no review needed. The miner only fills the gaps
   you didn't think to dictate. If you save something by hand while a matching proposal is
   waiting, the proposal quietly retires itself.
-- **"Nothing today" is normal.** On most days everything you emphasized is either
-  project-specific or already in memory. The tracker logs "0 new" and moves on.
+- **"Nothing today" is normal, and a broken day is not the same thing.** On most days
+  everything you emphasized is either project-specific or already in memory. The tracker
+  logs "0 new" and moves on. A day where the job could not run at all is different, say
+  because the `claude` CLI is missing or the memory repo will not sync. That used to look
+  identical to a quiet week. Now the reason is recorded, and once a block has lasted a few
+  days you get one note a day until it is fixed.
 - **You can always just read the file.** The tracker is plain markdown at
   `~/.local/share/claude-feedback/proposals.md`. Open it anytime.

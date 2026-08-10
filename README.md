@@ -46,7 +46,8 @@ index cannot see yet and proposes the small renames that fix them.
 ## What you will notice day to day
 
 Session starts may greet you with a short note: a reminder that a memory review is due,
-or that the daily loop found something worth keeping. Say "review feedback proposals"
+that the daily loop found something worth keeping, or that some part of the kit has been
+unable to run for a few days. Say "review feedback proposals"
 and Claude walks you through each suggestion. Say "remember this" at any time to save a
 preference directly, no review needed. That is the whole interface.
 
