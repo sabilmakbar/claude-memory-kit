@@ -4,7 +4,10 @@
 # Pure/read-only: owns no state; the runner decides the window and persists it.
 
 SINCE="${1:?usage: extract-user-messages.sh <since_epoch>}"
-PROJECTS="$HOME/.claude/projects"
+_LIB="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)/core/lib.sh"
+[ -r "$_LIB" ] || { echo "extract-user-messages: core/lib.sh not found next to this script" >&2; exit 1; }
+. "$_LIB"
+PROJECTS="$(mk_projects_dir)"
 MAX_BYTES=300000   # defensive cap; miner also sees a truncation marker if hit
 
 # -newermt is GNU-only: compare against a reference file stamped with the epoch instead
