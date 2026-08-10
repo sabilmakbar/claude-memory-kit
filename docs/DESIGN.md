@@ -1,36 +1,11 @@
 # Design
 
+> **This is a decision record, not a user guide.** It is dense on purpose: it
+> exists so that future changes know what they would be overturning. For how the
+> kit behaves day to day, read [FLOWS.md](FLOWS.md). For setup, the README.
+
 The decisions that shaped this kit, and the incidents behind them. Without this file
 that reasoning would live only in old conversations and commit messages.
-
-## The system at a glance
-
-```mermaid
-flowchart TD
-    subgraph session["Every Claude Code session"]
-        UPS[UserPromptSubmit] --> ENGINE[ensure-memory-symlink.sh<br/>symlink + regenerate index]
-        UPS --> DELTA[memory-delta-ping.sh<br/>announce changed memory]
-        SS[SessionStart] --> REMIND[memory-review-reminder.sh]
-        SS --> PING[feedback-proposals-ping.sh]
-        SS --> MINERRUN[run-feedback-miner.sh<br/>once per day, backgrounded]
-        SS --> VCHECK[memory-kit-version-check.sh]
-        PTU[PreToolUse: Write] --> EOW[edit-over-write.sh<br/>deny Write on existing files]
-    end
-
-    subgraph stores["Data"]
-        MEM[("~/.claude/memory<br/>global memories + generated index<br/>(optionally a private git repo)")]
-        MOUNTS[("~/.claude/memory-mounts<br/>machine-local project memory")]
-        TRACKER[("~/.local/share/claude-feedback<br/>proposals tracker + miner state")]
-    end
-
-    ENGINE --> MEM
-    ENGINE --> MOUNTS
-    MINERRUN --> TRACKER
-    PING --> TRACKER
-    GUARD[guardrail/pre-commit<br/>leak guard + convention lint] --> MEM
-    SKILLS[skills: review-feedback-proposals,<br/>review-memories] --> MEM
-    SKILLS --> TRACKER
-```
 
 ## Memory
 
@@ -60,20 +35,6 @@ session writes memory, which is the only moment that matters. This also countera
 harness default of kebab-case memory names, which repeatedly broke wikilinks before the
 convention was in context.
 
-### Write paths and their gates
-
-```mermaid
-flowchart LR
-    MANUAL["You: 'remember this'"] --> CONV[seed conventions<br/>in context]
-    MINED["Miner proposal accepted<br/>(review skill)"] --> CONV
-    CONSOL["/review-memories<br/>consolidation"] --> CONV
-    CONV --> FILES[memory files]
-    FILES --> INDEX[index regenerated<br/>every prompt]
-    FILES --> COMMIT{git commit}
-    COMMIT -->|leak guard +<br/>convention lint| REPO[(private repo)]
-    COMMIT -->|blocked| FIX[genericize / fix<br/>and retry]
-```
-
 ## The daily feedback loop
 
 **Started by your first session of the day, not by cron.** Running on session start
@@ -101,24 +62,6 @@ dangerous precisely when X is a safety or cleanup action. Candidate rules must m
 strength of their evidence, and situational preferences become "ask first", not "never".
 The review step caught the miner doing exactly this once, so the phrasing rule moved
 upstream into the brief.
-
-```mermaid
-flowchart TD
-    A[first session of the day] --> B[extract user-typed messages<br/>since last successful run]
-    B -->|digest empty| Z[advance window, stop]
-    B --> C[headless Claude reads digest<br/>+ memory + guidelines]
-    C --> D{candidate is a lasting,<br/>system-wide preference?}
-    D -->|already in memory| E[drop / retire]
-    D -->|new or partial gap| F[score: frequency, intensity,<br/>novelty, generality + judge pass]
-    F --> G[(tracker: Pending,<br/>sorted by score)]
-    G --> H[SessionStart ping:<br/>toast + model context]
-    H --> I{you review<br/>via skill}
-    I -->|accept / rephrase| J[memory file written<br/>per conventions]
-    I -->|reject: not now| K[dormant, may resurface<br/>once on fresh evidence]
-    I -->|reject: never /<br/>second reject| L[final, never again]
-    I -->|leave| G
-    J --> M[index picks it up;<br/>guardrail vets the commit]
-```
 
 **Pings speak to both audiences.** Every notice is emitted twice in one JSON payload:
 `systemMessage` for the human (a toast not every UI shows) and `additionalContext` for
