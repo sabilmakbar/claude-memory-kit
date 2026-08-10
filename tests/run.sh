@@ -40,6 +40,28 @@ git rm -qr --cached . && rm feedback_ok.md README.md
 mkdir -p memory && printf -- '---\nname: x\n---\nno desc\n' > memory/notes.md
 git add memory/notes.md
 "$KIT/guardrail/pre-commit" >/dev/null 2>&1; check "blocks bad file under memory/" 1 $?
+git rm -q --cached memory/notes.md && rm memory/notes.md
+
+# style rule: em-dashes blocked in reader-facing docs only (same rule and scope as
+# claude-session-kit). This suite is outside the scope, so it may hold the literal char.
+mkdir -p docs
+printf 'a clause — set off wrong\n' > docs/style.md
+git add docs/style.md
+"$KIT/guardrail/pre-commit" >/dev/null 2>&1; check "blocks an em-dash staged in docs/*.md" 1 $?
+git rm -q --cached docs/style.md && rm docs/style.md
+
+printf 'intro — dense on purpose\n' > README.md
+git add README.md
+"$KIT/guardrail/pre-commit" >/dev/null 2>&1; check "blocks an em-dash staged in README.md" 1 $?
+git rm -q --cached README.md && rm README.md
+
+# negative controls: memory files keep their em-dashes (exempt prose), and the
+# frontmatter lint never reaches docs/ (its path filter is root + memory/ only)
+printf -- '---\nname: feedback_dash\ndescription: legit — memory prose is exempt\n---\nBody — with dashes.\n' > feedback_dash.md
+printf 'plain doc prose, no frontmatter, no dashes\n' > docs/notes.md
+git add feedback_dash.md docs/notes.md
+"$KIT/guardrail/pre-commit" >/dev/null 2>&1; check "memory file with em-dash + frontmatter-less docs file both pass" 0 $?
+git rm -qr --cached . && rm feedback_dash.md docs/notes.md && rmdir docs
 
 # ---------- adoption merge + index engine ----------
 echo "scripts/ensure-memory-symlink.sh:"
