@@ -144,6 +144,12 @@ untracked `denylist.local` or an environment variable. It runs as the memory rep
 pre-commit and enforces both leak-safety and the file conventions. Commit time is the
 last moment before content becomes irreversible history.
 
+The same hook also guards this repo's own checkout (`git config core.hooksPath
+guardrail`), where it adds a style rule: no em-dashes on lines added to `README.md` or
+`docs/*.md`. The rule and scope are identical in claude-session-kit, so one habit
+serves both kits. Code, tests, and memory files are outside the scope on purpose;
+only reader-facing prose is checked.
+
 **Edit-over-Write.** A `PreToolUse` hook denies the `Write` tool on any existing file,
 so every change lands as a reviewable diff. Memory used to tell the agent to prefer
 Edit. Memory is advisory, and it was eventually ignored. The hook is not advisory.
