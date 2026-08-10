@@ -61,76 +61,113 @@ unable to run for a few days. Say "review feedback proposals"
 and Claude walks you through each suggestion. Say "remember this" at any time to save a
 preference directly, no review needed. That is the whole interface.
 
-## Keeping memories on GitHub (optional)
+## Keep your memories in a private git repo (recommended)
 
-Without this, everything works but your memories live on one disk. With it, a dead laptop
-loses nothing and a new machine starts off knowing everything you have taught Claude.
+Do this unless you have a reason not to. Memories are small text files you accumulate
+slowly, and they are the one part of this setup you cannot regenerate. Behind a private
+repo, a dead laptop costs you nothing and a new machine starts already knowing what you
+have taught Claude. Skip it only if one machine is all you use and you are willing to
+lose the files.
 
-One rule before the first push: tell the guardrail what counts as private for you. Add
-your employer's name and any other identifying terms to
-`~/.claude/memory-kit/guardrail/denylist.local`. The built-in checks catch emails and
-machine paths, but only you know the rest.
+**Before your first commit, tell the guardrail which terms are yours.** It already blocks
+generic PII on its own: any email address, any home directory path. What it cannot guess
+is the PII specific to you, such as your employer, your client or project names, and any
+handle you go by. Put those terms in `~/.claude/memory-kit/guardrail/denylist.local`.
+This has to happen before the first commit, not the first push: the guardrail runs at
+commit time, and once something is committed it is in history whether you push it or not.
 
-**On your first machine**, create the repo once. The easy way is the
+### First machine: create the repo
+
+The easy path is the
 [claude-memories-template](https://github.com/sabilmakbar/claude-memories-template):
-click "Use this template", make the repo **private**, clone it to `~/.claude/memory`, and
-re-run `install.sh`.
+
+1. Click "Use this template".
+2. Make the repo **private**.
+3. Clone it to `~/.claude/memory`.
+4. Re-run `~/claude-memory-kit/install.sh`. This is the step that wires the guardrail
+   into the new repo, so do not skip it.
 
 <details>
-<summary>Or turn an existing memory folder into the repo by hand</summary>
+<summary>Or turn an existing memory folder into the repo</summary>
+
+Create the empty private repo on GitHub first, then:
 
 ```bash
 cd ~/.claude/memory
 git init
-git config core.hooksPath ~/.claude/memory-kit/guardrail  # wire the guardrail FIRST
-git add . && git commit -m "Initial memory"               # now genuinely vetted
-git remote add origin https://github.com/<your-user>/claude-memories.git  # create it first
+~/claude-memory-kit/install.sh               # wires the guardrail into the repo you just created
+git add . && git commit -m "Initial memory"  # now genuinely vetted
+git remote add origin https://github.com/<your-user>/claude-memories.git
 git push -u origin main
 ```
 
-Wire the guardrail before the first commit. That commit carries everything you have
-accumulated unchecked, so it is the one that needs vetting most.
+Run `install.sh` between `git init` and the first commit. That commit carries everything
+you have accumulated unchecked, so it is the one that most needs vetting.
 
 With the GitHub CLI installed, `gh repo create <your-user>/claude-memories --private
---source . --push` replaces those last two lines and creates the repo for you.
+--source . --push` replaces the last two lines and creates the repo for you.
 </details>
 
-**On every other machine**, never create a second repo. Join the one you have:
+### Every other machine: join the repo you already have
+
+Never create a second repo. Two repos means two memories that disagree, and nothing to
+reconcile them.
 
 ```bash
 mv ~/.claude/memory ~/.claude/memory.local-backup    # keep what this machine learned
 git clone <your-memories-repo> ~/.claude/memory
-~/claude-memory-kit/install.sh
+~/claude-memory-kit/install.sh                       # wires the guardrail into the clone
 ```
 
-Copy anything worth keeping from the backup into the clone, commit, and delete the
-backup. From then on, plain `git pull` and `git push` in `~/.claude/memory` is how your
-machines share what they learn.
+Copy anything worth keeping out of the backup, commit it, then delete the backup. From
+then on, plain `git pull` and `git push` in `~/.claude/memory` is how your machines share
+what they learn.
 
-<details>
-<summary>Two extras some machines need</summary>
+### Finish the setup on each machine
 
-If the repo carries a global `CLAUDE.md` (the template ships one), link it:
+If the repo carries a global `CLAUDE.md` (the template ships one), link it so Claude
+loads it:
 
 ```bash
 ln -sfn ~/.claude/memory/CLAUDE.md ~/.claude/CLAUDE.md
 ```
 
-If this machine's git is signed into a different account (a work one, say), give the
-memory repo its own credentials so pushes go out under the right name. Keep your
-username in the remote URL (`https://<personal-user>@github.com/...`) and set:
+Give the repo its own commit identity, so memory commits are attributed to you rather
+than to whatever account this machine's git defaults to:
 
 ```bash
-cd ~/.claude/memory
-git config credential.https://github.com.helper ''
-git config --add credential.https://github.com.helper \
-  '!f() { test "$1" = get && echo "password=$(gh auth token --user <personal-user>)"; }; f'
+git -C ~/.claude/memory config user.name  "<your name>"
+git -C ~/.claude/memory config user.email "<your personal email>"
 ```
 
-That version borrows the token from the GitHub CLI. If you prefer SSH, a host alias in
-`~/.ssh/config` pointing at your personal key does the same job with no helper at all,
-and nothing to expire.
-</details>
+The guardrail cannot do this one for you. It reads the lines you commit, and the author
+identity is not one of them.
+
+### If a push is rejected, or commits land under the wrong account
+
+These look alike but they are two different problems, and a machine signed into a work
+account causes both.
+
+**Commits under the wrong name** is the commit identity step above. Set `user.name` and
+`user.email` on the repo and everything from then on is attributed correctly. Commits
+already made keep their original author; rewriting them is possible and rarely worth it
+on a private memory repo.
+
+**A rejected push** is authentication, and the fix depends on how this machine talks to
+GitHub, so there is no single command to give you. The goal is the same whichever method
+you use: the memory repo authenticates as the account that owns it, independently of
+whatever this machine defaults to.
+
+- **SSH:** the repo needs a key belonging to the personal account, and ssh has to offer
+  only that key for this remote. A machine holding several keys otherwise authenticates
+  as whichever one GitHub accepts first, and the push succeeds as the wrong account
+  rather than failing.
+- **HTTPS, whether through the GitHub CLI or a keychain:** the stored credential the repo
+  uses has to belong to the personal account. Most credential stores key on the hostname
+  alone, so two accounts on github.com collide and whichever was saved first wins.
+
+When a sync fails, the kit's own message names the mechanism your repo is configured
+with, which tells you where to look.
 
 ## How it stays trustworthy
 
