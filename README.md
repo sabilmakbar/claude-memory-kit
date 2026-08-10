@@ -153,7 +153,7 @@ Two complementary suites:
   or skipping depends on the machine, which is the point.
 
 On a clean pass, `smoke.sh` stamps the current Claude Code version into `.verified`
-(machine-local, gitignored). The `hooks/version-check.sh` SessionStart hook compares
+(machine-local, gitignored). The `hooks/memory-kit-version-check.sh` SessionStart hook compares
 that stamp against the running version: after a Claude Code update it re-runs the
 smoke suite once, in the background. Success re-stamps and everything stays quiet;
 failure stamps nothing — the missing write is the report, and `.smoke-last.log`
