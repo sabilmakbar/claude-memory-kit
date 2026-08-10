@@ -223,6 +223,20 @@ or yesterday means it is running; `0 new` is the normal result on most days. If 
 has stopped it from running at all, the kit tells you once a day rather than staying
 quiet.
 
+**What if two machines mine on the same day?** Nothing collides. The miner's tracker lives
+outside your memory folder, so it is never synced: each machine keeps its own window and
+its own proposal list, and each reads only the transcripts on that machine. The one shared
+thing is the memory files themselves. So if you accept a preference on one machine and pull
+it on the other, the second machine's miner sees it is already covered and retires its own
+copy of that proposal instead of asking you twice.
+
+**Can I edit a memory file by hand?** Yes, and it takes effect on your next prompt, because
+the index is rebuilt from whatever files are actually on disk rather than from a cached
+list. Two things to keep right: the `name` in the frontmatter has to match the filename, and
+the file needs its `description`. If either is off, the file is invisible to the index;
+`/review-memories` finds those and proposes the rename that fixes them. On a synced folder
+the commit guardrail checks the same fields, so a malformed file cannot leave the machine.
+
 **Web-only sessions?** No. Everything lives in local hooks and scripts.
 
 ## Uninstall
