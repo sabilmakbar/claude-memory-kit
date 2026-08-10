@@ -6,7 +6,8 @@ committed, and — once a day — notices preferences you keep repeating and pro
 to you. Everything runs on your machine.
 
 **New here? Read [HOW-IT-WORKS.md](HOW-IT-WORKS.md)** for the daily feedback loop in
-non-technical language.
+non-technical language. **[DESIGN.md](DESIGN.md)** holds the architecture diagrams and
+the decision records — what was chosen, why, and the incidents that forced it.
 
 ## Who this is for
 
