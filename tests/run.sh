@@ -127,6 +127,11 @@ GIT_COMMITTER_DATE="@$old_epoch +0000" GIT_AUTHOR_DATE="@$old_epoch +0000" \
     git -C "$RG9/.claude/memory" commit -q --allow-empty -m "memory review (otherbox): tidy"
 out=$(HOME="$RG9" MEMORY_MACHINE_LABEL=testbox bash "$KIT/scripts/memory-review-reminder.sh")
 echo "$out" | grep -q '9 days since last, any machine' && ok "git: stale marker: day count from history" || fail "stale marker ($out)"
+# once-per-session notice marker (session_id piped like the SessionStart harness does)
+remsid() { echo "{\"session_id\":\"$1\"}" | HOME="$RG9" MEMORY_MACHINE_LABEL=testbox bash "$KIT/scripts/memory-review-reminder.sh"; }
+out=$(remsid r1)
+echo "$out" | grep -q '9 days' && ok "sid: due nag fires on first notice" || fail "sid first ($out)"
+[ -z "$(remsid r1)" ] && ok "sid: same session same day is silent" || fail "sid repeat"
 
 echo "scripts/feedback-proposals-ping.sh:"
 PH="$TMP/home5"; mkdir -p "$PH/.local/share/claude-feedback"
@@ -138,6 +143,18 @@ out=$(HOME="$PH" bash "$KIT/scripts/feedback-proposals-ping.sh")
 printf '## Pending\n\n### P-009 · total 9 · Rule A\n### P-010 · total 5 · Rule B\n\n## Accepted\n' > "$PH/.local/share/claude-feedback/proposals.md"
 out=$(HOME="$PH" bash "$KIT/scripts/feedback-proposals-ping.sh")
 echo "$out" | grep -q '2 feedback proposal(s) pending (top: P-009' && ok "counts pending, names top proposal" || fail "pending count ($out)"
+# once-per-session notice marker
+pingsid() { echo "{\"session_id\":\"$1\"}" | HOME="$PH" bash "$KIT/scripts/feedback-proposals-ping.sh"; }
+out=$(pingsid m1)
+echo "$out" | grep -q '2 feedback proposal' && ok "sid m1: first notice fires" || fail "sid first ($out)"
+[ -z "$(pingsid m1)" ] && ok "sid m1: repeat same day is silent" || fail "sid repeat"
+out=$(pingsid m2)
+echo "$out" | grep -q '2 feedback proposal' && ok "sid m2: another session still notices" || fail "sid isolation ($out)"
+printf '2020-01-01\n' > "$PH/.claude/.notice-markers/m1.proposals"
+out=$(pingsid m1)
+echo "$out" | grep -q '2 feedback proposal' && ok "sid m1: a new day re-notices" || fail "sid rollover ($out)"
+out=$(echo '{}' | HOME="$PH" bash "$KIT/scripts/feedback-proposals-ping.sh")
+echo "$out" | grep -q '2 feedback proposal' && ok "no session id: fails open and notices" || fail "sid fail-open ($out)"
 
 # ---------- feedback miner: remote sync ----------
 echo "scripts/run-feedback-miner.sh:"

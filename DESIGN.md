@@ -125,7 +125,10 @@ flowchart TD
 `systemMessage` for the human (a toast not every UI shows) and `additionalContext` for
 the model (so Claude relays it in its first reply). The dual emission exists because the
 toast-only version ran silently for weeks in a UI that never displayed it — proposals
-piled up unseen.
+piled up unseen. Repeats are bounded by a once-per-session-per-day marker: resumes and
+compactions of the same session stay silent, a new day re-notices (a week-long session
+still hears about overdue reviews), and a missing session id fails open to the old
+always-notice behavior.
 
 **Review protocols are skills, not file headers.** The accept/reject protocol first
 lived in the tracker's header, written once at file creation — after the third protocol

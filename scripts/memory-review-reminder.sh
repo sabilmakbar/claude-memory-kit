@@ -6,6 +6,22 @@
 #  - mount-local memories still need a marker from THIS machine's label
 # No git repo → falls back to the machine-local .last-review stamp (no sync problem
 # exists without a remote, so the stamp is not a second source of truth there).
+#
+# Repeats are bounded: the notice fires once per session per day (resumes and
+# compactions stay silent; a new day re-notices). No readable session id → fail
+# open and notice, exactly the pre-marker behavior.
+
+SID=""
+if [ ! -t 0 ]; then
+    SID=$(jq -r '.session_id // empty' 2>/dev/null | tr -cd 'A-Za-z0-9_-')
+fi
+MARK=""
+if [ -n "$SID" ]; then
+    MARKDIR="$HOME/.claude/.notice-markers"; mkdir -p "$MARKDIR"
+    MARK="$MARKDIR/$SID.review"
+    [ "$(cat "$MARK" 2>/dev/null)" = "$(date +%F)" ] && exit 0
+    find "$MARKDIR" -type f -mtime +7 -delete 2>/dev/null   # sweep stale session markers
+fi
 
 MEM="$HOME/.claude/memory"
 WEEK_SECS=$((7 * 24 * 3600))
@@ -46,6 +62,7 @@ if ls "$HOME/.claude/memory-mounts"/*/*.md >/dev/null 2>&1; then
 fi
 
 [ -z "$MSG" ] && exit 0
+[ -n "$MARK" ] && date +%F > "$MARK"   # marker written only when a notice is emitted
 MSG="$MSG. Ask me: review my memories and update preferences."
 # systemMessage = user-facing toast (not all UIs show it); additionalContext reaches Claude
 printf '{"systemMessage": "%s", "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "%s Mention this to the user at the start of your next reply."}}\n' "$MSG" "$MSG"

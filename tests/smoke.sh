@@ -92,6 +92,19 @@ for s in feedback-proposals-ping.sh memory-review-reminder.sh; do
     else bad "$s: non-empty output is not the expected JSON"; fi
 done
 
+for s in feedback-proposals-ping.sh memory-review-reminder.sh; do
+    msid="smoke-mark-$$"
+    first=$(printf '{"session_id":"%s"}' "$msid" | bash "$KIT/scripts/$s" 2>/dev/null)
+    if [ -n "$first" ]; then
+        second=$(printf '{"session_id":"%s"}' "$msid" | bash "$KIT/scripts/$s" 2>/dev/null)
+        [ -z "$second" ] && ok "$s: once-per-session marker suppresses repeat" \
+                         || bad "$s: repeated notice despite marker"
+    else
+        skip "$s: nothing due on this machine — marker path not exercisable"
+    fi
+    rm -f "$HOME/.claude/.notice-markers/$msid".*
+done
+
 sid="smoke-test-$$"
 out=$(printf '{"session_id":"%s"}' "$sid" | bash "$KIT/scripts/memory-delta-ping.sh" 2>/dev/null); rc=$?
 [ "$rc" = 0 ] && [ -z "$out" ] && ok "memory-delta-ping: first call sets baseline silently" || bad "memory-delta-ping first call (rc=$rc out=${out:0:40})"
