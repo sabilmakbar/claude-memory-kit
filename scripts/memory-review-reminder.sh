@@ -29,13 +29,31 @@ overdue() { # <epoch-or-empty> → "never" | days-overdue | "" (fresh)
     [ "$e" -gt "$WEEK_SECS" ] && echo $((e / 86400))
 }
 
+UNREADABLE=""
 if [ -d "$MEM/.git" ]; then
-    ANY=$(git -C "$MEM" log --grep='^memory review' -1 --format=%ct 2>/dev/null)
-    HERE=$(git -C "$MEM" log --grep="^memory review ($LABEL)" -1 --format=%ct 2>/dev/null)
+    # probe with rev-parse, not log: it answers "can git read this repo" without
+    # needing a commit to exist, so a fresh repo still reports an honest "never"
+    if git -C "$MEM" rev-parse --git-dir >/dev/null 2>&1; then
+        ANY=$(git -C "$MEM" log --grep='^memory review' -1 --format=%ct 2>/dev/null)
+        HERE=$(git -C "$MEM" log --grep="^memory review ($LABEL)" -1 --format=%ct 2>/dev/null)
+    else
+        # git missing or the repo unreadable. Claiming "never reviewed" here would
+        # be a guess dressed as a fact, so say what is actually wrong instead.
+        UNREADABLE=1
+    fi
 else
     ANY=""; [ -f "$MEM/.last-review" ] && ANY=$(cat "$MEM/.last-review")
     HERE="$ANY"
 fi
+
+if [ -n "$UNREADABLE" ]; then
+    MSG="Memory review status unknown: the review history in ~/.claude/memory could not be read (git is missing or the repo is unreadable)"
+    mk_health_record review "review history in ~/.claude/memory cannot be read, so review reminders are guessing"
+    mk_notice_stamp "$SID" review
+    mk_emit_notice "$MSG"
+    exit 0
+fi
+mk_health_clear review
 
 MSG=""
 case "$(overdue "$ANY")" in
