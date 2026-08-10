@@ -164,7 +164,30 @@ HOME="$FH" MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
 grep -q 'memory-kit-version-check' "$FH/.claude/settings.json" \
     && ok "upgrade re-adds a hook missing from an existing group" || bad "upgrade path drops new hooks in existing groups"
 
-# ---------- 5. real state untouched ----------
+# ---------- 5. index engine normalization over a COPY of real memory ----------
+say "ensure-memory-symlink.sh (stamped-frontmatter healing, copy of real memory):"
+if ls "$HOME/.claude/memory"/*.md >/dev/null 2>&1; then
+    EH="$TMP/norm-home"; mkdir -p "$EH/.claude/memory" "$EH/proj"
+    cp "$HOME/.claude/memory"/*.md "$EH/.claude/memory/"
+    # files with no stamped keys must come out byte-identical (the rewrite gate);
+    # MEMORY.md is excluded — regenerating it is the engine's job
+    CLEAN_LIST=$(grep -LE '^[[:space:]]*(node_type|originSessionId|modified):' "$EH/.claude/memory"/*.md 2>/dev/null | grep -v 'MEMORY.md')
+    pre=$(echo "$CLEAN_LIST" | xargs cksum 2>/dev/null)
+    HOME="$EH" CLAUDE_PROJECT_DIR="$EH/proj" bash "$KIT/scripts/ensure-memory-symlink.sh" >/dev/null 2>&1
+    post=$(echo "$CLEAN_LIST" | xargs cksum 2>/dev/null)
+    [ "$pre" = "$post" ] && ok "stamp-free files byte-identical after index pass" || bad "index pass rewrote stamp-free files"
+    left=0
+    for f in "$EH/.claude/memory"/*.md; do
+        [ "$(basename "$f")" = "MEMORY.md" ] && continue
+        [ "$(head -1 "$f")" = "---" ] || continue
+        sed -n '2,/^---$/p' "$f" | grep -qE '^[[:space:]]*(node_type|originSessionId|modified):' && left=$((left+1))
+    done
+    [ "$left" = 0 ] && ok "no harness-stamped keys left in any file's frontmatter" || bad "$left file(s) still stamped after index pass"
+else
+    skip "no memory files on this machine"
+fi
+
+# ---------- 6. real state untouched ----------
 AFTER=$(snap)
 [ "$BEFORE" = "$AFTER" ] && ok "real settings/tracker/memory untouched by this run" || bad "REAL STATE CHANGED during smoke run"
 
