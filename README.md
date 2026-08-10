@@ -10,12 +10,15 @@ to remember them for you.
 
 Everything runs on your machine, and nothing is saved without your approval.
 
-Three docs, in the order you would want them. New here?
+Three docs form the reading path, shortest first. New here?
 [HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md) explains the daily loop in plain language, and it is
 the only one you need in order to use the kit. [FLOWS.md](docs/FLOWS.md) is the next step
 down: diagrams of what runs when, with the specifics the plain-language version leaves out.
 [DESIGN.md](docs/DESIGN.md) is for anyone changing the kit rather than running it: every rule
 in the code with the reason it exists.
+
+If something is broken rather than unclear, go straight to
+[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ## What you get
 
