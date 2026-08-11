@@ -65,13 +65,14 @@ mk_legacy_knobs() {
         'MEMORY_MACHINE_LABEL MEMORY_KIT_MACHINE_LABEL'
 }
 
-# mk_legacy_env → one sentence per old name still exported; empty when there is none.
+# mk_legacy_env → one clause per line for each old name still exported, with no
+# trailing punctuation: the caller joins and terminates them like any other notice.
 mk_legacy_env() {
     mk_legacy_knobs | while read -r _mk_old _mk_new; do
         [ -n "$_mk_old" ] || continue
         eval "_mk_lv=\${$_mk_old:-}"
         [ -n "$_mk_lv" ] || continue
-        printf '%s is still set in the environment but is no longer read; rename it to %s. ' \
+        printf '%s is still set in the environment but is no longer read, rename it to %s\n' \
                "$_mk_old" "$_mk_new"
     done
 }
