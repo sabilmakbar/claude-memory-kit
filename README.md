@@ -227,17 +227,19 @@ per-project memory, redirected to one central folder and given a generated index
 Claude Code reshapes its memory layout, the kit needs a patch, and the version check
 exists to surface exactly that.
 
-**Can I turn the daily miner off on one machine?** Set `MEMORY_KIT_NO_MINER=1`. Memory,
-the index, and the guardrail carry on. Saying it explicitly matters, because the kit
-treats a feature that goes quiet for days as a fault and tells you about it once a day.
+**Can I turn the daily miner off on one machine?** Uncomment `MEMORY_KIT_NO_MINER=1` in
+`~/.claude/memory-kit/config`. Memory, the index, and the guardrail carry on. Saying it
+explicitly matters, because the kit treats a feature that goes quiet for days as a fault
+and tells you about it once a day. That file holds every setting the kit has, each one
+listed with its default, and your edits survive upgrades.
 
 **What does the daily miner cost?** One Claude call a day, on Sonnet by default. It reads
 what you typed since the last run plus your memory files and global `CLAUDE.md`, which on
 a mature setup is roughly 25,000 input tokens and a couple of thousand out. It runs
 through your own Claude account, so on a subscription plan that is a small slice of your
 daily usage rather than a separate bill; on an API key it works out to a few cents a day.
-The number grows with your memory folder, not with how much you used Claude. Override the
-model with `FEEDBACK_MINER_MODEL`.
+The number grows with your memory folder, not with how much you used Claude. Change the
+model with `MEMORY_KIT_MINER_MODEL` in `~/.claude/memory-kit/config`.
 
 **Does it read my code?** No. The digest contains only messages you typed. Claude's
 replies, tool output, command output, and your editor selection are all stripped out

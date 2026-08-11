@@ -110,6 +110,23 @@ for s in feedback-proposals-ping.sh memory-review-reminder.sh; do
     rm -f "$HOME/.claude/.notice-markers/$msid".*
 done
 
+# this machine's real config: every knob it names must be one the kit still reads,
+# or a rename has silently turned a live setting into a dead line
+cfg="$(. "$KIT/core/lib.sh" && printf '%s' "$(mk_state_dir)/config")"
+if [ -r "$cfg" ]; then
+    unknown=""
+    while IFS= read -r k; do
+        [ -n "$k" ] || continue          # an all-commented config yields no keys at all
+        grep -rq "\${$k:-" "$KIT/scripts" "$KIT/hooks" 2>/dev/null || unknown="$unknown $k"
+    done <<EOF
+$(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$cfg" | tr -d '=')
+EOF
+    [ -z "$unknown" ] && ok "every knob set in this machine's config is still read" \
+                      || bad "config sets knobs nothing reads:$unknown"
+else
+    skip "no config file deployed yet"
+fi
+
 hsid="smoke-health-$$"
 out=$(printf '{"session_id":"%s"}' "$hsid" | bash "$KIT/hooks/memory-kit-health.sh" 2>/dev/null); rc=$?
 if [ "$rc" != 0 ]; then bad "memory-kit-health exit $rc"
@@ -159,13 +176,13 @@ printf -- '---\nname: feedback_ok\ndescription: clean\nmetadata:\n  type: feedba
 
 # ---------- 4. installer end-to-end in a throwaway HOME seeded with REAL settings ----------
 say "install.sh (throwaway \$HOME seeded with a copy of real settings):"
-# MEMORY_KIT_INSTALL_GATED skips the installer's run.sh gate here — smoke checks
+# CLAUDE_MEMORY_KIT_INSTALL_GATED skips the installer's run.sh gate here — smoke checks
 # reality, the fixture gate has its own suite (and its own gate-refusal fixture)
 FH="$TMP/home"; mkdir -p "$FH/.claude"
 [ -f "$HOME/.claude/settings.json" ] && cp "$HOME/.claude/settings.json" "$FH/.claude/settings.json"
-HOME="$FH" MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1; rc1=$?
+HOME="$FH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1; rc1=$?
 c1=$(jq -r '[.hooks[]?[]?.hooks[]?.command] | length' "$FH/.claude/settings.json" 2>/dev/null)
-HOME="$FH" MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1; rc2=$?
+HOME="$FH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1; rc2=$?
 c2=$(jq -r '[.hooks[]?[]?.hooks[]?.command] | length' "$FH/.claude/settings.json" 2>/dev/null)
 [ "$rc1" = 0 ] && [ "$rc2" = 0 ] && ok "installer runs twice cleanly" || bad "installer rc: $rc1/$rc2"
 [ -n "$c1" ] && [ "$c1" = "$c2" ] && ok "settings merge is idempotent ($c1 hook cmds)" || bad "hook count drifted: $c1 → $c2"
@@ -177,7 +194,7 @@ jq -e . "$FH/.claude/settings.json" >/dev/null 2>&1 && ok "merged settings still
 # dropped as a "duplicate" of the group it belongs to
 jq '.hooks.SessionStart |= (map(.hooks |= map(select(.command | contains("memory-kit-version-check") | not))) | map(select((.hooks|length) > 0)))' \
     "$FH/.claude/settings.json" > "$FH/.claude/settings.json.t" && mv "$FH/.claude/settings.json.t" "$FH/.claude/settings.json"
-HOME="$FH" MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$FH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
 grep -q 'memory-kit-version-check' "$FH/.claude/settings.json" \
     && ok "upgrade re-adds a hook missing from an existing group" || bad "upgrade path drops new hooks in existing groups"
 

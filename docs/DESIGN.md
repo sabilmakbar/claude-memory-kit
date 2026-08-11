@@ -104,6 +104,35 @@ machine goes quiet without anyone dismissing anything. Set `MEMORY_KIT_NO_MINER=
 skip the miner deliberately, which is what makes every other silence a fault worth
 reporting.
 
+**Knobs live in a file, not in `settings.json`.** A `KEY=value` file at the deployed kit
+root is the only mechanism that reaches every context the kit runs in: hooks, skill and
+Bash-tool commands, the miner that a hook launches as a grandchild, and the guardrail that
+git spawns. Environment variables cannot be relied on to reach all four, and
+`settings.json` belongs to the orchestrator. The file is parsed, never sourced, so a stray
+line in a hand-edited file cannot become code inside a hook. Precedence is the environment
+variable, then the file, then the built-in default, which keeps every existing override
+working. A malformed value falls back silently, because a typo must not break a session
+start. The file also serves as the inventory: if a knob is not listed there, the kit does
+not read it.
+
+**The prefix is exact: `MEMORY_KIT_*` is a user knob, `CLAUDE_MEMORY_KIT_*` is not.**
+The same rule claude-session-kit settled on, and the value is the same: a name answers "is
+this configurable" without reading any code. Getting there cost renaming three knobs that
+already worked and one test seam. The objection to renaming was that a machine setting an
+old name in a shell profile would go on being ignored in silence, which is the failure this
+kit works hardest to prevent. That objection is answered rather than accepted. The
+installer rewrites old keys inside a live config file, commented or not, so a file-based
+setting migrates itself. The one place no installer can reach is an export in someone's
+shell profile, so the health hook reports an old name by name, immediately rather than
+after the usual grace period, since it is already being ignored and the fix is one edit
+away.
+
+Two checks keep the inventory honest alongside the prefix, because a convention that must
+be remembered is weaker than a test that cannot be forgotten. One fails when the code reads
+a knob `config.example` does not declare. The other fails when a machine's own config sets
+a knob the code no longer reads. `CLAUDE_CONFIG_DENYLIST` stays outside all of this: the
+guardrail is wired into other repos on its own, so its interface is not the kit's to rename.
+
 **Sync failures are classified, not swallowed.** A pull that fails is sorted into
 offline, refused credentials, or diverged history, because each one sends you somewhere
 different. For refused credentials the message reads the repo's own configuration to name

@@ -48,7 +48,7 @@ Record the review in the single source of truth:
 - **Memory repo has git:** commit the approved changes (one logical change per commit,
   staging and committing as separate steps). The **last** commit's subject must be a
   review marker: `memory review (<machine-label>): <one-line summary>` — machine-label
-  is `$MEMORY_MACHINE_LABEL` if set, else the short hostname (`hostname -s`). If the
+  is `$MEMORY_KIT_MACHINE_LABEL` if set, else the short hostname (`hostname -s`). If the
   review changed nothing, record it anyway:
   `git commit --allow-empty -m "memory review (<machine-label>): no changes"`.
   Then offer to push — the reminder on every machine reads these markers from git

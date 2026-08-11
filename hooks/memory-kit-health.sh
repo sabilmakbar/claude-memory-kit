@@ -18,13 +18,22 @@ KIT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)"
 [ -r "$KIT/core/lib.sh" ] || exit 0
 . "$KIT/core/lib.sh"
 
-GRACE="${MEMORY_KIT_HEALTH_GRACE:-3}"
-case "$GRACE" in ''|*[!0-9]*) GRACE=3 ;; esac
+GRACE="${MEMORY_KIT_HEALTH_GRACE:-$(mk_conf MEMORY_KIT_HEALTH_GRACE 3 int)}"
+case "$GRACE" in ''|*[!0-9]*) GRACE=3 ;; esac   # env half is unvalidated
 
 SID=$(mk_session_id)
 mk_notice_due "$SID" health || exit 0
 
 MSG=""
+# A knob still set under its old name is reported at once rather than after the
+# grace period: it is already being ignored, and the fix is one edit away.
+while IFS= read -r legacy; do
+    [ -n "$legacy" ] || continue
+    MSG="$MSG${MSG:+; }$legacy"
+done <<EOF
+$(mk_legacy_env)
+EOF
+
 for f in "$(mk_health_dir)"/*; do
     [ -f "$f" ] || continue                      # unexpanded glob when nothing is recorded
     blocked=$(mk_health_blocked "$(basename "$f")") || continue

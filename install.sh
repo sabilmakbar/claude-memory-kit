@@ -28,9 +28,9 @@ fi
 
 # Refuse to deploy something the tests reject. run.sh's own install fixtures call
 # this installer with the guard variable set, so gating cannot recurse.
-if [ -z "${MEMORY_KIT_INSTALL_GATED:-}" ] && [ -r "$REPO/tests/run.sh" ]; then
+if [ -z "${CLAUDE_MEMORY_KIT_INSTALL_GATED:-}" ] && [ -r "$REPO/tests/run.sh" ]; then
   echo "→ gating on the test suite"
-  if MEMORY_KIT_INSTALL_GATED=1 bash "$REPO/tests/run.sh" >/dev/null 2>&1 </dev/null; then
+  if CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$REPO/tests/run.sh" >/dev/null 2>&1 </dev/null; then
     echo "  ✓ tests pass"
   else
     echo "  ✗ tests fail — refusing to deploy an untested tree. Run: bash $REPO/tests/run.sh"
@@ -54,6 +54,23 @@ cp "$REPO"/guardrail/pre-commit "$REPO"/guardrail/denylist.local.example "$DEST/
 # ship what re-verification needs (smoke reinstalls from the deployed tree)
 install -m 0755 "$REPO/install.sh" "$DEST/install.sh"
 install -m 0644 "$REPO/settings.snippet.json" "$DEST/settings.snippet.json"
+# knobs: the example refreshes every install so new knobs show up; the live config
+# is seeded once and never overwritten, the same deal denylist.local gets above.
+# Both sit at the tree root, which the wipe above does not touch.
+install -m 0644 "$REPO/config.example" "$DEST/config.example"
+[ -f "$DEST/config" ] || install -m 0644 "$DEST/config.example" "$DEST/config"
+# a renamed knob keeps working: old keys in the live config are rewritten in place,
+# commented or not. The one case this cannot reach is an export in a shell profile,
+# which the health hook reports instead of letting it be ignored in silence.
+if [ -r "$REPO/core/lib.sh" ]; then
+  . "$REPO/core/lib.sh"
+  mk_legacy_knobs | while read -r old new; do
+    grep -qE "^[[:space:]]*#?[[:space:]]*$old=" "$DEST/config" 2>/dev/null || continue
+    t="$(mktemp)"
+    sed "s/^\([[:space:]]*#\{0,1\}[[:space:]]*\)$old=/\1$new=/" "$DEST/config" > "$t" \
+      && mv "$t" "$DEST/config" && echo "  renamed knob $old to $new in your config"
+  done
+fi
 chmod -R u+rwX "$DEST"
 
 echo "→ installing skills to ~/.claude/skills"
@@ -120,6 +137,7 @@ fi
 #   git -C <repo> config core.hooksPath ~/.claude/memory-kit/guardrail
 echo "→ commit guardrail available at: $DEST/guardrail"
 echo "    add private terms to $DEST/guardrail/denylist.local (or set \$CLAUDE_CONFIG_DENYLIST)"
+echo "→ knobs (miner opt-out, notice timing, machine label) live in $DEST/config"
 
 # Legacy cleanup: the pre-tree layout scattered our scripts into ~/.claude/scripts;
 # they are now stale copies. Remove exactly ours, never anything else living there.
