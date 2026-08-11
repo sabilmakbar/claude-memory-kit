@@ -68,7 +68,7 @@ index cannot see yet and proposes the small renames that fix them.
 
 Session starts may greet you with a short note: a reminder that a memory review is due,
 that the daily loop found something worth keeping, or that some part of the kit has been
-unable to run for a few days. Say "review feedback proposals"
+unable to run for three days or more. Say "review feedback proposals"
 and Claude walks you through each suggestion. Say "remember this" at any time to save a
 preference directly, no review needed. That is the whole interface.
 
@@ -229,9 +229,10 @@ exists to surface exactly that.
 
 **Can I turn the daily miner off on one machine?** Uncomment `MEMORY_KIT_NO_MINER=1` in
 `~/.claude/memory-kit/config`. Memory, the index, and the guardrail carry on. Saying it
-explicitly matters, because the kit treats a feature that goes quiet for days as a fault
-and tells you about it once a day. That file holds every setting the kit has, each one
-listed with its default, and your edits survive upgrades.
+explicitly matters, because the kit treats a feature that has been silent for three days as
+a fault and tells you about it once a day. That file holds every setting the kit has, each
+one listed with its default, and your edits survive upgrades. `MEMORY_KIT_HEALTH_GRACE` is
+the three, if you want a longer fuse on a machine you use rarely.
 
 **What does the daily miner cost?** One Claude call a day, on Sonnet by default. It reads
 what you typed since the last run plus your memory files and global `CLAUDE.md`, which on
