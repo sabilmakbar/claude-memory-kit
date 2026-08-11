@@ -216,6 +216,24 @@ HOME="$FH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2
 grep -q 'memory-kit-version-check' "$FH/.claude/settings.json" \
     && ok "upgrade re-adds a hook missing from an existing group" || bad "upgrade path drops new hooks in existing groups"
 
+# Round trip in the same throwaway HOME, which holds a copy of the REAL settings file:
+# whatever else lives in yours is exactly what an uninstall must not touch.
+foreign_before=$(jq '[.hooks[]?[]?.hooks[]?.command | select(contains("memory-kit/") | not)] | length' \
+    "$FH/.claude/settings.json" 2>/dev/null || echo -1)
+HOME="$FH" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1; urc=$?
+ours_after=$(jq '[.hooks[]?[]?.hooks[]?.command | select(contains("memory-kit/"))] | length' \
+    "$FH/.claude/settings.json" 2>/dev/null || echo -1)
+foreign_after=$(jq '[.hooks[]?[]?.hooks[]?.command | select(contains("memory-kit/") | not)] | length' \
+    "$FH/.claude/settings.json" 2>/dev/null || echo -2)
+[ "$urc" = 0 ] && ok "uninstall runs cleanly against real settings" || bad "uninstall rc $urc"
+[ "$ours_after" = 0 ] && ok "uninstall removed every hook of ours" || bad "$ours_after of our hooks survived"
+[ "$foreign_after" = "$foreign_before" ] \
+    && ok "everything else in settings.json survived ($foreign_before entries)" \
+    || bad "other tools' hooks changed: $foreign_before to $foreign_after"
+jq -e . "$FH/.claude/settings.json" >/dev/null 2>&1 \
+    && ok "settings.json is still valid JSON after uninstall" || bad "uninstall left invalid JSON"
+[ ! -d "$FH/.claude/memory-kit" ] && ok "the deployed tree is gone" || bad "tree survived uninstall"
+
 # ---------- 5. index engine normalization over a COPY of real memory ----------
 say "ensure-memory-symlink.sh (stamped-frontmatter healing, copy of real memory):"
 if ls "$HOME/.claude/memory"/*.md >/dev/null 2>&1; then
