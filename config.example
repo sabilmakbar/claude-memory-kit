@@ -1,0 +1,29 @@
+# claude-memory-kit knobs. Copied to ~/.claude/memory-kit/config on install if no
+# config exists yet; upgrades never overwrite it. Uncomment a line to change a value.
+#
+# Rules: KEY=value, one per line. Surrounding spaces are trimmed. A malformed value
+# is ignored and the built-in default applies. An environment variable with the same
+# name overrides this file. This file is read, never executed, so nothing here can
+# run code.
+#
+# This is also the inventory: every knob the kit reads is listed below. Anything
+# else that looks like a setting in the source is internal.
+
+# Skip the daily feedback miner on this machine. Memory, the index, and the
+# guardrail carry on. Setting it also stops the health notice treating the miner's
+# silence as a fault. Off values: 0, no, off, false, or empty.
+#MEMORY_KIT_NO_MINER=1
+
+# Days a feature must stay blocked before the health notice mentions it. Raise it
+# on a machine that is offline a lot.
+#MEMORY_KIT_HEALTH_GRACE=3
+
+# Model the daily miner runs on.
+#FEEDBACK_MINER_MODEL=sonnet
+
+# Seconds between "memory files changed" notices in a running session.
+#MEMORY_DELTA_THROTTLE=3600
+
+# What this machine calls itself in review-marker commits. Defaults to the short
+# hostname. Set it when the hostname is not the name you think of the machine by.
+#MEMORY_MACHINE_LABEL=laptop

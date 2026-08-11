@@ -15,6 +15,44 @@ mk_mounts_dir()   { printf '%s/.claude/memory-mounts' "$HOME"; }
 mk_projects_dir() { printf '%s/.claude/projects' "$HOME"; }
 mk_tracker_dir()  { printf '%s/.local/share/claude-feedback' "$HOME"; }
 
+# ---- tunable knobs -----------------------------------------------------------
+
+# Knobs are KEY=value lines in a config file at the deployed kit root, beside
+# .verified, which install.sh never wipes. A file is the only mechanism that
+# reaches every context this kit runs in: hooks, skill and Bash-tool commands, the
+# hook-launched miner grandchild, and the git-spawned guardrail. It is parsed
+# strictly and NEVER sourced, so a stray line in a hand-edited file cannot become
+# code inside a hook. Resolved from $HOME rather than this file's location, which
+# is also what lets a test's fake HOME isolate it for free.
+mk_state_dir() { printf '%s/.claude/memory-kit' "$HOME"; }
+
+# mk_conf <key> <default> [int] → value. Precedence is env > file > default, with
+# the env half at the call site: VAR="${VAR:-$(mk_conf VAR default)}".
+# A missing file, missing key, empty value, or a non-numeric value under `int` all
+# fall back to the default silently. A typo in a config file must never break a
+# session start, so this fails open like everything else here.
+mk_conf() {
+    _mk_cf="$(mk_state_dir)/config"
+    [ -r "$_mk_cf" ] || { printf '%s' "$2"; return; }
+    _mk_cv=$(grep -E "^$1=" "$_mk_cf" 2>/dev/null | tail -1 | cut -d= -f2- \
+             | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+    [ -n "$_mk_cv" ] || { printf '%s' "$2"; return; }
+    if [ "${3:-}" = int ]; then
+        case "$_mk_cv" in ''|*[!0-9]*) _mk_cv="$2" ;; esac
+    fi
+    printf '%s' "$_mk_cv"
+}
+
+# mk_conf_off <value> → rc 0 when the value means "off". A kill switch read from a
+# file needs this: presence alone would make MEMORY_KIT_NO_MINER=0 mean "on",
+# which is the opposite of what anyone writing that line intends.
+mk_conf_off() {
+    case "$(printf '%s' "${1:-}" | tr 'A-Z' 'a-z')" in
+        ''|0|no|off|false) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 # ---- hook stdin ------------------------------------------------------------
 
 # Session id from hook stdin JSON. Empty (rc 1) on a tty, unreadable stdin, or
