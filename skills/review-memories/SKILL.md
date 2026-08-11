@@ -41,6 +41,12 @@ Present findings as a short proposal list first — explain why each change is n
 before editing (per the user's editing preferences). Apply only what the user approves,
 editing files in place; the index regenerates automatically from the files.
 
+Never edit a file's `source:` field. It records where a rule came from, which a review
+cannot change: coupling, decoupling, tightening and generalizing all change what a rule
+says, not its origin. Describe what you changed in the review commit message instead,
+which is where that history stays accurate and syncs to other machines. Treating the
+field as a log is what once grew one into a four-event line.
+
 ## Wrap up (always, even if nothing changed)
 
 Record the review in the single source of truth:

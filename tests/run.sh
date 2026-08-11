@@ -205,6 +205,7 @@ name: feedback_sample
 description: a rule
 metadata:
   type: feedback
+  source: direct
 ---
 
 Do the thing.
@@ -223,6 +224,16 @@ out=$(guard "$MEMD/feedback_sample.md" "$(printf '%s' "$GOOD" | grep -v '^  type
 denied "$out" && ok "a missing metadata type is denied" || fail "type not enforced"
 out=$(guard "$MEMD/feedback_sample.md" "$(printf '%s' "$GOOD" | grep -v '^\*\*Why:\*\*')")
 denied "$out" && ok "a feedback rule with no Why line is denied" || fail "Why not enforced"
+out=$(guard "$MEMD/feedback_sample.md" "$(printf '%s' "$GOOD" | grep -v '^  source:')")
+denied "$out" && ok "a file with no origin is denied" || fail "origin not enforced"
+out=$(guard "$MEMD/feedback_sample.md" "$(printf '%s' "$GOOD" | sed 's/^  source: direct$/  source: feedback-miner/')")
+denied "$out" && fail "feedback-miner was rejected as an origin ($out)" || ok "feedback-miner is a valid origin"
+# the id is what made the field machine-local and wrong, so nothing may follow the value
+out=$(guard "$MEMD/feedback_sample.md" "$(printf '%s' "$GOOD" | sed 's/^  source: direct$/  source: feedback-miner (P-009, accepted 2026-08-11)/')")
+denied "$out" && ok "an origin with a proposal id appended is denied" || fail "id accepted after the value"
+out=$(guard "$MEMD/feedback_sample.md" "$(printf '%s' "$GOOD" | sed 's/^  source: direct$/  source: somewhere-else/')")
+denied "$out" && ok "an unknown origin value is denied" || fail "any value accepted"
+
 out=$(guard "$MEMD/feedback_sample.md" "$GOOD
 **Evidence:** the user said something, on a date.
 ")
@@ -234,6 +245,7 @@ name: user_someone
 description: who the user is
 metadata:
   type: user
+  source: direct
 ---
 
 Works on things. Prefers directness.
@@ -251,6 +263,7 @@ name: project_thing
 description: a project fact
 metadata:
   type: project
+  source: direct
 ---
 
 **Evidence:** local notes are fine here.

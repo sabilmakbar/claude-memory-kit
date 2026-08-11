@@ -29,7 +29,7 @@ GUIDE="$HOME/.claude/memory-kit/guidance/memory-authoring.md"
 # Self-describing, so prose and code cannot drift apart. This is the canonical list
 # of what is enforced; tests bind it three ways: every id must have a deny site here,
 # every id must be marked in the guidance, and the guidance may name no other.
-MK_RULES="filename-prefix name-matches-slug description-required type-required why-required-for-feedback no-evidence-when-synced"
+MK_RULES="filename-prefix name-matches-slug description-required type-required origin-required why-required-for-feedback no-evidence-when-synced"
 if [ "${1:-}" = "--rules" ]; then printf '%s\n' $MK_RULES; exit 0; fi
 
 command -v jq >/dev/null 2>&1 || exit 0
@@ -87,6 +87,8 @@ fi
 if [ -n "$whole" ]; then
     has '^description:' || deny description-required "A memory file needs a description line in its frontmatter. It is the index entry and what recall reads to judge whether the file is relevant, so a file without one is close to invisible."
     has '^[[:space:]]*type:' || deny type-required "A memory file needs a type in its metadata: user, feedback, project or reference."
+    has '^[[:space:]]*source: \(direct\|feedback-miner\)$' \
+      || deny origin-required "A memory file must state where it came from: source: direct when you decided the rule, or source: feedback-miner when a mined proposal was accepted. Nothing follows either value, and no later edit changes it; what a review did to the rule belongs in the commit message. A proposal id would name a tracker entry that only one machine can resolve."
     case "$slug" in
         feedback_*)
             has '^\*\*Why:\*\*' || deny why-required-for-feedback "A feedback rule needs a **Why:** line giving the generalized reason it matters. Without it the rule reads as an arbitrary instruction and gets ignored or misapplied later." ;;
