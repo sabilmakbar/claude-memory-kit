@@ -49,7 +49,7 @@ session cannot write inside it.
 
 ```mermaid
 flowchart LR
-    MANUAL["You: 'remember this'"] --> CONV[seed conventions<br/>in context]
+    MANUAL["You: 'remember this'"] --> CONV[write-time guard:<br/>denies a file that<br/>misses a rule]
     MINED["Miner proposal accepted<br/>(review skill)"] --> CONV
     CONSOL["/review-memories<br/>consolidation"] --> CONV
     CONV --> FILES[memory files]

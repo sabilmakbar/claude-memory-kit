@@ -298,9 +298,11 @@ the commit guardrail checks the same fields, so a malformed file cannot leave th
 ## Uninstall
 
 Remove the kit's hooks from `~/.claude/settings.json`, then delete
-`~/.claude/memory-kit`, the kit's skills in `~/.claude/skills`, the two seed convention
-files in `~/.claude/memory`, and `~/.local/share/claude-feedback` (the miner's tracker).
-Your memory files themselves are yours and stay where they are.
+`~/.claude/memory-kit` and the kit's skills in `~/.claude/skills`. Your memory files are
+yours and stay where they are, and so does the miner's tracker at
+`~/.local/share/claude-feedback`, which holds the proposals you accepted and rejected.
+Nothing the kit installs lives in your memory folder, so there is nothing to sort through
+there.
 
 ## Related projects
 

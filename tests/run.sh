@@ -184,6 +184,113 @@ out=$(echo "{\"tool_input\":{\"file_path\":\"$TMP/brand-new.txt\"}}" | bash "$KI
 out=$(echo 'not json' | bash "$KIT/scripts/edit-over-write.sh" 2>/dev/null); rc=$?
 [ -z "$out" ] && [ "$rc" = 0 ] && ok "fails open on garbage input" || fail "fail-open"
 
+# ---------- memory write guard ----------
+# The conventions moved out of two seeded memory files into this check plus guidance/.
+# Enforcement must match what real, correct memory files look like: several legitimate
+# rules carry their own "how" with no section header, a user_ profile has no **Why:**,
+# and a [[wikilink]] may point at a memory not written yet. Denying any of those would
+# make the hook worse than the drift it replaces, so each has its own check.
+echo "hooks/memory-write-guard.sh:"
+WH="$TMP/home-guard"; MEMD="$WH/.claude/memory"; MNTD="$WH/.claude/memory-mounts/-work"
+mkdir -p "$MEMD" "$MNTD"
+guard() { # guard <file_path> <content> [tool_input field]
+  jq -n --arg p "$1" --arg c "$2" --arg f "${3:-content}" \
+     '{tool_input: ({file_path:$p} + {($f): $c})}' \
+    | HOME="$WH" bash "$KIT/hooks/memory-write-guard.sh" 2>/dev/null
+}
+denied() { printf '%s' "$1" | grep -q '"permissionDecision":"deny"'; }
+
+GOOD='---
+name: feedback_sample
+description: a rule
+metadata:
+  type: feedback
+---
+
+Do the thing.
+
+**Why:** it matters.
+'
+out=$(guard "$MEMD/feedback_sample.md" "$GOOD")
+denied "$out" && fail "a compliant file was denied ($out)" || ok "a compliant memory file passes"
+out=$(guard "$MEMD/notes.md" "$GOOD")
+denied "$out" && ok "a filename without a type prefix is denied" || fail "prefix not enforced"
+out=$(guard "$MEMD/feedback_sample.md" "$(printf '%s' "$GOOD" | sed 's/^name: feedback_sample/name: feedback-sample/')")
+denied "$out" && ok "a kebab-case name that breaks wikilinks is denied" || fail "name mismatch not caught"
+out=$(guard "$MEMD/feedback_sample.md" "$(printf '%s' "$GOOD" | grep -v '^description:')")
+denied "$out" && ok "a missing description is denied" || fail "description not enforced"
+out=$(guard "$MEMD/feedback_sample.md" "$(printf '%s' "$GOOD" | grep -v '^  type: feedback')")
+denied "$out" && ok "a missing metadata type is denied" || fail "type not enforced"
+out=$(guard "$MEMD/feedback_sample.md" "$(printf '%s' "$GOOD" | grep -v '^\*\*Why:\*\*')")
+denied "$out" && ok "a feedback rule with no Why line is denied" || fail "Why not enforced"
+out=$(guard "$MEMD/feedback_sample.md" "$GOOD
+**Evidence:** the user said something, on a date.
+")
+denied "$out" && ok "an Evidence section in global memory is denied" || fail "evidence leak surface open"
+
+# shapes that must NEVER be denied, each taken from a real memory file
+out=$(guard "$MEMD/user_someone.md" '---
+name: user_someone
+description: who the user is
+metadata:
+  type: user
+---
+
+Works on things. Prefers directness.
+')
+denied "$out" && fail "a user_ profile was denied for having no Why ($out)" \
+             || ok "a user_ profile needs no Why line"
+out=$(guard "$MEMD/feedback_sample.md" "$GOOD
+Related: [[feedback_not_written_yet]].
+")
+denied "$out" && fail "a forward wikilink was denied" || ok "a wikilink to an unwritten memory passes"
+out=$(guard "$MEMD/feedback_sample.md" "$(printf '%s' "$GOOD" | sed 's/Do the thing./Always do the thing, no exceptions./')")
+denied "$out" && fail "a rule carrying its own how was denied" || ok "the How section stays optional"
+out=$(guard "$MNTD/project_thing.md" '---
+name: project_thing
+description: a project fact
+metadata:
+  type: project
+---
+
+**Evidence:** local notes are fine here.
+')
+denied "$out" && fail "a mount file was held to the synced-tier rule ($out)" \
+             || ok "mount memory keeps its own evidence"
+
+# scope and fail-open
+out=$(guard "$MEMD/MEMORY.md" "no frontmatter at all")
+[ -z "$out" ] && ok "the generated index is out of scope" || fail "MEMORY.md was checked"
+out=$(guard "$WH/somewhere/else/notes.md" "no frontmatter at all")
+[ -z "$out" ] && ok "files outside memory are out of scope" || fail "scope leaked"
+out=$(printf 'not json\n' | HOME="$WH" bash "$KIT/hooks/memory-write-guard.sh" 2>/dev/null); rc=$?
+[ -z "$out" ] && [ "$rc" = 0 ] && ok "garbage stdin fails open" || fail "fail-open (rc=$rc)"
+
+# The hook declares what it enforces, and the guidance must agree in both directions.
+# Prose describing code is exactly what drifts, so this is bound rather than trusted:
+# the same failure the config.example inventory checks catch for knobs.
+RULES=$(bash "$KIT/hooks/memory-write-guard.sh" --rules)
+[ -n "$RULES" ] && ok "the hook declares the rules it enforces" || fail "--rules printed nothing"
+undenied=""; undocumented=""
+for r in $RULES; do
+  grep -q "deny $r " "$KIT/hooks/memory-write-guard.sh" || undenied="$undenied $r"
+  grep -q "rule: $r" "$KIT/guidance/memory-authoring.md" || undocumented="$undocumented $r"
+done
+[ -z "$undenied" ] && ok "every declared rule has a deny site" || fail "declared but never enforced:$undenied"
+[ -z "$undocumented" ] && ok "every enforced rule is documented in the guidance" \
+                       || fail "enforced but undocumented:$undocumented"
+stale=""
+for m in $(grep -oE 'rule: [a-z-]+' "$KIT/guidance/memory-authoring.md" | awk '{print $2}'); do
+  printf '%s\n' $RULES | grep -qx "$m" || stale="$stale $m"
+done
+[ -z "$stale" ] && ok "the guidance names no rule the hook does not enforce" || fail "stale in guidance:$stale"
+
+# an Edit shows only a fragment, so absence can never be judged from it
+out=$(guard "$MEMD/feedback_sample.md" "one edited sentence." new_string)
+[ -z "$out" ] && ok "an Edit fragment is not judged for missing sections" || fail "Edit judged on absence"
+out=$(guard "$MEMD/feedback_sample.md" "name: feedback-wrong" new_string)
+denied "$out" && ok "an Edit that introduces a bad name is still caught" || fail "Edit name check missing"
+
 # ---------- session-start reminders ----------
 echo "scripts/memory-review-reminder.sh:"
 RH="$TMP/home4"; mkdir -p "$RH/.claude/memory"
@@ -455,11 +562,20 @@ echo "$out" | grep -q "never recorded" && fail "still claims never-recorded" || 
 # recurse back into this suite
 echo "install.sh:"
 IH="$TMP/home3"; mkdir -p "$IH/.claude/memory"
+# retiring the seeded conventions: an edited copy is the user's file and stays, an
+# untouched one is kit property and goes, because the rules are a write-time check now
 printf 'customized\n' > "$IH/.claude/memory/feedback_memory_conventions.md"
+cp "$KIT/guidance/retired-seeds/feedback_memory_generality.md" "$IH/.claude/memory/"
 HOME="$IH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
 HOME="$IH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
 [ "$(cat "$IH/.claude/memory/feedback_memory_conventions.md")" = "customized" ] \
-  && ok "re-run keeps customized seed file" || fail "seed clobbered"
+  && ok "an edited seed file is left alone" || fail "edited seed clobbered"
+[ -f "$IH/.claude/memory/feedback_memory_generality.md" ] \
+  && fail "an unmodified seed file was left behind" || ok "an unmodified seed file is retired"
+[ -f "$IH/.claude/memory-kit/guidance/memory-authoring.md" ] \
+  && ok "the guidance the hook points at is deployed" || fail "guidance missing from the tree"
+[ -f "$IH/.claude/skills/save-memory/SKILL.md" ] \
+  && ok "the authoring skill is installed" || fail "save-memory skill missing"
 n=$(jq '[.hooks[][].hooks[].command] | length' "$IH/.claude/settings.json")
 n2=$(jq '[.hooks[][].hooks[].command] | unique | length' "$IH/.claude/settings.json")
 [ "$n" = "$n2" ] && ok "hooks deduped across re-runs ($n entries)" || fail "hook dupes ($n vs $n2)"
@@ -497,7 +613,7 @@ grep -q '\.claude/scripts/unrelated-tool.sh' "$MH2/.claude/settings.json" \
 GK="$TMP/gated-kit"; mkdir -p "$GK"
 cp -R "$KIT/scripts" "$GK/scripts"; cp -R "$KIT/core" "$GK/core"
 cp -R "$KIT/hooks" "$GK/hooks"; cp -R "$KIT/tests" "$GK/tests"
-cp -R "$KIT/seed-memories" "$GK/seed-memories"; cp -R "$KIT/skills" "$GK/skills"; cp -R "$KIT/guardrail" "$GK/guardrail"
+cp -R "$KIT/guidance" "$GK/guidance"; cp -R "$KIT/skills" "$GK/skills"; cp -R "$KIT/guardrail" "$GK/guardrail"
 cp "$KIT/install.sh" "$KIT/settings.snippet.json" "$GK/"
 printf '#!/bin/sh\nexit 1\n' > "$GK/tests/run.sh"
 GH2="$TMP/home10"; mkdir -p "$GH2/.claude"
