@@ -46,7 +46,7 @@ git clone https://github.com/sabilmakbar/claude-memory-kit.git ~/claude-memory-k
 The installer runs its own test suite first and refuses to install if anything fails.
 It then places the kit in `~/.claude/memory-kit`, adds its hooks to your Claude Code
 settings without touching hooks from other tools, and keeps any memory files you already
-have. Re-running it is always safe.
+have. Re-running it is always safe, and is also how you upgrade (see below).
 
 Start a new Claude Code session, then confirm the index got built:
 
@@ -179,6 +179,29 @@ whatever this machine defaults to.
 
 When a sync fails, the kit's own message names the mechanism your repo is configured
 with, which tells you where to look.
+
+## Upgrading
+
+Re-run the installer. That is the whole upgrade path:
+
+```bash
+git -C ~/claude-memory-kit pull && ~/claude-memory-kit/install.sh
+```
+
+It runs the test suite first and refuses to deploy a tree the tests reject. Then it replaces
+kit code only, and carries the rest forward:
+
+| Kept as it is | Why it survives |
+|---|---|
+| your memory files | the installer only ever adds the two convention seeds, never overwrites |
+| `guardrail/denylist.local` | the guardrail folder is overlaid, never wiped |
+| your edited `config` | seeded once; later installs refresh `config.example` only |
+| other tools' hooks in `settings.json` | the hook merge is append-only and deduped per hook |
+
+Two things it does rather than just preserve. A knob that has been renamed since your last
+install gets rewritten in place in your `config`, keeping its value, and it tells you when it
+does. And `config.example` is refreshed every time, so knobs added since your last upgrade
+show up there with their defaults.
 
 ## Is it working?
 
