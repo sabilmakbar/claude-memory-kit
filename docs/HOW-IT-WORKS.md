@@ -58,15 +58,18 @@ Ignore it as long as you like. Nothing happens without you.
 (Or run `/review-feedback-proposals`.) Claude shows you each proposal in full: the rule,
 when it fires, and the evidence. You answer one of four ways.
 
-- **Accept.** The rule becomes a permanent memory. Every future session starts already
-  knowing it, and you should never have to repeat that correction again.
-- **Reject.** The proposal is filed away. By default that means "not now": if the same
-  pattern clearly keeps happening on later days, it may come back once, marked as
-  resurfaced. Reject it a second time and it is gone for good. If you already know it's
-  a never, say "never" and it is final immediately.
-- **Rephrase.** You like the idea but not the wording. Give your own phrasing and that
-  is what gets saved.
-- **Leave it.** Undecided items stay in the list and keep collecting evidence.
+| Your answer | What gets saved | What happens to the proposal |
+|---|---|---|
+| **Accept** | the rule, as a permanent memory | done; every later session starts knowing it |
+| **Rephrase** | your wording instead of Claude's | same as accept, with your phrasing |
+| **Reject** | nothing | dormant. It may return **once**, and only on fresh evidence from later days |
+| **Reject again**, or say **"never"** | nothing | final, immediately, never proposed again |
+| **Leave it** | nothing | stays in the list and keeps collecting evidence |
+
+Rejection is deliberately two-strike: "not now" and "never" are different answers, so one
+snap judgement on thin evidence does not silence a pattern forever, and a pattern you have
+genuinely ruled out stops asking. [FLOWS.md](FLOWS.md) has the whole loop as a diagram,
+including these states.
 
 That is the whole loop. The tool notices, checks what Claude already knows, proposes,
 you decide, and Claude remembers.
