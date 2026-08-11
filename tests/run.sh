@@ -233,6 +233,31 @@ git -C "$UH/.claude/memory" remote set-url origin "$TMP/nonexistent.git"
 HOME="$UH" PATH="$SB:$PATH" bash "$KIT/scripts/run-feedback-miner.sh" >/dev/null 2>&1
 check "unreachable origin: miner run still succeeds" 0 $?
 
+# ---------- config.example is the inventory, enforced in both directions ----------
+# smoke checks that every knob a machine SETS is still read. This checks that every
+# knob the CODE READS is declared, so the file cannot quietly fall behind. Names read
+# from the environment that are not user knobs are listed here explicitly, so adding
+# one is a deliberate act. Together these two checks do the job claude-session-kit
+# gives its `CS_*` prefix, which is why the knobs here keep their existing names.
+echo "config.example inventory:"
+NOT_KNOBS="MEMORY_KIT_INSTALL_GATED CLAUDE_CONFIG_DENYLIST CLAUDE_PROJECT_DIR"
+undeclared=""
+for k in $(grep -rhE '\$\{[A-Z][A-Z0-9_]*:-' "$KIT/scripts" "$KIT/hooks" "$KIT/core" \
+             "$KIT/guardrail/pre-commit" "$KIT/install.sh" 2>/dev/null \
+           | grep -v '^[[:space:]]*#' \
+           | grep -oE '\$\{[A-Z][A-Z0-9_]*:-' | tr -d '${:-' | sort -u); do
+  case " $NOT_KNOBS " in *" $k "*) continue ;; esac
+  grep -q "^#$k=" "$KIT/config.example" || undeclared="$undeclared $k"
+done
+[ -z "$undeclared" ] && ok "every knob the code reads is declared in config.example" \
+                     || fail "read but undeclared:$undeclared"
+declared_internal=""
+for k in $NOT_KNOBS; do
+  grep -q "^#$k=" "$KIT/config.example" && declared_internal="$declared_internal $k"
+done
+[ -z "$declared_internal" ] && ok "internal names stay out of the inventory" \
+                            || fail "internal name offered as a knob:$declared_internal"
+
 # ---------- tunable knobs: env > file > default ----------
 echo "core/lib.sh mk_conf:"
 KH="$TMP/home-conf"; mkdir -p "$KH/.claude/memory-kit"
