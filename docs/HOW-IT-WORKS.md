@@ -109,7 +109,26 @@ a moment of autopilot.
   everything you emphasized is either project-specific or already in memory. The tracker
   logs "0 new" and moves on. A day where the job could not run at all is different, say
   because the `claude` CLI is missing or the memory repo will not sync. That used to look
-  identical to a quiet week. Now the reason is recorded, and once a block has lasted a few
-  days you get one note a day until it is fixed.
+  identical to a quiet week. Now the reason is recorded, and once a block has lasted three
+  days you get one note a day until it is fixed. `MEMORY_KIT_HEALTH_GRACE` in
+  `~/.claude/memory-kit/config` is that three, if a machine you use rarely needs a longer
+  fuse.
 - **You can always just read the file.** The tracker is plain markdown at
   `~/.local/share/claude-feedback/proposals.md`. Open it anytime.
+
+## The other reminder: reviewing what you have
+
+The daily loop adds memories. Nothing in it ever prunes them, so separately from proposals,
+a session start will occasionally tell you the collection itself is due a look:
+
+> *Memory review due (34 days since last, any machine). Ask me: review my memories and
+> update preferences.*
+
+That is a different job from reviewing proposals. Here you are looking at memories you
+already accepted: merging two that overlap, correcting one that has gone stale, deleting one
+that turned out to be wrong. Say "review my memories" and Claude walks the collection with
+you.
+
+It is tracked per machine as well as globally, so if a machine has never reviewed its own
+mount-local memories the note says that too. Like every other notice, it appears once a day
+at most and never blocks anything.
