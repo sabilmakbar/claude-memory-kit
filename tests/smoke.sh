@@ -116,6 +116,7 @@ cfg="$(. "$KIT/core/lib.sh" && printf '%s' "$(mk_state_dir)/config")"
 if [ -r "$cfg" ]; then
     unknown=""
     while IFS= read -r k; do
+        [ -n "$k" ] || continue          # an all-commented config yields no keys at all
         grep -rq "\${$k:-" "$KIT/scripts" "$KIT/hooks" 2>/dev/null || unknown="$unknown $k"
     done <<EOF
 $(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$cfg" | tr -d '=')
