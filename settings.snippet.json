@@ -21,6 +21,15 @@
     ],
     "PreToolUse": [
       {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.claude/memory-kit/hooks/memory-write-guard.sh\" 2>/dev/null || true"
+          }
+        ]
+      },
+      {
         "matcher": "Write",
         "hooks": [
           {

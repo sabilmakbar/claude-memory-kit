@@ -41,7 +41,7 @@ fi
 echo "→ deploying the kit tree to ~/.claude/memory-kit"
 mkdir -p "$DEST"
 # content dirs are stateless: replace them wholesale so renames/removals propagate
-for d in core scripts hooks tests seed-memories skills; do
+for d in core scripts hooks tests guidance skills; do
   rm -rf "$DEST/$d"
   cp -R "$REPO/$d" "$DEST/$d"
 done
@@ -76,10 +76,21 @@ chmod -R u+rwX "$DEST"
 echo "→ installing skills to ~/.claude/skills"
 cp -r "$REPO"/skills/* "$CLAUDE/skills/"
 
-echo "→ seeding memory-authoring conventions into ~/.claude/memory (existing files kept)"
-for f in "$REPO"/seed-memories/*.md; do
+# The authoring conventions used to be seeded into ~/.claude/memory as two memory files.
+# They are kit instructions rather than user data: they cost context in every session,
+# could be edited into drift, and nothing verified that a write followed them. They now
+# live in guidance/ and are enforced by hooks/memory-write-guard.sh. Retire an old copy
+# only when it is byte-identical to what the kit shipped; anything edited is the user's.
+for f in "$REPO"/guidance/retired-seeds/*.md; do
   t="$CLAUDE/memory/$(basename "$f")"
-  [ -f "$t" ] || install -m 0644 "$f" "$t"
+  [ -f "$t" ] || continue
+  if cmp -s "$f" "$t"; then
+    rm -f "$t"
+    echo "→ retired $(basename "$t") from ~/.claude/memory (its rules are now a write-time check)"
+  else
+    echo "  ! $(basename "$t") differs from the copy the kit shipped, so it is yours and stays"
+    echo "    its rules are enforced at write time now; delete it whenever you like"
+  fi
 done
 
 echo "→ wiring hooks into settings.json (append-only, deduped by command)"

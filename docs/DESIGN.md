@@ -28,12 +28,28 @@ history. The first design allowed a masked evidence section. Work-identifying na
 riding in through that exception faster than they could be masked, so the leak surface
 was removed structurally rather than policed.
 
-**Authoring conventions ship as seed memories.** The commit-time lint cannot reach
-memory-mounts (no repo there) and cannot shape write-time behavior anywhere. So the
-conventions are installed as memory files themselves. They get recalled at the moment a
-session writes memory, which is the only moment that matters. This also counteracts the
-harness default of kebab-case memory names, which repeatedly broke wikilinks before the
-convention was in context.
+**Authoring conventions are a write-time check, not seeded memory files.** They used to
+ship as two memory files installed into the user's memory folder, because the commit lint
+cannot reach memory-mounts and cannot shape behavior at write time. That diagnosis was
+right and the delivery was wrong: it put kit instructions inside the user's data, where
+they cost context in every session, could be edited into drift, needed an uninstall
+decision, and still verified nothing. A `PreToolUse` hook on Write and Edit now checks a
+memory file as it is written, anywhere, with no repo needed, and denies with the specific
+rule that was missed. The guidance and template live in `guidance/`, versioned with the
+kit, and the deny message points at them, so the advice arrives when it is needed instead
+of sitting in context all day. This is the tooling-over-memory rule applied to the kit
+itself.
+
+**Only rules that hold for every legitimate file are enforced.** An audit of real memory
+files set that boundary. Several correct rules carry their own "how" with no section
+header, a `user_` profile has no `**Why:**` because it is not a rule, and a `[[wikilink]]`
+may point at a memory not written yet. Denying any of those would make the check worse
+than the drift it replaces, so they stay guidance, each with a test proving it is not
+denied. Enforced: the type-prefixed filename, `name` equal to the filename slug (which
+the harness's kebab-case default breaks, repeatedly, until this became mechanical), a
+present `description` and `metadata.type`, a `**Why:**` on a `feedback_` rule, and no
+Evidence section in the tier that syncs. An Edit shows only a fragment, so absence is
+never judged from one.
 
 ## The daily feedback loop
 

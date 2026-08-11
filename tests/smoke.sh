@@ -127,6 +127,24 @@ else
     skip "no config file deployed yet"
 fi
 
+# The write guard against this machine's real memory files. Fixtures prove each rule
+# fires; only real data proves the rules match what correct files actually look like. A
+# denial here means the guard would have refused a file that already exists and is fine.
+say "memory-write-guard against real memory files:"
+gcount=0; grefused=""
+for f in "$(. "$KIT/core/lib.sh"; mk_memory_dir)"/*.md \
+         "$(. "$KIT/core/lib.sh"; mk_mounts_dir)"/*/*.md; do
+    [ -f "$f" ] || continue
+    case "${f##*/}" in MEMORY.md|README.md|CLAUDE.md) continue ;; esac
+    gout=$(jq -n --arg p "$f" --rawfile c "$f" '{tool_input:{file_path:$p, content:$c}}' 2>/dev/null \
+           | bash "$KIT/hooks/memory-write-guard.sh" 2>/dev/null)
+    gcount=$((gcount + 1))
+    printf '%s' "$gout" | grep -q '"permissionDecision":"deny"' && grefused="$grefused ${f##*/}"
+done
+if [ "$gcount" -eq 0 ]; then skip "no memory files on this machine to check"
+elif [ -n "$grefused" ]; then bad "the guard would refuse existing valid files:$grefused"
+else ok "all $gcount real memory files pass the write guard"; fi
+
 hsid="smoke-health-$$"
 out=$(printf '{"session_id":"%s"}' "$hsid" | bash "$KIT/hooks/memory-kit-health.sh" 2>/dev/null); rc=$?
 if [ "$rc" != 0 ]; then bad "memory-kit-health exit $rc"
