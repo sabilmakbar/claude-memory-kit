@@ -41,8 +41,9 @@ whatever the pull just brought in.
 - **Accept** → create the rule in the user's global memory, following the memory-authoring
   conventions: **What / Why / How** format, stated **project-agnostic**, with **no in-file
   Evidence section** — the incident (quotes, repo, paths) stays in this tracker and git
-  history, never in the synced memory file. Do not add a `source:`/proposal-id field to the
-  file's metadata — the tracker entry below is the provenance record. Then move the
+  history, never in the synced memory file. Add `source: feedback-miner` to the metadata,
+  with no proposal id after it: the id would name a tracker entry that only this machine
+  can resolve, since trackers are machine-local while memory files sync. Then move the
   tracker entry to `## Accepted`, appending `- **reviewed:** <date> · accepted → <file>`.
 - **Rephrase first** → ask for (or propose) better wording, get their confirmation, then
   follow the Accept path with their wording.

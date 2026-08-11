@@ -16,6 +16,7 @@ name: feedback_short_slug
 description: One line, stating the rule, used as the index entry and for recall
 metadata:
   type: feedback
+  source: direct
 ---
 
 The rule itself, stated directly, in a sentence or two.
@@ -38,6 +39,12 @@ already carries it. Link related memories with [[their_name]].
 - **`description:` is required.** <!-- rule: description-required --> It is the index line and what recall reads to decide
   whether the file is worth loading, so keep it current when the body changes.
 - **`metadata.type` is required:** <!-- rule: type-required --> user, feedback, project or reference.
+- **`source:` states the origin** <!-- rule: origin-required -->, and is one of exactly two
+  values: `direct` when you decided the rule, `feedback-miner` when a mined proposal was
+  accepted. Nothing follows either one. It is written once, at creation, and no later edit
+  touches it: what a review changed belongs in the commit message, which is durable and
+  syncs. A proposal id is deliberately excluded, because the tracker is machine-local, so
+  the same id means different things on different machines and can be deleted outright.
 - **A `feedback_` rule needs `**Why:**`.** <!-- rule: why-required-for-feedback --> A rule with no stated reason gets ignored or
   misapplied once the original context is gone.
 - **No Evidence section in global memory.** <!-- rule: no-evidence-when-synced --> Quotes, repo names and paths stay in the
