@@ -19,11 +19,11 @@
 #MEMORY_KIT_HEALTH_GRACE=3
 
 # Model the daily miner runs on.
-#FEEDBACK_MINER_MODEL=sonnet
+#MEMORY_KIT_MINER_MODEL=sonnet
 
 # Seconds between "memory files changed" notices in a running session.
-#MEMORY_DELTA_THROTTLE=3600
+#MEMORY_KIT_DELTA_THROTTLE=3600
 
 # What this machine calls itself in review-marker commits. Defaults to the short
 # hostname. Set it when the hostname is not the name you think of the machine by.
-#MEMORY_MACHINE_LABEL=laptop
+#MEMORY_KIT_MACHINE_LABEL=laptop

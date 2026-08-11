@@ -14,7 +14,7 @@ STAMP="$PROP/.last-run-date"
 STATE="$PROP/.last-extract-epoch"
 LOCK="$PROP/.lock"
 MINER_DOC="$SCRIPT_DIR/feedback-miner.md"    # ships alongside this script
-MODEL="${FEEDBACK_MINER_MODEL:-$(mk_conf FEEDBACK_MINER_MODEL sonnet)}"
+MODEL="${MEMORY_KIT_MINER_MODEL:-$(mk_conf MEMORY_KIT_MINER_MODEL sonnet)}"
 mkdir -p "$PROP"
 
 # A machine can skip the miner on purpose. Saying so explicitly is what lets the

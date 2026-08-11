@@ -21,7 +21,7 @@ mk_notice_due "$SID" review || exit 0
 MEM="$(mk_memory_dir)"
 WEEK_SECS=$((7 * 24 * 3600))
 NOW=$(date +%s)
-LABEL="${MEMORY_MACHINE_LABEL:-$(mk_conf MEMORY_MACHINE_LABEL "$(hostname -s)")}"
+LABEL="${MEMORY_KIT_MACHINE_LABEL:-$(mk_conf MEMORY_KIT_MACHINE_LABEL "$(hostname -s)")}"
 
 overdue() { # <epoch-or-empty> → "never" | days-overdue | "" (fresh)
     [ -z "$1" ] && { echo never; return; }

@@ -16,7 +16,7 @@ sid=$(mk_session_id)
 MEM="$(mk_memory_dir)"
 MOUNTS="$(mk_mounts_dir)"
 MARKERS="$HOME/.claude/.memory-delta"
-THROTTLE="${MEMORY_DELTA_THROTTLE:-$(mk_conf MEMORY_DELTA_THROTTLE 3600 int)}"
+THROTTLE="${MEMORY_KIT_DELTA_THROTTLE:-$(mk_conf MEMORY_KIT_DELTA_THROTTLE 3600 int)}"
 mkdir -p "$MARKERS"
 
 marker="$MARKERS/$sid"

@@ -122,7 +122,7 @@ echo "scripts/memory-delta-ping.sh:"
 DH="$TMP/home2"; mkdir -p "$DH/.claude/memory" "$DH/.claude/memory-mounts/-m"
 printf -- '---\nname: feedback_x\n---\nr\n' > "$DH/.claude/memory/feedback_x.md"
 printf '# idx\n' > "$DH/.claude/memory/MEMORY.md"
-ping() { echo "{\"session_id\":\"$1\"}" | HOME="$DH" MEMORY_DELTA_THROTTLE="${2:-0}" bash "$KIT/scripts/memory-delta-ping.sh"; }
+ping() { echo "{\"session_id\":\"$1\"}" | HOME="$DH" MEMORY_KIT_DELTA_THROTTLE="${2:-0}" bash "$KIT/scripts/memory-delta-ping.sh"; }
 
 [ -z "$(ping s1)" ] && ok "first prompt: silent baseline" || fail "baseline"
 sleep 1
@@ -167,7 +167,7 @@ echo "$out" | grep -q 'Memory review due' && ok "missing stamp: reminder" || fai
 RG="$TMP/home8"; mkdir -p "$RG/.claude/memory"
 git init -q "$RG/.claude/memory"
 git -C "$RG/.claude/memory" config user.email t@t && git -C "$RG/.claude/memory" config user.name t
-remind() { HOME="$RG" MEMORY_MACHINE_LABEL=testbox bash "$KIT/scripts/memory-review-reminder.sh"; }
+remind() { HOME="$RG" MEMORY_KIT_MACHINE_LABEL=testbox bash "$KIT/scripts/memory-review-reminder.sh"; }
 out=$(remind)
 echo "$out" | grep -q 'never recorded' && ok "git repo, no marker: honest never-reviewed nag" || fail "no marker ($out)"
 git -C "$RG/.claude/memory" commit -q --allow-empty -m "memory review (otherbox): no changes"
@@ -183,10 +183,10 @@ git -C "$RG9/.claude/memory" config user.email t@t && git -C "$RG9/.claude/memor
 old_epoch=$(( $(date +%s) - 9*86400 ))
 GIT_COMMITTER_DATE="@$old_epoch +0000" GIT_AUTHOR_DATE="@$old_epoch +0000" \
     git -C "$RG9/.claude/memory" commit -q --allow-empty -m "memory review (otherbox): tidy"
-out=$(HOME="$RG9" MEMORY_MACHINE_LABEL=testbox bash "$KIT/scripts/memory-review-reminder.sh")
+out=$(HOME="$RG9" MEMORY_KIT_MACHINE_LABEL=testbox bash "$KIT/scripts/memory-review-reminder.sh")
 echo "$out" | grep -q '9 days since last, any machine' && ok "git: stale marker: day count from history" || fail "stale marker ($out)"
 # once-per-session notice marker (session_id piped like the SessionStart harness does)
-remsid() { echo "{\"session_id\":\"$1\"}" | HOME="$RG9" MEMORY_MACHINE_LABEL=testbox bash "$KIT/scripts/memory-review-reminder.sh"; }
+remsid() { echo "{\"session_id\":\"$1\"}" | HOME="$RG9" MEMORY_KIT_MACHINE_LABEL=testbox bash "$KIT/scripts/memory-review-reminder.sh"; }
 out=$(remsid r1)
 echo "$out" | grep -q '9 days' && ok "sid: due nag fires on first notice" || fail "sid first ($out)"
 [ -z "$(remsid r1)" ] && ok "sid: same session same day is silent" || fail "sid repeat"
@@ -240,7 +240,7 @@ check "unreachable origin: miner run still succeeds" 0 $?
 # one is a deliberate act. Together these two checks do the job claude-session-kit
 # gives its `CS_*` prefix, which is why the knobs here keep their existing names.
 echo "config.example inventory:"
-NOT_KNOBS="MEMORY_KIT_INSTALL_GATED CLAUDE_CONFIG_DENYLIST CLAUDE_PROJECT_DIR"
+NOT_KNOBS="CLAUDE_MEMORY_KIT_INSTALL_GATED CLAUDE_CONFIG_DENYLIST CLAUDE_PROJECT_DIR"
 undeclared=""
 for k in $(grep -rhE '\$\{[A-Z][A-Z0-9_]*:-' "$KIT/scripts" "$KIT/hooks" "$KIT/core" \
              "$KIT/guardrail/pre-commit" "$KIT/install.sh" 2>/dev/null \
@@ -264,12 +264,12 @@ KH="$TMP/home-conf"; mkdir -p "$KH/.claude/memory-kit"
 KC="$KH/.claude/memory-kit/config"
 conf() { HOME="$KH" bash -c ". \"$KIT/core/lib.sh\"; $1"; }
 
-[ "$(conf 'mk_conf FEEDBACK_MINER_MODEL sonnet')" = sonnet ] \
+[ "$(conf 'mk_conf MEMORY_KIT_MINER_MODEL sonnet')" = sonnet ] \
   && ok "no config file: the default applies" || fail "missing-file default"
-printf 'FEEDBACK_MINER_MODEL=opus\n' > "$KC"
-[ "$(conf 'mk_conf FEEDBACK_MINER_MODEL sonnet')" = opus ] \
+printf 'MEMORY_KIT_MINER_MODEL=opus\n' > "$KC"
+[ "$(conf 'mk_conf MEMORY_KIT_MINER_MODEL sonnet')" = opus ] \
   && ok "a file value beats the default" || fail "file value ignored"
-[ "$(FEEDBACK_MINER_MODEL=haiku conf 'printf %s "${FEEDBACK_MINER_MODEL:-$(mk_conf FEEDBACK_MINER_MODEL sonnet)}"')" = haiku ] \
+[ "$(MEMORY_KIT_MINER_MODEL=haiku conf 'printf %s "${MEMORY_KIT_MINER_MODEL:-$(mk_conf MEMORY_KIT_MINER_MODEL sonnet)}"')" = haiku ] \
   && ok "an environment variable beats the file" || fail "precedence"
 [ "$(conf 'mk_conf MEMORY_KIT_HEALTH_GRACE 3 int')" = 3 ] \
   && ok "a key absent from the file falls back" || fail "absent-key default"
@@ -277,19 +277,19 @@ printf 'FEEDBACK_MINER_MODEL=opus\n' > "$KC"
 printf 'MEMORY_KIT_HEALTH_GRACE=soon\n' > "$KC"
 [ "$(conf 'mk_conf MEMORY_KIT_HEALTH_GRACE 3 int')" = 3 ] \
   && ok "a non-numeric value for an int knob falls back, silently" || fail "int validation"
-printf 'MEMORY_MACHINE_LABEL=the laptop\n' > "$KC"
-[ "$(conf 'mk_conf MEMORY_MACHINE_LABEL fallback')" = "the laptop" ] \
+printf 'MEMORY_KIT_MACHINE_LABEL=the laptop\n' > "$KC"
+[ "$(conf 'mk_conf MEMORY_KIT_MACHINE_LABEL fallback')" = "the laptop" ] \
   && ok "a string knob keeps its spaces" || fail "string knob mangled"
-printf '   MEMORY_MACHINE_LABEL   =   padded   \nMEMORY_MACHINE_LABEL=  trimmed  \n' > "$KC"
-[ "$(conf 'mk_conf MEMORY_MACHINE_LABEL fallback')" = trimmed ] \
+printf '   MEMORY_KIT_MACHINE_LABEL   =   padded   \nMEMORY_KIT_MACHINE_LABEL=  trimmed  \n' > "$KC"
+[ "$(conf 'mk_conf MEMORY_KIT_MACHINE_LABEL fallback')" = trimmed ] \
   && ok "surrounding spaces trimmed, last entry wins" || fail "trim/last-wins"
-printf '# MEMORY_MACHINE_LABEL=commented\n\n' > "$KC"
-[ "$(conf 'mk_conf MEMORY_MACHINE_LABEL fallback')" = fallback ] \
+printf '# MEMORY_KIT_MACHINE_LABEL=commented\n\n' > "$KC"
+[ "$(conf 'mk_conf MEMORY_KIT_MACHINE_LABEL fallback')" = fallback ] \
   && ok "comments and blank lines are not values" || fail "comment parsed as value"
 
 # the file is data, never code: a command-shaped value must reach the caller as text
-printf 'FEEDBACK_MINER_MODEL=$(touch %s/pwned)\n' "$TMP" > "$KC"
-got=$(conf 'mk_conf FEEDBACK_MINER_MODEL sonnet')
+printf 'MEMORY_KIT_MINER_MODEL=$(touch %s/pwned)\n' "$TMP" > "$KC"
+got=$(conf 'mk_conf MEMORY_KIT_MINER_MODEL sonnet')
 [ -f "$TMP/pwned" ] && fail "a config value executed" || ok "a command-shaped value does not execute"
 [ "$got" = "\$(touch $TMP/pwned)" ] && ok "it is returned as literal text" || fail "value mangled ($got)"
 printf 'MEMORY_KIT_NO_MINER=1; rm -rf %s/victim\n' "$TMP" > "$KC"; mkdir -p "$TMP/victim"
@@ -316,6 +316,33 @@ printf 'MEMORY_KIT_HEALTH_GRACE=90\n' > "$CFH/.claude/memory-kit/config"
 printf '%s\nblocked for a month\n' "$(( $(date +%s) - 30 * 86400 ))" > "$CFH/.local/share/claude-feedback/health/miner"
 out=$(echo '{"session_id":"c1"}' | HOME="$CFH" bash "$KIT/hooks/memory-kit-health.sh")
 [ -z "$out" ] && ok "a raised grace period from the file holds the notice" || fail "grace from file ignored ($out)"
+
+# ---------- renamed knobs: migrated in a file, reported in an environment ----------
+echo "knob renames:"
+RH2="$TMP/home-rename"; mkdir -p "$RH2/.claude/memory-kit"
+RC="$RH2/.claude/memory-kit/config"
+printf '#FEEDBACK_MINER_MODEL=sonnet\nMEMORY_MACHINE_LABEL=oldbox\nMEMORY_KIT_NO_MINER=1\n' > "$RC"
+HOME="$RH2" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+grep -q '^MEMORY_KIT_MACHINE_LABEL=oldbox$' "$RC" \
+  && ok "install rewrites a set legacy key, keeping its value" || fail "set legacy key not migrated"
+grep -q '^#MEMORY_KIT_MINER_MODEL=sonnet$' "$RC" \
+  && ok "install rewrites a commented legacy key too" || fail "commented legacy key not migrated"
+grep -q '^MEMORY_KIT_NO_MINER=1$' "$RC" \
+  && ok "an already-current key is left alone" || fail "current key touched"
+grep -qE '^[^#]*FEEDBACK_MINER_MODEL|^[^#]*MEMORY_MACHINE_LABEL' "$RC" \
+  && fail "an old key survived the migration" || ok "no old key survives"
+[ "$(HOME="$RH2" bash -c ". \"$KIT/core/lib.sh\"; mk_conf MEMORY_KIT_MACHINE_LABEL fallback")" = oldbox ] \
+  && ok "the migrated value is what the loader now reads" || fail "migrated value unreadable"
+
+# a shell profile is the one place the installer cannot rewrite, so it is said out loud
+out=$(echo '{"session_id":"lg1"}' | HOME="$RH2" MEMORY_MACHINE_LABEL=stale \
+      bash "$KIT/hooks/memory-kit-health.sh")
+echo "$out" | grep -q "MEMORY_MACHINE_LABEL is still set" \
+  && ok "a legacy environment variable is reported by name" || fail "legacy env not reported ($out)"
+echo "$out" | grep -q "MEMORY_KIT_MACHINE_LABEL" \
+  && ok "the message names the replacement" || fail "no replacement named"
+out=$(echo '{"session_id":"lg2"}' | HOME="$RH2" bash "$KIT/hooks/memory-kit-health.sh")
+[ -z "$out" ] && ok "nothing is said when no legacy name is set" || fail "legacy noise ($out)"
 
 # ---------- feature health: a blocked feature leaves a reason ----------
 echo "core/lib.sh health records:"
@@ -391,13 +418,13 @@ echo "$out" | grep -q "never recorded" && fail "still claims never-recorded" || 
   && ok "unreadable history is recorded for the health notice" || fail "no health record from the reminder"
 
 # ---------- installer ----------
-# fixtures set MEMORY_KIT_INSTALL_GATED so the installer's own test gate doesn't
+# fixtures set CLAUDE_MEMORY_KIT_INSTALL_GATED so the installer's own test gate doesn't
 # recurse back into this suite
 echo "install.sh:"
 IH="$TMP/home3"; mkdir -p "$IH/.claude/memory"
 printf 'customized\n' > "$IH/.claude/memory/feedback_memory_conventions.md"
-HOME="$IH" MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
-HOME="$IH" MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$IH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$IH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
 [ "$(cat "$IH/.claude/memory/feedback_memory_conventions.md")" = "customized" ] \
   && ok "re-run keeps customized seed file" || fail "seed clobbered"
 n=$(jq '[.hooks[][].hooks[].command] | length' "$IH/.claude/settings.json")
@@ -411,7 +438,7 @@ n2=$(jq '[.hooks[][].hooks[].command] | unique | length' "$IH/.claude/settings.j
   && ok "install seeds a config from the example" || fail "config not seeded"
 printf 'MEMORY_KIT_HEALTH_GRACE=42\n' > "$IH/.claude/memory-kit/config"
 printf 'stale example\n' > "$IH/.claude/memory-kit/config.example"
-HOME="$IH" MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$IH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
 [ "$(cat "$IH/.claude/memory-kit/config")" = "MEMORY_KIT_HEALTH_GRACE=42" ] \
   && ok "upgrade keeps an edited config" || fail "config overwritten on upgrade"
 grep -q "^#MEMORY_KIT_NO_MINER" "$IH/.claude/memory-kit/config.example" \
@@ -421,7 +448,7 @@ MH2="$TMP/home8"; mkdir -p "$MH2/.claude/scripts"
 printf '#!/bin/sh\n' > "$MH2/.claude/scripts/feedback-proposals-ping.sh"
 printf '#!/bin/sh\n' > "$MH2/.claude/scripts/unrelated-tool.sh"
 printf '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"\\"$HOME/.claude/scripts/feedback-proposals-ping.sh\\" 2>/dev/null || true"},{"type":"command","command":"\\"$HOME/.claude/scripts/unrelated-tool.sh\\" || true"}]}]}}\n' > "$MH2/.claude/settings.json"
-HOME="$MH2" MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$MH2" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
 # exactly ONE entry for the migrated script: the old command re-pointed in place,
 # not left mangled beside a merge-appended duplicate
 pcount=$(jq '[.hooks[][].hooks[].command | select(contains("feedback-proposals-ping.sh"))] | length' "$MH2/.claude/settings.json")
@@ -443,7 +470,7 @@ printf '#!/bin/sh\nexit 1\n' > "$GK/tests/run.sh"
 GH2="$TMP/home10"; mkdir -p "$GH2/.claude"
 # clear the guard explicitly: when THIS suite is itself run by an installer's gate,
 # the fixture must not inherit the skip and let the sabotaged kit through
-HOME="$GH2" MEMORY_KIT_INSTALL_GATED= bash "$GK/install.sh" >/dev/null 2>&1
+HOME="$GH2" CLAUDE_MEMORY_KIT_INSTALL_GATED= bash "$GK/install.sh" >/dev/null 2>&1
 check "gate: failing tests refuse to deploy" 1 $?
 [ ! -d "$GH2/.claude/memory-kit" ] && ok "gate: nothing was deployed" || fail "gate deployed anyway"
 

@@ -53,6 +53,29 @@ mk_conf_off() {
     esac
 }
 
+# Knobs renamed when the prefix became exact: MEMORY_KIT_* is a user knob and
+# CLAUDE_MEMORY_KIT_* is internal. install.sh rewrites these keys inside a live
+# config file, so the one place a rename cannot reach is an export in a shell
+# profile on some other machine. mk_legacy_env finds exactly that, which is what
+# keeps a rename from silently dropping a setting.
+mk_legacy_knobs() {
+    printf '%s\n' \
+        'FEEDBACK_MINER_MODEL MEMORY_KIT_MINER_MODEL' \
+        'MEMORY_DELTA_THROTTLE MEMORY_KIT_DELTA_THROTTLE' \
+        'MEMORY_MACHINE_LABEL MEMORY_KIT_MACHINE_LABEL'
+}
+
+# mk_legacy_env → one sentence per old name still exported; empty when there is none.
+mk_legacy_env() {
+    mk_legacy_knobs | while read -r _mk_old _mk_new; do
+        [ -n "$_mk_old" ] || continue
+        eval "_mk_lv=\${$_mk_old:-}"
+        [ -n "$_mk_lv" ] || continue
+        printf '%s is still set in the environment but is no longer read; rename it to %s. ' \
+               "$_mk_old" "$_mk_new"
+    done
+}
+
 # ---- hook stdin ------------------------------------------------------------
 
 # Session id from hook stdin JSON. Empty (rc 1) on a tty, unreadable stdin, or

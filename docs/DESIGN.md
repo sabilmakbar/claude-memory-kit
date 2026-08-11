@@ -115,18 +115,23 @@ working. A malformed value falls back silently, because a typo must not break a 
 start. The file also serves as the inventory: if a knob is not listed there, the kit does
 not read it.
 
-**The knob names are not a namespace, and the inventory plus two tests replace one.**
-claude-session-kit reserves one prefix for user knobs and another for internals, with zero
-exceptions, so a name alone answers "is this configurable". That property is worth having,
-and a prefix is only one way to get it. Here it would mean renaming variables that already
-work, including one the README documents, and a rename that misses a machine fails in the
-way this kit has spent a lot of effort eliminating: silently, with the old setting simply
-ignored and nothing said. So the inventory carries the meaning instead, and two checks keep
-it honest. One fails when the code reads a knob the file does not declare. The other fails
-when a machine's own config sets a knob the code no longer reads. Names that are read but
-are not knobs are listed explicitly in the first check, so classifying one is a deliberate
-act rather than an omission. This is a deliberate divergence: a convention that has to be
-remembered is weaker than a test that cannot be forgotten.
+**The prefix is exact: `MEMORY_KIT_*` is a user knob, `CLAUDE_MEMORY_KIT_*` is not.**
+The same rule claude-session-kit settled on, and the value is the same: a name answers "is
+this configurable" without reading any code. Getting there cost renaming three knobs that
+already worked and one test seam. The objection to renaming was that a machine setting an
+old name in a shell profile would go on being ignored in silence, which is the failure this
+kit works hardest to prevent. That objection is answered rather than accepted. The
+installer rewrites old keys inside a live config file, commented or not, so a file-based
+setting migrates itself. The one place no installer can reach is an export in someone's
+shell profile, so the health hook reports an old name by name, immediately rather than
+after the usual grace period, since it is already being ignored and the fix is one edit
+away.
+
+Two checks keep the inventory honest alongside the prefix, because a convention that must
+be remembered is weaker than a test that cannot be forgotten. One fails when the code reads
+a knob `config.example` does not declare. The other fails when a machine's own config sets
+a knob the code no longer reads. `CLAUDE_CONFIG_DENYLIST` stays outside all of this: the
+guardrail is wired into other repos on its own, so its interface is not the kit's to rename.
 
 **Sync failures are classified, not swallowed.** A pull that fails is sorted into
 offline, refused credentials, or diverged history, because each one sends you somewhere

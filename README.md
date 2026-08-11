@@ -238,8 +238,8 @@ what you typed since the last run plus your memory files and global `CLAUDE.md`,
 a mature setup is roughly 25,000 input tokens and a couple of thousand out. It runs
 through your own Claude account, so on a subscription plan that is a small slice of your
 daily usage rather than a separate bill; on an API key it works out to a few cents a day.
-The number grows with your memory folder, not with how much you used Claude. Override the
-model with `FEEDBACK_MINER_MODEL`.
+The number grows with your memory folder, not with how much you used Claude. Change the
+model with `MEMORY_KIT_MINER_MODEL` in `~/.claude/memory-kit/config`.
 
 **Does it read my code?** No. The digest contains only messages you typed. Claude's
 replies, tool output, command output, and your editor selection are all stripped out
