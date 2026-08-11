@@ -11,6 +11,13 @@ The first time you open Claude Code each day, a small background job wakes up. I
 what you typed into Claude since the last run, across all your projects. Only your side of
 the conversation is read. Claude's replies, code, and command output are left out.
 
+You can switch this step off on a machine, and if you do not want it you should say so
+rather than just ignoring it: uncomment `MEMORY_KIT_NO_MINER=1` in
+`~/.claude/memory-kit/config`. Everything below stops, while memory, the index, and the
+guardrail carry on. Saying it explicitly is what matters, because the kit reads three days
+of silence from any part of itself as a fault and starts telling you about it once a day.
+Setting the knob clears that, so you are opting out rather than looking broken.
+
 **2. It looks for things you keep saying.**
 A separate, private Claude session reads those messages and looks for lasting preferences
 rather than one-off instructions. The signs it watches for:

@@ -12,6 +12,11 @@ without them. The report tells you which features will sit idle.
   not on `PATH`, the miner falls back to the newest VS Code extension's bundled binary
   (under `~/.vscode-server/extensions` on Linux/remote, `~/.vscode/extensions` on
   desktop including macOS).
+
+  On a machine where you do not want the miner at all, say so instead of letting the
+  dependency go unmet: uncomment `MEMORY_KIT_NO_MINER=1` in
+  `~/.claude/memory-kit/config`. A missing `claude` CLI and a deliberate opt-out look
+  identical to the kit otherwise, and it reports the first as a fault after three days.
 - **git**. The commit guardrail runs as a git hook, and syncing a memory repo needs it.
 
 ## Platform
