@@ -316,6 +316,27 @@ to remove all of it. Both say what they are deleting.
 
 `--dry-run` prints what either direction would do and changes nothing.
 
+## Working on the kit
+
+```bash
+bash tests/run.sh          # the fixture suite, runs on any machine, gates every install
+bash tests/smoke.sh        # the real-data suite, checks the kit against your ~/.claude
+```
+
+`run.sh` is the gate: `install.sh` runs it first and refuses to deploy a tree it rejects.
+`smoke.sh` passes or skips depending on the machine it runs on, which is the point, so it is
+never a required check.
+
+Point the commit guardrail at your own checkout too, and it adds one house rule on top of
+the leak checks: no em-dashes on lines added to `README.md` or `docs/*.md`.
+
+```bash
+git -C . config core.hooksPath guardrail
+```
+
+[DESIGN.md](docs/DESIGN.md) says why every rule exists, including the ones that look
+arbitrary. Read it before changing one.
+
 ## Related projects
 
 - **[claude-setup-template](https://github.com/sabilmakbar/claude-setup-template)**: one
