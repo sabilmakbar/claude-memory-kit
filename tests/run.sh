@@ -22,24 +22,30 @@ check() { # check <desc> <expected-exit> <actual-exit>
 
 # ---------- guardrail ----------
 echo "guardrail/pre-commit:"
+# Hermetic by construction: the hook reads denylist.local from ITS OWN directory, so
+# running the repo copy would read whatever private terms this machine happens to
+# have. Every check below runs a copy whose denylist we control, so a pass means the
+# same thing on a developer machine as in CI.
+GH="$TMP/guardrail"; mkdir -p "$GH"
+cp "$KIT/guardrail/pre-commit" "$GH/pre-commit"
 G="$TMP/guard"; mkdir -p "$G"; cd "$G"
-git init -q . && git config core.hooksPath "$KIT/guardrail"
+git init -q . && git config core.hooksPath "$GH"
 git config user.email t@t && git config user.name t
 
 printf -- '---\nname: wrong_slug\n---\nmail me at leak@example.com\n' > feedback_bad.md
 git add feedback_bad.md
-"$KIT/guardrail/pre-commit" >/dev/null 2>&1; check "blocks PII + bad name at repo root" 1 $?
+"$GH/pre-commit" >/dev/null 2>&1; check "blocks PII + bad name at repo root" 1 $?
 git rm -q --cached feedback_bad.md && rm feedback_bad.md
 
 printf -- '---\nname: feedback_ok\ndescription: a clean rule\n---\nGeneric rule.\n' > feedback_ok.md
 printf '# docs\n' > README.md
 git add feedback_ok.md README.md
-"$KIT/guardrail/pre-commit" >/dev/null 2>&1; check "passes clean memory file + README at root" 0 $?
+"$GH/pre-commit" >/dev/null 2>&1; check "passes clean memory file + README at root" 0 $?
 git rm -qr --cached . && rm feedback_ok.md README.md
 
 mkdir -p memory && printf -- '---\nname: x\n---\nno desc\n' > memory/notes.md
 git add memory/notes.md
-"$KIT/guardrail/pre-commit" >/dev/null 2>&1; check "blocks bad file under memory/" 1 $?
+"$GH/pre-commit" >/dev/null 2>&1; check "blocks bad file under memory/" 1 $?
 git rm -q --cached memory/notes.md && rm memory/notes.md
 
 # style rule: em-dashes blocked in reader-facing docs only (same rule and scope as
@@ -47,12 +53,12 @@ git rm -q --cached memory/notes.md && rm memory/notes.md
 mkdir -p docs
 printf 'a clause — set off wrong\n' > docs/style.md
 git add docs/style.md
-"$KIT/guardrail/pre-commit" >/dev/null 2>&1; check "blocks an em-dash staged in docs/*.md" 1 $?
+"$GH/pre-commit" >/dev/null 2>&1; check "blocks an em-dash staged in docs/*.md" 1 $?
 git rm -q --cached docs/style.md && rm docs/style.md
 
 printf 'intro — dense on purpose\n' > README.md
 git add README.md
-"$KIT/guardrail/pre-commit" >/dev/null 2>&1; check "blocks an em-dash staged in README.md" 1 $?
+"$GH/pre-commit" >/dev/null 2>&1; check "blocks an em-dash staged in README.md" 1 $?
 git rm -q --cached README.md && rm README.md
 
 # negative controls: memory files keep their em-dashes (exempt prose), and the
@@ -60,8 +66,35 @@ git rm -q --cached README.md && rm README.md
 printf -- '---\nname: feedback_dash\ndescription: legit — memory prose is exempt\n---\nBody — with dashes.\n' > feedback_dash.md
 printf 'plain doc prose, no frontmatter, no dashes\n' > docs/notes.md
 git add feedback_dash.md docs/notes.md
-"$KIT/guardrail/pre-commit" >/dev/null 2>&1; check "memory file with em-dash + frontmatter-less docs file both pass" 0 $?
+"$GH/pre-commit" >/dev/null 2>&1; check "memory file with em-dash + frontmatter-less docs file both pass" 0 $?
 git rm -qr --cached . && rm feedback_dash.md docs/notes.md && rmdir docs
+
+# private terms: both mechanisms, because breaking either one is silent. The generic
+# patterns would keep blocking emails and home paths, every other check here would
+# stay green, and only the terms you listed would quietly stop being checked.
+printf -- '---\nname: feedback_terms\ndescription: d\n---\nthe northwind engagement notes\n' > feedback_terms.md
+git add feedback_terms.md
+"$GH/pre-commit" >/dev/null 2>&1
+check "control: with no denylist and no env var, the term passes" 0 $?
+printf 'northwind\n' > "$GH/denylist.local"
+"$GH/pre-commit" >/dev/null 2>&1
+check "a term from denylist.local blocks the commit" 1 $?
+rm -f "$GH/denylist.local"
+CLAUDE_CONFIG_DENYLIST=northwind "$GH/pre-commit" >/dev/null 2>&1
+check "a term from CLAUDE_CONFIG_DENYLIST blocks the commit" 1 $?
+# a file of only comments and blanks must not turn into a pattern that matches anything
+printf '# northwind is only mentioned in a comment\n\n' > "$GH/denylist.local"
+"$GH/pre-commit" >/dev/null 2>&1
+check "comments and blank lines in denylist.local are not terms" 0 $?
+printf '# a comment\n\ntyrell\n' > "$GH/denylist.local"
+"$GH/pre-commit" >/dev/null 2>&1
+check "control: a real term beside the comment still passes other content" 0 $?
+printf -- '---\nname: feedback_terms\ndescription: d\n---\nthe tyrell account\n' > feedback_terms.md
+git add feedback_terms.md
+"$GH/pre-commit" >/dev/null 2>&1
+check "a term after a comment line is still read" 1 $?
+rm -f "$GH/denylist.local"
+git rm -qr --cached . && rm feedback_terms.md
 
 # ---------- adoption merge + index engine ----------
 echo "scripts/ensure-memory-symlink.sh:"
