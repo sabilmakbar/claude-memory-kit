@@ -14,12 +14,12 @@ STAMP="$PROP/.last-run-date"
 STATE="$PROP/.last-extract-epoch"
 LOCK="$PROP/.lock"
 MINER_DOC="$SCRIPT_DIR/feedback-miner.md"    # ships alongside this script
-MODEL="${FEEDBACK_MINER_MODEL:-sonnet}"
+MODEL="${FEEDBACK_MINER_MODEL:-$(mk_conf FEEDBACK_MINER_MODEL sonnet)}"
 mkdir -p "$PROP"
 
 # A machine can skip the miner on purpose. Saying so explicitly is what lets the
 # health notice treat every other silence as a fault worth reporting.
-if [ -n "${MEMORY_KIT_NO_MINER:-}" ]; then
+if ! mk_conf_off "${MEMORY_KIT_NO_MINER:-$(mk_conf MEMORY_KIT_NO_MINER '')}"; then
     mk_health_clear miner
     exit 0
 fi
