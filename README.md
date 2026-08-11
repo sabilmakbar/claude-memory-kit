@@ -46,7 +46,7 @@ git clone https://github.com/sabilmakbar/claude-memory-kit.git ~/claude-memory-k
 The installer runs its own test suite first and refuses to install if anything fails.
 It then places the kit in `~/.claude/memory-kit`, adds its hooks to your Claude Code
 settings without touching hooks from other tools, and keeps any memory files you already
-have. Re-running it is always safe.
+have. Re-running it is always safe, and is also how you upgrade (see below).
 
 Start a new Claude Code session, then confirm the index got built:
 
@@ -68,7 +68,7 @@ index cannot see yet and proposes the small renames that fix them.
 
 Session starts may greet you with a short note: a reminder that a memory review is due,
 that the daily loop found something worth keeping, or that some part of the kit has been
-unable to run for a few days. Say "review feedback proposals"
+unable to run for three days or more. Say "review feedback proposals"
 and Claude walks you through each suggestion. Say "remember this" at any time to save a
 preference directly, no review needed. That is the whole interface.
 
@@ -180,6 +180,29 @@ whatever this machine defaults to.
 When a sync fails, the kit's own message names the mechanism your repo is configured
 with, which tells you where to look.
 
+## Upgrading
+
+Re-run the installer. That is the whole upgrade path:
+
+```bash
+git -C ~/claude-memory-kit pull && ~/claude-memory-kit/install.sh
+```
+
+It runs the test suite first and refuses to deploy a tree the tests reject. Then it replaces
+kit code only, and carries the rest forward:
+
+| Kept as it is | Why it survives |
+|---|---|
+| your memory files | the installer only ever adds the two convention seeds, never overwrites |
+| `guardrail/denylist.local` | the guardrail folder is overlaid, never wiped |
+| your edited `config` | seeded once; later installs refresh `config.example` only |
+| other tools' hooks in `settings.json` | the hook merge is append-only and deduped per hook |
+
+Two things it does rather than just preserve. A knob that has been renamed since your last
+install gets rewritten in place in your `config`, keeping its value, and it tells you when it
+does. And `config.example` is refreshed every time, so knobs added since your last upgrade
+show up there with their defaults.
+
 ## Is it working?
 
 If something seems off, or Claude Code has just updated itself, run the smoke suite. It
@@ -229,9 +252,10 @@ exists to surface exactly that.
 
 **Can I turn the daily miner off on one machine?** Uncomment `MEMORY_KIT_NO_MINER=1` in
 `~/.claude/memory-kit/config`. Memory, the index, and the guardrail carry on. Saying it
-explicitly matters, because the kit treats a feature that goes quiet for days as a fault
-and tells you about it once a day. That file holds every setting the kit has, each one
-listed with its default, and your edits survive upgrades.
+explicitly matters, because the kit treats a feature that has been silent for three days as
+a fault and tells you about it once a day. That file holds every setting the kit has, each
+one listed with its default, and your edits survive upgrades. `MEMORY_KIT_HEALTH_GRACE` is
+the three, if you want a longer fuse on a machine you use rarely.
 
 **What does the daily miner cost?** One Claude call a day, on Sonnet by default. It reads
 what you typed since the last run plus your memory files and global `CLAUDE.md`, which on

@@ -11,6 +11,13 @@ The first time you open Claude Code each day, a small background job wakes up. I
 what you typed into Claude since the last run, across all your projects. Only your side of
 the conversation is read. Claude's replies, code, and command output are left out.
 
+You can switch this step off on a machine, and if you do not want it you should say so
+rather than just ignoring it: uncomment `MEMORY_KIT_NO_MINER=1` in
+`~/.claude/memory-kit/config`. Everything below stops, while memory, the index, and the
+guardrail carry on. Saying it explicitly is what matters, because the kit reads three days
+of silence from any part of itself as a fault and starts telling you about it once a day.
+Setting the knob clears that, so you are opting out rather than looking broken.
+
 **2. It looks for things you keep saying.**
 A separate, private Claude session reads those messages and looks for lasting preferences
 rather than one-off instructions. The signs it watches for:
@@ -51,15 +58,18 @@ Ignore it as long as you like. Nothing happens without you.
 (Or run `/review-feedback-proposals`.) Claude shows you each proposal in full: the rule,
 when it fires, and the evidence. You answer one of four ways.
 
-- **Accept.** The rule becomes a permanent memory. Every future session starts already
-  knowing it, and you should never have to repeat that correction again.
-- **Reject.** The proposal is filed away. By default that means "not now": if the same
-  pattern clearly keeps happening on later days, it may come back once, marked as
-  resurfaced. Reject it a second time and it is gone for good. If you already know it's
-  a never, say "never" and it is final immediately.
-- **Rephrase.** You like the idea but not the wording. Give your own phrasing and that
-  is what gets saved.
-- **Leave it.** Undecided items stay in the list and keep collecting evidence.
+| Your answer | What gets saved | What happens to the proposal |
+|---|---|---|
+| **Accept** | the rule, as a permanent memory | done; every later session starts knowing it |
+| **Rephrase** | your wording instead of Claude's | same as accept, with your phrasing |
+| **Reject** | nothing | dormant. It may return **once**, and only on fresh evidence from later days |
+| **Reject again**, or say **"never"** | nothing | final, immediately, never proposed again |
+| **Leave it** | nothing | stays in the list and keeps collecting evidence |
+
+Rejection is deliberately two-strike: "not now" and "never" are different answers, so one
+snap judgement on thin evidence does not silence a pattern forever, and a pattern you have
+genuinely ruled out stops asking. [FLOWS.md](FLOWS.md) has the whole loop as a diagram,
+including these states.
 
 That is the whole loop. The tool notices, checks what Claude already knows, proposes,
 you decide, and Claude remembers.
@@ -99,7 +109,26 @@ a moment of autopilot.
   everything you emphasized is either project-specific or already in memory. The tracker
   logs "0 new" and moves on. A day where the job could not run at all is different, say
   because the `claude` CLI is missing or the memory repo will not sync. That used to look
-  identical to a quiet week. Now the reason is recorded, and once a block has lasted a few
-  days you get one note a day until it is fixed.
+  identical to a quiet week. Now the reason is recorded, and once a block has lasted three
+  days you get one note a day until it is fixed. `MEMORY_KIT_HEALTH_GRACE` in
+  `~/.claude/memory-kit/config` is that three, if a machine you use rarely needs a longer
+  fuse.
 - **You can always just read the file.** The tracker is plain markdown at
   `~/.local/share/claude-feedback/proposals.md`. Open it anytime.
+
+## The other reminder: reviewing what you have
+
+The daily loop adds memories. Nothing in it ever prunes them, so separately from proposals,
+a session start will occasionally tell you the collection itself is due a look:
+
+> *Memory review due (34 days since last, any machine). Ask me: review my memories and
+> update preferences.*
+
+That is a different job from reviewing proposals. Here you are looking at memories you
+already accepted: merging two that overlap, correcting one that has gone stale, deleting one
+that turned out to be wrong. Say "review my memories" and Claude walks the collection with
+you.
+
+It is tracked per machine as well as globally, so if a machine has never reviewed its own
+mount-local memories the note says that too. Like every other notice, it appears once a day
+at most and never blocks anything.
