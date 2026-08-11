@@ -156,6 +156,18 @@ the mechanism in use, whether that is an SSH key, a keychain, or a helper. That 
 only words the message. Nothing in the kit checks for a credential tool or gates a sync
 on one.
 
+**What the kit may do to the memory repo, which it does not own.** `~/.claude/memory` is
+the user's repo, and the kit reaches into it three ways: it writes the generated index, it
+heals harness-stamped frontmatter, and it sets two git settings. The boundary that keeps
+that honest has three parts. Nothing that git tracks is ever deleted, because staging a
+deletion in someone's history is a commit for them to make; a file the kit once seeded is
+removed only when it is still byte-identical to the copy the kit ships, so anything deleted
+is reproducible from this tree, and when the repo tracks it the installer says so and names
+the command instead. A rewrite is never silent, because a heal the user did not make would
+otherwise surface as an unexplained change in `git status`, so the index pass names each
+file it touched and what it dropped. And the two git settings, the guardrail `hooksPath`
+and the `skip-worktree` flag on the generated index, are undone by `--uninstall`.
+
 **Edit-over-Write.** A `PreToolUse` hook denies the `Write` tool on any existing file,
 so every change lands as a reviewable diff. Memory used to tell the agent to prefer
 Edit. Memory is advisory, and it was eventually ignored. The hook is not advisory.

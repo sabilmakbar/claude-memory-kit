@@ -387,15 +387,23 @@ run cp -r "$REPO"/skills/. "$CLAUDE/skills/"
 # could be edited into drift, and nothing verified that a write followed them. They now
 # live in guidance/ and are enforced by hooks/memory-write-guard.sh. Retire an old copy
 # only when it is byte-identical to what the kit shipped; anything edited is the user's.
+# Two guards, because ~/.claude/memory is the USER'S repo and this installer does not own
+# it. Only a file byte-identical to the copy the kit still ships is ever removed, so
+# anything deleted here is reproducible from this tree. And a file git tracks is never
+# removed at all: deleting tracked content would stage a deletion in someone else's
+# history, which is a commit for them to make, not for an installer to make on their behalf.
 for f in "$REPO"/guidance/retired-seeds/*.md; do
-  t="$CLAUDE/memory/$(basename "$f")"
+  b="$(basename "$f")"; t="$CLAUDE/memory/$b"
   [ -f "$t" ] || continue
-  if cmp -s "$f" "$t"; then
-    run rm -f "$t"
-    echo "→ retired $(basename "$t") from ~/.claude/memory (its rules are now a write-time check)"
-  else
-    echo "  ! $(basename "$t") differs from the copy the kit shipped, so it is yours and stays"
+  if ! cmp -s "$f" "$t"; then
+    echo "  ! $b differs from the copy the kit shipped, so it is yours and stays"
     echo "    its rules are enforced at write time now; delete it whenever you like"
+  elif command -v git >/dev/null 2>&1 && git -C "$CLAUDE/memory" ls-files --error-unmatch "$b" >/dev/null 2>&1; then
+    echo "  ! $b is unchanged from the kit's copy but your repo tracks it, so it stays"
+    echo "    removing it is a commit for you to make: git rm $b"
+  else
+    run rm -f "$t"
+    echo "→ retired $b from ~/.claude/memory (its rules are now a write-time check)"
   fi
 done
 
