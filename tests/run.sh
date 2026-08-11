@@ -233,6 +233,65 @@ git -C "$UH/.claude/memory" remote set-url origin "$TMP/nonexistent.git"
 HOME="$UH" PATH="$SB:$PATH" bash "$KIT/scripts/run-feedback-miner.sh" >/dev/null 2>&1
 check "unreachable origin: miner run still succeeds" 0 $?
 
+# ---------- tunable knobs: env > file > default ----------
+echo "core/lib.sh mk_conf:"
+KH="$TMP/home-conf"; mkdir -p "$KH/.claude/memory-kit"
+KC="$KH/.claude/memory-kit/config"
+conf() { HOME="$KH" bash -c ". \"$KIT/core/lib.sh\"; $1"; }
+
+[ "$(conf 'mk_conf FEEDBACK_MINER_MODEL sonnet')" = sonnet ] \
+  && ok "no config file: the default applies" || fail "missing-file default"
+printf 'FEEDBACK_MINER_MODEL=opus\n' > "$KC"
+[ "$(conf 'mk_conf FEEDBACK_MINER_MODEL sonnet')" = opus ] \
+  && ok "a file value beats the default" || fail "file value ignored"
+[ "$(FEEDBACK_MINER_MODEL=haiku conf 'printf %s "${FEEDBACK_MINER_MODEL:-$(mk_conf FEEDBACK_MINER_MODEL sonnet)}"')" = haiku ] \
+  && ok "an environment variable beats the file" || fail "precedence"
+[ "$(conf 'mk_conf MEMORY_KIT_HEALTH_GRACE 3 int')" = 3 ] \
+  && ok "a key absent from the file falls back" || fail "absent-key default"
+
+printf 'MEMORY_KIT_HEALTH_GRACE=soon\n' > "$KC"
+[ "$(conf 'mk_conf MEMORY_KIT_HEALTH_GRACE 3 int')" = 3 ] \
+  && ok "a non-numeric value for an int knob falls back, silently" || fail "int validation"
+printf 'MEMORY_MACHINE_LABEL=the laptop\n' > "$KC"
+[ "$(conf 'mk_conf MEMORY_MACHINE_LABEL fallback')" = "the laptop" ] \
+  && ok "a string knob keeps its spaces" || fail "string knob mangled"
+printf '   MEMORY_MACHINE_LABEL   =   padded   \nMEMORY_MACHINE_LABEL=  trimmed  \n' > "$KC"
+[ "$(conf 'mk_conf MEMORY_MACHINE_LABEL fallback')" = trimmed ] \
+  && ok "surrounding spaces trimmed, last entry wins" || fail "trim/last-wins"
+printf '# MEMORY_MACHINE_LABEL=commented\n\n' > "$KC"
+[ "$(conf 'mk_conf MEMORY_MACHINE_LABEL fallback')" = fallback ] \
+  && ok "comments and blank lines are not values" || fail "comment parsed as value"
+
+# the file is data, never code: a command-shaped value must reach the caller as text
+printf 'FEEDBACK_MINER_MODEL=$(touch %s/pwned)\n' "$TMP" > "$KC"
+got=$(conf 'mk_conf FEEDBACK_MINER_MODEL sonnet')
+[ -f "$TMP/pwned" ] && fail "a config value executed" || ok "a command-shaped value does not execute"
+[ "$got" = "\$(touch $TMP/pwned)" ] && ok "it is returned as literal text" || fail "value mangled ($got)"
+printf 'MEMORY_KIT_NO_MINER=1; rm -rf %s/victim\n' "$TMP" > "$KC"; mkdir -p "$TMP/victim"
+conf 'mk_conf MEMORY_KIT_NO_MINER ""' >/dev/null 2>&1
+[ -d "$TMP/victim" ] && ok "a trailing command in a value is inert" || fail "config line ran as code"
+
+# a kill switch read from a file needs 0/no/off to mean off, not "present"
+for v in 0 no off false ""; do
+  mk_off=$(conf "mk_conf_off \"$v\" && echo off || echo on")
+  [ "$mk_off" = off ] || fail "kill switch: '$v' should read as off"
+done
+ok "0, no, off, false and empty all read as off"
+[ "$(conf 'mk_conf_off 1 && echo off || echo on')" = on ] \
+  && ok "1 reads as on" || fail "kill switch: 1 should read as on"
+
+# the knobs work through their real call sites, not just the loader
+CFH="$TMP/home-conf-live"; mkdir -p "$CFH/.claude/memory-kit" "$CFH/.local/share/claude-feedback/health"
+printf 'MEMORY_KIT_NO_MINER=yes\n' > "$CFH/.claude/memory-kit/config"
+printf '%s\nstale\n' "$(date +%s)" > "$CFH/.local/share/claude-feedback/health/miner"
+HOME="$CFH" PATH="/usr/bin:/bin" bash "$KIT/scripts/run-feedback-miner.sh" >/dev/null 2>&1
+[ -f "$CFH/.local/share/claude-feedback/health/miner" ] \
+  && fail "opt-out from the config file was not honoured" || ok "the miner opt-out works from the config file"
+printf 'MEMORY_KIT_HEALTH_GRACE=90\n' > "$CFH/.claude/memory-kit/config"
+printf '%s\nblocked for a month\n' "$(( $(date +%s) - 30 * 86400 ))" > "$CFH/.local/share/claude-feedback/health/miner"
+out=$(echo '{"session_id":"c1"}' | HOME="$CFH" bash "$KIT/hooks/memory-kit-health.sh")
+[ -z "$out" ] && ok "a raised grace period from the file holds the notice" || fail "grace from file ignored ($out)"
+
 # ---------- feature health: a blocked feature leaves a reason ----------
 echo "core/lib.sh health records:"
 HH="$TMP/home-health"; mkdir -p "$HH"
@@ -321,6 +380,17 @@ n2=$(jq '[.hooks[][].hooks[].command] | unique | length' "$IH/.claude/settings.j
 [ "$n" = "$n2" ] && ok "hooks deduped across re-runs ($n entries)" || fail "hook dupes ($n vs $n2)"
 [ -x "$IH/.claude/memory-kit/scripts/run-feedback-miner.sh" ] && [ -r "$IH/.claude/memory-kit/core/lib.sh" ] \
   && ok "deploys one tree: scripts + core lib together" || fail "tree deploy incomplete"
+
+# knobs: seeded once, never overwritten, and the example refreshed every install
+[ -f "$IH/.claude/memory-kit/config" ] && [ -f "$IH/.claude/memory-kit/config.example" ] \
+  && ok "install seeds a config from the example" || fail "config not seeded"
+printf 'MEMORY_KIT_HEALTH_GRACE=42\n' > "$IH/.claude/memory-kit/config"
+printf 'stale example\n' > "$IH/.claude/memory-kit/config.example"
+HOME="$IH" MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+[ "$(cat "$IH/.claude/memory-kit/config")" = "MEMORY_KIT_HEALTH_GRACE=42" ] \
+  && ok "upgrade keeps an edited config" || fail "config overwritten on upgrade"
+grep -q "^#MEMORY_KIT_NO_MINER" "$IH/.claude/memory-kit/config.example" \
+  && ok "upgrade refreshes the example so new knobs appear" || fail "example not refreshed"
 # migration: a pre-tree layout (script copies + old-path hooks) converges to the tree
 MH2="$TMP/home8"; mkdir -p "$MH2/.claude/scripts"
 printf '#!/bin/sh\n' > "$MH2/.claude/scripts/feedback-proposals-ping.sh"

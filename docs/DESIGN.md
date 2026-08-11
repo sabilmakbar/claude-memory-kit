@@ -104,6 +104,17 @@ machine goes quiet without anyone dismissing anything. Set `MEMORY_KIT_NO_MINER=
 skip the miner deliberately, which is what makes every other silence a fault worth
 reporting.
 
+**Knobs live in a file, not in `settings.json`.** A `KEY=value` file at the deployed kit
+root is the only mechanism that reaches every context the kit runs in: hooks, skill and
+Bash-tool commands, the miner that a hook launches as a grandchild, and the guardrail that
+git spawns. Environment variables cannot be relied on to reach all four, and
+`settings.json` belongs to the orchestrator. The file is parsed, never sourced, so a stray
+line in a hand-edited file cannot become code inside a hook. Precedence is the environment
+variable, then the file, then the built-in default, which keeps every existing override
+working. A malformed value falls back silently, because a typo must not break a session
+start. The file also serves as the inventory: if a knob is not listed there, the kit does
+not read it.
+
 **Sync failures are classified, not swallowed.** A pull that fails is sorted into
 offline, refused credentials, or diverged history, because each one sends you somewhere
 different. For refused credentials the message reads the repo's own configuration to name

@@ -110,6 +110,22 @@ for s in feedback-proposals-ping.sh memory-review-reminder.sh; do
     rm -f "$HOME/.claude/.notice-markers/$msid".*
 done
 
+# this machine's real config: every knob it names must be one the kit still reads,
+# or a rename has silently turned a live setting into a dead line
+cfg="$(. "$KIT/core/lib.sh" && printf '%s' "$(mk_state_dir)/config")"
+if [ -r "$cfg" ]; then
+    unknown=""
+    while IFS= read -r k; do
+        grep -rq "\${$k:-" "$KIT/scripts" "$KIT/hooks" 2>/dev/null || unknown="$unknown $k"
+    done <<EOF
+$(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$cfg" | tr -d '=')
+EOF
+    [ -z "$unknown" ] && ok "every knob set in this machine's config is still read" \
+                      || bad "config sets knobs nothing reads:$unknown"
+else
+    skip "no config file deployed yet"
+fi
+
 hsid="smoke-health-$$"
 out=$(printf '{"session_id":"%s"}' "$hsid" | bash "$KIT/hooks/memory-kit-health.sh" 2>/dev/null); rc=$?
 if [ "$rc" != 0 ]; then bad "memory-kit-health exit $rc"
