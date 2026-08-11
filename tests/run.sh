@@ -266,6 +266,25 @@ out=$(guard "$WH/somewhere/else/notes.md" "no frontmatter at all")
 out=$(printf 'not json\n' | HOME="$WH" bash "$KIT/hooks/memory-write-guard.sh" 2>/dev/null); rc=$?
 [ -z "$out" ] && [ "$rc" = 0 ] && ok "garbage stdin fails open" || fail "fail-open (rc=$rc)"
 
+# The hook declares what it enforces, and the guidance must agree in both directions.
+# Prose describing code is exactly what drifts, so this is bound rather than trusted:
+# the same failure the config.example inventory checks catch for knobs.
+RULES=$(bash "$KIT/hooks/memory-write-guard.sh" --rules)
+[ -n "$RULES" ] && ok "the hook declares the rules it enforces" || fail "--rules printed nothing"
+undenied=""; undocumented=""
+for r in $RULES; do
+  grep -q "deny $r " "$KIT/hooks/memory-write-guard.sh" || undenied="$undenied $r"
+  grep -q "rule: $r" "$KIT/guidance/memory-authoring.md" || undocumented="$undocumented $r"
+done
+[ -z "$undenied" ] && ok "every declared rule has a deny site" || fail "declared but never enforced:$undenied"
+[ -z "$undocumented" ] && ok "every enforced rule is documented in the guidance" \
+                       || fail "enforced but undocumented:$undocumented"
+stale=""
+for m in $(grep -oE 'rule: [a-z-]+' "$KIT/guidance/memory-authoring.md" | awk '{print $2}'); do
+  printf '%s\n' $RULES | grep -qx "$m" || stale="$stale $m"
+done
+[ -z "$stale" ] && ok "the guidance names no rule the hook does not enforce" || fail "stale in guidance:$stale"
+
 # an Edit shows only a fragment, so absence can never be judged from it
 out=$(guard "$MEMD/feedback_sample.md" "one edited sentence." new_string)
 [ -z "$out" ] && ok "an Edit fragment is not judged for missing sections" || fail "Edit judged on absence"

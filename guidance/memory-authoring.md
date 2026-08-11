@@ -29,18 +29,18 @@ already carries it. Link related memories with [[their_name]].
 
 ## Enforced when you write
 
-- **Filename is type-prefixed:** `user_`, `feedback_` or `project_`. Facts about the
+- **Filename is type-prefixed:** <!-- rule: filename-prefix --> `user_`, `feedback_` or `project_`. Facts about the
   person are `user_`, behavioural rules are `feedback_`, project-specific notes are
   `project_` and live in memory-mounts rather than global memory.
-- **`name:` equals the filename slug**, in snake_case. The generated index and every
+- **`name:` equals the filename slug** <!-- rule: name-matches-slug -->, in snake_case. The generated index and every
   `[[wikilink]]` resolve through it. The harness suggests kebab-case, which breaks both,
   so this deliberately overrides it.
-- **`description:` is required.** It is the index line and what recall reads to decide
+- **`description:` is required.** <!-- rule: description-required --> It is the index line and what recall reads to decide
   whether the file is worth loading, so keep it current when the body changes.
-- **`metadata.type` is required:** user, feedback, project or reference.
-- **A `feedback_` rule needs `**Why:**`.** A rule with no stated reason gets ignored or
+- **`metadata.type` is required:** <!-- rule: type-required --> user, feedback, project or reference.
+- **A `feedback_` rule needs `**Why:**`.** <!-- rule: why-required-for-feedback --> A rule with no stated reason gets ignored or
   misapplied once the original context is gone.
-- **No Evidence section in global memory.** Quotes, repo names and paths stay in the
+- **No Evidence section in global memory.** <!-- rule: no-evidence-when-synced --> Quotes, repo names and paths stay in the
   miner tracker and git history. Global memory syncs to a personal GitHub repo, so the
   leak surface was removed structurally rather than policed.
 
