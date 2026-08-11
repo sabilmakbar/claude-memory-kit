@@ -623,6 +623,93 @@ HOME="$GH2" CLAUDE_MEMORY_KIT_INSTALL_GATED= bash "$GK/install.sh" >/dev/null 2>
 check "gate: failing tests refuse to deploy" 1 $?
 [ ! -d "$GH2/.claude/memory-kit" ] && ok "gate: nothing was deployed" || fail "gate deployed anyway"
 
+# ---------- uninstall: symmetric with what install wires ----------
+# Everything the installer writes outside its own tree has to come back out, and the
+# dangerous one is core.hooksPath: deleting the tree while that still points into it
+# leaves git finding no hook and running nothing, so the commit guard stops silently
+# while the repo still looks configured.
+echo "install.sh --uninstall:"
+UH2="$TMP/home-uninstall"; mkdir -p "$UH2/.claude/memory"
+git init -q "$UH2/.claude/memory"
+git -C "$UH2/.claude/memory" config user.email t@t
+git -C "$UH2/.claude/memory" config user.name t
+printf -- '---\nname: feedback_mine\ndescription: keep me\nmetadata:\n  type: feedback\n---\n\nRule.\n\n**Why:** mine.\n' \
+  > "$UH2/.claude/memory/feedback_mine.md"
+printf '# index\n' > "$UH2/.claude/memory/MEMORY.md"
+git -C "$UH2/.claude/memory" add -A
+git -C "$UH2/.claude/memory" commit -qm seed
+mkdir -p "$UH2/.local/share/claude-feedback"
+printf '## Rejected\n### P-001 refused\n' > "$UH2/.local/share/claude-feedback/proposals.md"
+printf 'a cached copy of messages\n' > "$UH2/.local/share/claude-feedback/digest-latest.txt"
+# a hook belonging to something else, sharing one of our filenames from another path
+jq -n '{hooks:{SessionStart:[{hooks:[{type:"command",command:"$HOME/other-tool/hooks/memory-kit-health.sh"}]}]}}' \
+  > "$UH2/.claude/settings.json"
+
+HOME="$UH2" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+[ -d "$UH2/.claude/memory-kit" ] && ok "install: tree deployed for the uninstall fixture" || fail "fixture install failed"
+[ "$(git -C "$UH2/.claude/memory" config --get core.hooksPath)" = "$UH2/.claude/memory-kit/guardrail" ] \
+  && ok "install: guardrail wired via core.hooksPath" || fail "hooksPath not set"
+git -C "$UH2/.claude/memory" ls-files -v MEMORY.md | grep -q '^S' \
+  && ok "install: MEMORY.md marked skip-worktree" || fail "skip-worktree not set"
+mine=$(jq '[.hooks[]?[]?.hooks[]?.command | select(contains("memory-kit/"))] | length' "$UH2/.claude/settings.json")
+[ "$mine" -ge 8 ] && ok "install: our hooks wired ($mine entries)" || fail "hooks not wired ($mine)"
+grep -q "other-tool" "$UH2/.claude/settings.json" \
+  && ok "install: another tool's same-named hook left in place" || fail "foreign hook lost on install"
+
+HOME="$UH2" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
+left=$(jq '[.hooks[]?[]?.hooks[]?.command | select(contains("memory-kit/"))] | length' "$UH2/.claude/settings.json")
+[ "$left" = 0 ] && ok "uninstall: every hook of ours is gone" || fail "hooks left behind ($left)"
+grep -q "other-tool" "$UH2/.claude/settings.json" \
+  && ok "uninstall: the foreign hook with our filename survived" || fail "deleted another tool's hook"
+[ -z "$(git -C "$UH2/.claude/memory" config --get core.hooksPath || true)" ] \
+  && ok "uninstall: core.hooksPath unset, so no silent guard" || fail "hooksPath left pointing at a deleted tree"
+git -C "$UH2/.claude/memory" ls-files -v MEMORY.md | grep -q '^S' \
+  && fail "MEMORY.md still hidden from git" || ok "uninstall: skip-worktree cleared"
+[ ! -d "$UH2/.claude/memory-kit" ] && ok "uninstall: the tree is gone" || fail "tree left behind"
+[ ! -d "$UH2/.claude/skills/save-memory" ] && ok "uninstall: the kit's skills are gone" || fail "skills left behind"
+[ -f "$UH2/.claude/memory/feedback_mine.md" ] \
+  && ok "uninstall: memory files are untouched" || fail "user memory deleted"
+[ -f "$UH2/.local/share/claude-feedback/proposals.md" ] \
+  && ok "uninstall: the tracker is kept by default" || fail "tracker deleted without asking"
+HOME="$UH2" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
+check "uninstall twice is not an error" 0 $?
+
+# the two purge flags, which must say what they do rather than doing it quietly
+out=$(HOME="$UH2" bash "$KIT/install.sh" --uninstall --purge-cache 2>&1)
+printf '%s' "$out" | grep -q "purge-cache" && ok "--purge-cache announces itself" || fail "purge-cache silent"
+[ ! -f "$UH2/.local/share/claude-feedback/digest-latest.txt" ] \
+  && ok "--purge-cache drops the cached messages" || fail "cache survived"
+[ -f "$UH2/.local/share/claude-feedback/proposals.md" ] \
+  && ok "--purge-cache keeps what you accepted and rejected" || fail "purge-cache took the history"
+out=$(HOME="$UH2" bash "$KIT/install.sh" --uninstall --purge-tracker 2>&1)
+printf '%s' "$out" | grep -q "re-propose" && ok "--purge-tracker warns what is lost" || fail "purge-tracker unwarned"
+[ ! -d "$UH2/.local/share/claude-feedback" ] && ok "--purge-tracker removes the tracker" || fail "tracker survived"
+
+# a hooksPath somebody else set is not ours to unset
+UH3="$TMP/home-foreign-hookspath"; mkdir -p "$UH3/.claude/memory"
+git init -q "$UH3/.claude/memory"
+git -C "$UH3/.claude/memory" config core.hooksPath /somewhere/else
+HOME="$UH3" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+git -C "$UH3/.claude/memory" config core.hooksPath /somewhere/else   # install re-points it; put it back
+out=$(HOME="$UH3" bash "$KIT/install.sh" --uninstall 2>&1)
+[ "$(git -C "$UH3/.claude/memory" config --get core.hooksPath)" = "/somewhere/else" ] \
+  && ok "a foreign core.hooksPath is reported, not unset" || fail "unset someone else's hooksPath"
+
+# --dry-run must change nothing at all
+DH="$TMP/home-dry"; mkdir -p "$DH/.claude"
+HOME="$DH" bash "$KIT/install.sh" --dry-run >/dev/null 2>&1
+[ ! -d "$DH/.claude/memory-kit" ] && [ ! -f "$DH/.claude/settings.json" ] \
+  && ok "--dry-run writes nothing" || fail "dry run had side effects"
+
+# a settings.json that is already broken stops the run before anything is installed
+BH="$TMP/home-broken"; mkdir -p "$BH/.claude"
+printf 'not json at all\n' > "$BH/.claude/settings.json"
+HOME="$BH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+check "a broken settings.json refuses the install" 1 $?
+[ ! -d "$BH/.claude/memory-kit" ] && ok "and nothing was deployed first" || fail "deployed despite bad settings"
+[ "$(cat "$BH/.claude/settings.json")" = "not json at all" ] \
+  && ok "and the file was left exactly as it was" || fail "touched a file it could not parse"
+
 echo
 echo "passed $PASS, failed $FAIL"
 [ "$FAIL" = 0 ]

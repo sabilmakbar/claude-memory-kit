@@ -194,8 +194,37 @@ deep-merge replaced other tools' hook arrays. Deduping by exact command string b
 `$HOME` versus absolute-path spellings. Deduping per group (keyed on the group's first
 hook) silently dropped any hook later added to an existing group, which meant upgrades
 never delivered new hooks to installed machines. Each of those failures is a test now.
-Hook script names are kit-prefixed where a collision with a sibling kit's file is
-plausible, because the filename is the dedup key.
+
+**Ownership is the basename and the directory, so a shared filename is not a collision.**
+Deduping on the basename alone was wrong in both directions: a sibling kit shipping a
+file of the same name could make us skip wiring our own hook, leaving a silently dead
+kit, and then let an uninstall delete theirs. This kit renamed its own `version-check.sh`
+once to dodge that, which was a workaround rather than a fix. A hook is ours only when
+the basename is one we ship and its directory sits inside the deployed tree. Anything
+else using one of our names is left alone and reported, because silence there looks like
+a bug in us. The managed list is derived from `settings.snippet.json`, so adding a hook
+is one edit and both halves see it.
+
+**Uninstall is the same contract in reverse, and `settings.json` is treated as shared.**
+The kit writes hooks, so it removes them, matching claude-session-kit rather than leaving
+two kits with two contracts for one file. Four properties make writing a file every other
+tool shares survivable: it is written last, after everything else has installed, so a run
+that fails earlier never touches it; the result is validated before it replaces the live
+file, where wiring must not shrink the hook count and removal must leave every hook that
+was not ours untouched; the merge runs against a snapshot and refuses if the live file
+changed underneath, since Claude Code and other installers write it too; and a failure
+after the write is rolled back from a kit-specific backup, or by deleting a file that did
+not exist beforehand. Removal prunes upward, dropping emptied groups, then events, then
+the `hooks` key.
+
+**Uninstall undoes what install did outside its own tree, and nothing else.** Deleting
+the tree while the memory repo's `core.hooksPath` still pointed into it would leave git
+finding no hook and running nothing, so the commit guard would stop silently while the
+repo still looked configured. That is the worst failure available here, so uninstall
+unsets it, and only when it points at our tree. It also clears the `skip-worktree` flag
+that hid `MEMORY.md`. Memory files are never touched. The miner's tracker is kept by
+default because its rejection history is what stops a reinstall re-proposing what you
+refused; two flags remove it, and both say what they are deleting.
 
 ## Self-verification
 

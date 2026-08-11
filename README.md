@@ -297,12 +297,24 @@ the commit guardrail checks the same fields, so a malformed file cannot leave th
 
 ## Uninstall
 
-Remove the kit's hooks from `~/.claude/settings.json`, then delete
-`~/.claude/memory-kit` and the kit's skills in `~/.claude/skills`. Your memory files are
-yours and stay where they are, and so does the miner's tracker at
-`~/.local/share/claude-feedback`, which holds the proposals you accepted and rejected.
-Nothing the kit installs lives in your memory folder, so there is nothing to sort through
-there.
+```bash
+~/claude-memory-kit/install.sh --uninstall     # or ~/.claude/memory-kit/install.sh
+```
+
+It removes its own hooks from `~/.claude/settings.json` and leaves every other hook in
+that file alone, deletes the tree and the kit's skills, and undoes the two settings it
+made in your memory repo: the guardrail wiring and the flag that hid `MEMORY.md` from
+git. That last part matters, because a guardrail still wired to a deleted tree would stop
+checking commits without saying anything.
+
+**What stays.** Every memory file, in both tiers. Nothing the kit installs lives in your
+memory folder, so there is nothing to sort through. The miner's tracker at
+`~/.local/share/claude-feedback` also stays, since it holds the proposals you accepted
+and rejected, and the rejections are what stop a later reinstall from asking again. Add
+`--purge-cache` to drop the cached message digest and the run logs, or `--purge-tracker`
+to remove all of it. Both say what they are deleting.
+
+`--dry-run` prints what either direction would do and changes nothing.
 
 ## Related projects
 
