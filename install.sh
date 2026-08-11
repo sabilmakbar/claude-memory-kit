@@ -54,6 +54,11 @@ cp "$REPO"/guardrail/pre-commit "$REPO"/guardrail/denylist.local.example "$DEST/
 # ship what re-verification needs (smoke reinstalls from the deployed tree)
 install -m 0755 "$REPO/install.sh" "$DEST/install.sh"
 install -m 0644 "$REPO/settings.snippet.json" "$DEST/settings.snippet.json"
+# knobs: the example refreshes every install so new knobs show up; the live config
+# is seeded once and never overwritten, the same deal denylist.local gets above.
+# Both sit at the tree root, which the wipe above does not touch.
+install -m 0644 "$REPO/config.example" "$DEST/config.example"
+[ -f "$DEST/config" ] || install -m 0644 "$DEST/config.example" "$DEST/config"
 chmod -R u+rwX "$DEST"
 
 echo "→ installing skills to ~/.claude/skills"
@@ -120,6 +125,7 @@ fi
 #   git -C <repo> config core.hooksPath ~/.claude/memory-kit/guardrail
 echo "→ commit guardrail available at: $DEST/guardrail"
 echo "    add private terms to $DEST/guardrail/denylist.local (or set \$CLAUDE_CONFIG_DENYLIST)"
+echo "→ knobs (miner opt-out, notice timing, machine label) live in $DEST/config"
 
 # Legacy cleanup: the pre-tree layout scattered our scripts into ~/.claude/scripts;
 # they are now stale copies. Remove exactly ours, never anything else living there.
