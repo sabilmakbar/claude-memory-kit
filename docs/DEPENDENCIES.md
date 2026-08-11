@@ -5,9 +5,13 @@ Tools the kit expects. `install.sh` checks for them before it does anything: a m
 without them. The report tells you which features will sit idle.
 
 ## Required
-- **jq**. Merges the kit's hooks into `~/.claude/settings.json` and parses hook input.
+- **jq 1.5 or newer**. Merges the kit's hooks into `~/.claude/settings.json`, parses hook
+  input, and lints memory frontmatter at commit time. Without it `install.sh` stops before
+  changing anything. The 1.5 floor is the regex functions (`capture`, `gsub`, named
+  captures); nothing here needs 1.6 or later, so any `jq` you are likely to already have
+  will do. Developed against 1.7.
 
-## For the miner and cross-machine sync
+## Used when you use the feature
 - **claude** CLI, runnable headless (`claude -p`). The daily miner spawns it. If it is
   not on `PATH`, the miner falls back to the newest VS Code extension's bundled binary
   (under `~/.vscode-server/extensions` on Linux/remote, `~/.vscode/extensions` on
@@ -17,10 +21,20 @@ without them. The report tells you which features will sit idle.
   dependency go unmet: uncomment `MEMORY_KIT_NO_MINER=1` in
   `~/.claude/memory-kit/config`. A missing `claude` CLI and a deliberate opt-out look
   identical to the kit otherwise, and it reports the first as a fault after three days.
-- **git**. The commit guardrail runs as a git hook, and syncing a memory repo needs it.
+- **git**. Two features need it: the commit guardrail, which runs as a git hook and blocks
+  emails, home paths, your private terms and malformed memory files before they can be
+  committed, and syncing your memory folder as a repo. Without git both simply never run;
+  memory, the index and the miner carry on.
 
 ## Platform
-Linux and macOS with their stock userland. The scripts stick to portable calls (with
-dual GNU/BSD fallbacks such as `stat -c || stat -f`) and run on bash 3.2, the macOS
-default. No Homebrew coreutils needed. `timeout` is used when present and skipped when
-not. CI runs the test suite on both `ubuntu` and `macos`.
+- **bash, including 3.2**, the version macOS still ships. The scripts target it rather
+  than assuming a newer bash from Homebrew.
+- **macOS and Linux** with their stock userland, no Homebrew coreutils needed. Portable
+  calls throughout, with dual GNU/BSD fallbacks such as `stat -c || stat -f`. `timeout`
+  is used when present and skipped when not. CI runs the suite on `ubuntu` and `macos`.
+- **Claude Code** itself. The kit reads its undocumented internals, so a version-check
+  hook re-runs the real-data suite after an update and records the result.
+
+## Never used
+No network calls, no package installs, no daemons, no telemetry. The kit is files reading
+files, plus one local `claude` call a day if you leave the miner on.
