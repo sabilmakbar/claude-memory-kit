@@ -10,7 +10,7 @@ This kit reads files Claude Code owns, and Claude Code documents none of them.
 version each entry was seen on, the surface it was read from, how it was checked, and what you
 need to re-run the check yourself.
 
-**Three of its seven entries have no recorded provenance.** They were learned from incidents
+**Two of its seven entries have no recorded provenance.** They were learned from incidents
 during development and written down only as a clause inside a decision, so they carry
 `First observed: not recorded`. Those are the entries to doubt, and re-verifying one is a genuinely
 useful contribution.

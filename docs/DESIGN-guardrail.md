@@ -53,7 +53,16 @@ It is wrong for this repo, which the same hook also guards. **No memory file has
 so every root-level document is a false positive waiting for someone to add its name. Four of the
 original five exemptions were already dead when this was found: the path filter cannot reach
 anything under `docs/`, and this repo has no root `MEMORY.md` or `CLAUDE.md`. Only `README` was
-doing any work. Adding `CONTRIBUTING` made six exemptions where three would do.
+doing any work. Adding `CONTRIBUTING` made six exemptions where three would do, and adding
+`CHANGELOG` hours later made seven.
+
+**The list is also duplicated, and has already drifted once.** It exists twice, in two syntaxes:
+a regex alternation in `guardrail/pre-commit`, and a shell `case` pattern in
+`scripts/ensure-memory-symlink.sh`, where a root-level document not on the list is reported as an
+unindexed memory file. The `CONTRIBUTING` exemption patched only the first copy, so for several
+hours one half of the kit exempted that file and the other half complained about it. The next
+exemption had to fix both at once to catch up. Two copies of a list that must be remembered is
+strictly worse than one, and it is the second failure of this stopgap in a single day.
 
 **The fix is to gate the lint on being in the memory repo**, not to keep widening the list.
 `install.sh` wires the hook to exactly one place, so `git rev-parse --show-toplevel` against
