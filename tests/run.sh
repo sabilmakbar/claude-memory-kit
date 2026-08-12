@@ -824,7 +824,10 @@ shape_case() { # shape_case <desc> <json> <expect-rc> <expect-our-hooks>
   SHAPE_DIR=$(mktemp -d); mkdir -p "$SHAPE_DIR/.claude"
   printf '%s' "$json" > "$SHAPE_DIR/.claude/settings.json"
   HOME="$SHAPE_DIR" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1; rc=$?
-  ours=$(jq '[.hooks[]?[]?.hooks[]?.command | select(contains("memory-kit/"))] | length' \
+  # Counted by recursive descent, not by the hooks path: these fixtures are deliberately
+  # odd shapes, and `.hooks[]?` guards the iteration but not the field access before it,
+  # so the obvious expression dies on the very inputs this section exists to cover.
+  ours=$(jq '[.. | objects | .command? | strings | select(contains("memory-kit/"))] | length' \
          "$SHAPE_DIR/.claude/settings.json" 2>/dev/null || echo -1)
   if [ "$rc" = "$want_rc" ] && [ "$ours" = "$want_ours" ]; then ok "$d"
   else fail "$d (rc=$rc want $want_rc, ourhooks=$ours want $want_ours)"; fi
@@ -844,6 +847,27 @@ jq -e '.other == "keep me"' "$h/.claude/settings.json" >/dev/null \
   && ok "an unrelated top-level key survives" || fail "dropped a key that was not ours"
 jq -e '[.hooks.SessionStart[] | select(.hooks == "nope")] | length == 1' "$h/.claude/settings.json" >/dev/null \
   && ok "the malformed group is preserved, not tidied away" || fail "rewrote someone else's malformed entry"
+rm -rf "$h"
+# An event we never wire is someone else's key. Its type is not ours to have an opinion
+# about: the merge only reads the keys settings.snippet.json declares, so refusing here
+# would be judging config we did not write.
+shape_case "a wrong-typed event that is not ours: wires normally" \
+      '{"hooks":{"Weird":"a string","SessionStart":[]},"other":"keep me"}' 0 9; h="$SHAPE_DIR"
+jq -e '.hooks.Weird == "a string" and .other == "keep me"' "$h/.claude/settings.json" >/dev/null \
+  && ok "and the foreign event survives the install untouched" || fail "touched an event we never wire"
+HOME="$h" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
+jq -e '.hooks.Weird == "a string" and .other == "keep me"' "$h/.claude/settings.json" >/dev/null \
+  && ok "and survives the uninstall too" || fail "uninstall touched an event we never wire"
+[ "$(jq '[.hooks[]?[]?.hooks[]?.command | select(contains("memory-kit/"))] | length' \
+     "$h/.claude/settings.json" 2>/dev/null)" = 0 ] \
+  && ok "while our own hooks are all gone" || fail "left our hooks behind"
+rm -rf "$h"
+# Ours, an array, but holding something that is not a hook group. The old check passed
+# this through to the merge; the type error surfaced there instead of here.
+shape_case "one of our events holding non-groups: refuses" \
+      '{"hooks":{"SessionStart":["nope"]}}' 1 0; h="$SHAPE_DIR"
+[ ! -d "$h/.claude/memory-kit" ] \
+  && ok "and refuses before deploying anything" || fail "deployed despite an unusable event"
 rm -rf "$h"
 
 echo

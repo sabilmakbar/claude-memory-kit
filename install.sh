@@ -336,16 +336,36 @@ if [ -f "$SETT" ] && ! jq -e 'type == "object"' "$SETT" >/dev/null 2>&1; then
   exit 1
 fi
 # A file can parse and still be unusable: .hooks has to be an object keyed by event, and
-# each event an array. Checking the shape here rather than discovering it mid-merge is
-# what turns a raw jq parser error at the end of a half-finished run into a sentence.
-# Nothing is repaired automatically, because a .hooks of the wrong type holds something
-# this installer did not write and must not guess at.
-if [ -f "$SETT" ] && ! jq -e '(.hooks // {}) as $h
+# each event we wire an array of groups. Checking the shape here rather than discovering
+# it mid-merge is what turns a raw jq parser error at the end of a half-finished run into
+# a sentence.
+#
+# Scoped to the snippet's own event keys, NOT to every event in the file. A foreign event
+# of the wrong type is not our business: the merge only reads the keys the snippet
+# declares, so such an event survives an install and an uninstall untouched. Refusing over
+# it would mean judging config we did not write, which is the one thing this installer is
+# built never to do. Deriving the list from the snippet keeps that file the single source
+# of truth, so wiring a new event cannot forget to widen this check.
+#
+# `hooks` itself is different, and is still refused whatever it holds: that is not someone
+# else's key, it is the container the merge has to write into. Nothing is repaired
+# automatically either, because a wrongly-typed `hooks` holds something this installer did
+# not write and must not guess at. No snippet means no wiring at all (hooks_wire returns
+# early), so there is nothing left to check for.
+if [ -f "$SETT" ] && [ -f "$SNIPPET" ] && ! jq -e --slurpfile snip "$SNIPPET" '
+      ($snip[0].hooks | keys) as $ours
+      | (.hooks // {}) as $h
       | ($h | type) == "object"
-      and ([$h[] | select(type != "array")] | length) == 0' "$SETT" >/dev/null 2>&1; then
-  echo "  ✗ $SETT parses, but its \"hooks\" is not an object of event arrays" >&2
-  echo "    that is not a shape this installer can merge into, and it will not rewrite" >&2
-  echo "    what it did not write. Fix that key and re-run; nothing has been changed." >&2
+        and ([ $ours[]
+               | $h[.]
+               | select(. != null)
+               | select((type != "array") or (any(.[]; type != "object")))
+             ] | length) == 0
+    ' "$SETT" >/dev/null 2>&1; then
+  echo "  ✗ $SETT parses, but its \"hooks\" is not a shape this installer can merge into" >&2
+  echo "    expected: \"hooks\" an object, and each event we wire an array of groups" >&2
+  echo "    it will not rewrite what it did not write. Fix that key and re-run;" >&2
+  echo "    nothing has been installed or changed." >&2
   exit 1
 fi
 
