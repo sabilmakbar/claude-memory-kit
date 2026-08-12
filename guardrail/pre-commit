@@ -62,7 +62,7 @@ fi
 # memory files live at the repo root or under memory/; known non-memory docs are exempt
 memfiles="$(git diff --cached --name-only --diff-filter=ACM \
   | grep -E '^(memory/)?[^/]+\.md$' \
-  | grep -vE '(^|/)(MEMORY|README|CLAUDE|DEPENDENCIES|HOW-IT-WORKS)\.md$')"
+  | grep -vE '(^|/)(MEMORY|README|CLAUDE|CONTRIBUTING|DEPENDENCIES|HOW-IT-WORKS)\.md$')"
 bad=""
 for f in $memfiles; do
   slug="$(basename "$f" .md)"
