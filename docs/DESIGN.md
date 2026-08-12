@@ -4,6 +4,11 @@
 > exists so that future changes know what they would be overturning. For how the
 > kit behaves day to day, read [FLOWS.md](FLOWS.md). For setup, the README.
 
+    Status:            Implemented
+    Last revised:      2026-08-12
+    Verified against:  Claude Code 2.1.222
+    Supersedes:        (none)
+
 The decisions that shaped this kit, and the incidents behind them. Without this file
 that reasoning would live only in old conversations and commit messages.
 
@@ -105,18 +110,19 @@ last moment before content becomes irreversible history.
 
 The same hook also guards this repo's own checkout (`git config core.hooksPath
 guardrail`), where it adds a style rule: no em-dashes on lines added to `README.md` or
-`docs/*.md`. The rule and scope are identical in claude-session-kit, so one habit
-serves both kits. Code, tests, and memory files are outside the scope on purpose;
-only reader-facing prose is checked.
+`docs/*.md`. Code, tests, and memory files are outside the scope on purpose: only
+reader-facing prose is checked, which leaves the rule with no exemptions to remember and
+so nothing to drift.
 
 **A blocked feature records why, and says so once a day.** The background work fails
 quiet, because a hook cannot tell a machine that skips a feature from one that is broken,
 and a warning at every session start becomes noise you learn to ignore. Quiet alone was
 not enough though: a miner with no `claude` CLI used to exit before writing even a log
 line, so months of no proposals looked exactly like months of nothing worth saving. Now
-each feature records the reason it could not run, a notice fires once a day only after
-the block has lasted a few days, and any successful run clears its own record, so a fixed
-machine goes quiet without anyone dismissing anything. Set `MEMORY_KIT_NO_MINER=1` to
+each feature records the reason it could not run, a notice fires once a day only after the
+block has lasted three days (`MEMORY_KIT_HEALTH_GRACE`, which is a knob because the right
+grace period depends on how often you open a session), and any successful run clears its own
+record, so a fixed machine goes quiet without anyone dismissing anything. Set `MEMORY_KIT_NO_MINER=1` to
 skip the miner deliberately, which is what makes every other silence a fault worth
 reporting.
 
@@ -132,8 +138,8 @@ start. The file also serves as the inventory: if a knob is not listed there, the
 not read it.
 
 **The prefix is exact: `MEMORY_KIT_*` is a user knob, `CLAUDE_MEMORY_KIT_*` is not.**
-The same rule claude-session-kit settled on, and the value is the same: a name answers "is
-this configurable" without reading any code. Getting there cost renaming three knobs that
+The value is that a name answers "is this configurable" without anyone reading code to find
+out. Getting there cost renaming three knobs that
 already worked and one test seam. The objection to renaming was that a machine setting an
 old name in a shell profile would go on being ignored in silence, which is the failure this
 kit works hardest to prevent. That objection is answered rather than accepted. The
@@ -153,7 +159,7 @@ guardrail is wired into other repos on its own, so its interface is not the kit'
 offline, refused credentials, or diverged history, because each one sends you somewhere
 different. For refused credentials the message reads the repo's own configuration to name
 the mechanism in use, whether that is an SSH key, a keychain, or a helper. That detection
-only words the message. Nothing in the kit checks for a credential tool or gates a sync
+only shapes the wording. Nothing in the kit checks for a credential tool or gates a sync
 on one.
 
 **What the kit may do to the memory repo, which it does not own.** `~/.claude/memory` is
@@ -208,7 +214,7 @@ hook) silently dropped any hook later added to an existing group, which meant up
 never delivered new hooks to installed machines. Each of those failures is a test now.
 
 **Ownership is the basename and the directory, so a shared filename is not a collision.**
-Deduping on the basename alone was wrong in both directions: a sibling kit shipping a
+Deduping on the basename alone was wrong in both directions: any other tool shipping a
 file of the same name could make us skip wiring our own hook, leaving a silently dead
 kit, and then let an uninstall delete theirs. This kit renamed its own `version-check.sh`
 once to dodge that, which was a workaround rather than a fix. A hook is ours only when
@@ -218,9 +224,9 @@ a bug in us. The managed list is derived from `settings.snippet.json`, so adding
 is one edit and both halves see it.
 
 **Uninstall is the same contract in reverse, and `settings.json` is treated as shared.**
-The kit writes hooks, so it removes them, matching claude-session-kit rather than leaving
-two kits with two contracts for one file. Four properties make writing a file every other
-tool shares survivable: it is written last, after everything else has installed, so a run
+The kit writes hooks, so it removes them: a tool that adds to a file it shares and cannot
+take its own additions back out leaves the user no undo except editing by hand. Four
+properties make writing a file every other tool shares survivable: it is written last, after everything else has installed, so a run
 that fails earlier never touches it; the result is validated before it replaces the live
 file, where wiring must not shrink the hook count and removal must leave every hook that
 was not ours untouched; the merge runs against a snapshot and refuses if the live file
@@ -240,7 +246,7 @@ did not write. The list of events comes from the snippet, so wiring a new one ca
 to widen the check. Two things are still refused: `hooks` itself being the wrong type,
 because that is the container we have to write into rather than someone else's key, and an
 event of ours holding anything that is not a hook group. Nothing is ever repaired
-automatically. claude-session-kit hit the same overreach and settled on the same rule.
+automatically.
 
 **Uninstall undoes what install did outside its own tree, and nothing else.** Deleting
 the tree while the memory repo's `core.hooksPath` still pointed into it would leave git
