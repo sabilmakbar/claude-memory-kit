@@ -367,4 +367,6 @@ covering what you are changing before you change it.
 - **[claude-memories-template](https://github.com/sabilmakbar/claude-memories-template)**:
   the starting point for the private memory repo described above.
 
+Released versions and what changed in each: [CHANGELOG.md](CHANGELOG.md).
+
 MIT licensed, see [LICENSE](LICENSE).

@@ -14,10 +14,11 @@ Nothing here is promised by Claude Code. Every entry carries the date and versio
 on, the surface it was read from, how it was checked, and what you need to re-run the check, so
 it can be re-run rather than believed.
 
-**Three entries have no recorded provenance**: O5, O6 and O7 were learned from incidents during
+**Two entries have no recorded provenance**: O5 and O6 were learned from incidents during
 development and written down only as a clause inside a decision. They are marked
 `First observed: not recorded`, which is a gap rather than a detail. Treat them as the least
-trustworthy entries here until someone re-verifies them and fills the date in.
+trustworthy entries here until someone re-verifies them and fills the date in. The count is `grep -c '^ *First observed: *not recorded' docs/INTERNALS.md`, anchored to the
+field so it cannot count this sentence, and so it cannot drift from the entries again.
 
 Commands that answer this file's own claims, so none of the counts above have to be believed:
 
