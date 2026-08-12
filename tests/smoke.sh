@@ -266,8 +266,20 @@ echo "smoke: $PASS passed, $FAIL failed, $SKIP skipped"
 if [ "$FAIL" = 0 ]; then
     v=$(bash "$KIT/scripts/claude-version.sh" 2>/dev/null)
     if [ -n "$v" ]; then
-        printf '%s\n' "$v" > "$KIT/.verified"
-        echo "smoke: stamped .verified = $v"
+        # Record every version that has passed, never just the latest. A single value
+        # moves BACKWARDS on a machine running several versions at once: a run started
+        # while only older sessions are live overwrites a newer pass, and the suite then
+        # re-runs work it had already cleared. A set cannot regress.
+        if [ -r "$KIT/.verified" ] && grep -qxF "$v" "$KIT/.verified" 2>/dev/null; then
+            echo "smoke: $v already recorded in .verified"
+        else
+            { [ -r "$KIT/.verified" ] && cat "$KIT/.verified"; printf '%s\n' "$v"; } \
+                | grep -vE '^[[:space:]]*$' | sort -V -u > "$KIT/.verified.new" 2>/dev/null \
+                || { [ -r "$KIT/.verified" ] && cat "$KIT/.verified"; printf '%s\n' "$v"; } \
+                     | grep -vE '^[[:space:]]*$' | sort -u > "$KIT/.verified.new"
+            mv "$KIT/.verified.new" "$KIT/.verified"
+            echo "smoke: recorded $v in .verified ($(grep -c . "$KIT/.verified") version(s) passed)"
+        fi
     else
         echo "smoke: pass, but Claude Code version unresolvable — not stamping"
     fi

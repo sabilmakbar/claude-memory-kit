@@ -758,6 +758,61 @@ check "a broken settings.json refuses the install" 1 $?
 [ "$(cat "$BH/.claude/settings.json")" = "not json at all" ] \
   && ok "and the file was left exactly as it was" || fail "touched a file it could not parse"
 
+# ---------- .verified holds every version that passed ----------
+# A single value moves backwards on a machine running several versions at once: a smoke
+# run started while only older sessions are live overwrites a newer pass, and the suite
+# re-runs work it had already cleared. The record is a set, and the question the hook
+# asks is whether THIS version is in it.
+echo "version record:"
+VH="$TMP/home-verified"; VK="$VH/.claude/memory-kit"
+mkdir -p "$VH/.claude/sessions" "$VK/tests" "$VK/core"
+printf '{"version":"2.1.100"}\n' > "$VH/.claude/sessions/s.json"
+cp "$KIT/core/lib.sh" "$VK/core/lib.sh"; printf '#!/bin/sh\nexit 0\n' > "$VK/tests/smoke.sh"
+cp "$KIT/hooks/memory-kit-version-check.sh" "$VK/hooks-check.sh" 2>/dev/null || \
+  { mkdir -p "$VK/hooks"; cp "$KIT/hooks/memory-kit-version-check.sh" "$VK/hooks/vc.sh"; }
+VC="$VK/hooks/vc.sh"; [ -f "$VC" ] || { mkdir -p "$VK/hooks"; cp "$KIT/hooks/memory-kit-version-check.sh" "$VC"; }
+
+printf '2.1.100\n2.1.222\n' > "$VK/.verified"
+HOME="$VH" bash "$VC" </dev/null >/dev/null 2>&1
+[ ! -f "$VK/.smoke-attempt" ] \
+  && ok "a version already in the record does not re-run the suite" || fail "re-ran for a recorded version"
+# the same file with only a NEWER version recorded is the regression case: the running
+# version passed once, and a later stamp must not have erased it
+printf '2.1.222\n' > "$VK/.verified"
+HOME="$VH" bash "$VC" </dev/null >/dev/null 2>&1
+[ -f "$VK/.smoke-attempt" ] \
+  && ok "a version missing from the record does re-run it" || fail "did not re-verify an unrecorded version"
+
+# ---------- degraded mode: the kit says when it has stopped working ----------
+# Every other hook exits quietly when jq is missing, which is the kit's healthy state
+# too, so a broken machine looks exactly like a working one. The health hook reports it
+# because it needs no jq itself. The PATH is built from resolved tool paths so this is
+# the same test on macOS and in CI, where jq may live anywhere.
+echo "degraded mode (no jq):"
+NOJQ="$TMP/nojq/bin"; mkdir -p "$NOJQ"
+for b in bash sh cat cut date dirname find grep head ls mkdir sed tail tr basename rm \
+         mktemp mv awk sort xargs stat hostname; do
+  src=$(command -v "$b" 2>/dev/null) && ln -sf "$src" "$NOJQ/$b"
+done
+# probed through a fresh shell: bash caches command locations, so the builtin lookup
+# would report the cached jq no matter what PATH says
+if ! [ -x "$NOJQ/bash" ] || env PATH="$NOJQ" sh -c 'command -v jq' >/dev/null 2>&1; then
+  ok "SKIP: could not build a jq-less PATH on this machine"
+else
+  out=$(echo '{"session_id":"nojq1"}' | PATH="$NOJQ" "$NOJQ/bash" "$KIT/hooks/memory-kit-health.sh" 2>/dev/null)
+  printf '%s' "$out" | grep -q "jq is not on PATH" \
+    && ok "a missing jq is reported by the one hook that does not need it" \
+    || fail "the kit went silent about its own dependency ($out)"
+  printf '%s' "$out" | grep -q "write guard" \
+    && ok "and it names what stopped working" || fail "does not say what is affected"
+  # the hooks that need jq must still fail open rather than blocking a tool call
+  for h in memory-kit-version-check memory-write-guard; do
+    o=$(echo '{"session_id":"n"}' | PATH="$NOJQ" "$NOJQ/bash" "$KIT/hooks/$h.sh" 2>/dev/null); rc=$?
+    [ "$rc" = 0 ] && [ -z "$o" ] || fail "$h without jq: rc=$rc out=$o"
+  done
+  ok "the hooks that need jq stay silent and fail open"
+fi
+
 # ---------- settings.json shapes that parse but are not what we expect ----------
 # Unparseable was already covered. This is the other half: a file that IS valid JSON but
 # holds a shape the merge cannot use, and a file whose odd corners must survive untouched.
