@@ -25,6 +25,14 @@ SID=$(mk_session_id)
 mk_notice_due "$SID" health || exit 0
 
 MSG=""
+# The kit's own dependencies come first, because a missing one silences everything
+# else including the recording that this hook reports. Every other hook exits quietly
+# without jq, so the fault would never be written down for the grace period to notice.
+# This hook can say it because it uses no jq itself: reporting must not depend on the
+# thing that broke.
+command -v jq >/dev/null 2>&1 \
+  || MSG="jq is not on PATH, so most of the memory kit is not running: the write guard, the version check and the edit-over-write guard all exit silently without it"
+
 # A knob still set under its old name is reported at once rather than after the
 # grace period: it is already being ignored, and the fix is one edit away.
 while IFS= read -r legacy; do
