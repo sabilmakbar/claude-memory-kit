@@ -32,6 +32,7 @@ fi
 # a file is rewritten only when a stamped key is actually present: one heal per
 # stamped file, then a no-op.
 STAMPED='^[[:space:]]*(node_type|originSessionId|modified):'
+NORMALIZED=""
 normalize_frontmatter() { # <dir> — heal root-level .md files in place
     for f in $(grep -lE "$STAMPED" "$1"/*.md 2>/dev/null); do
         case "$(basename "$f")" in MEMORY.md) continue ;; esac
@@ -44,7 +45,8 @@ normalize_frontmatter() { # <dir> — heal root-level .md files in place
             NR>1 && NR<end && $0 ~ re { next }
             NR>1 && NR<end && /^metadata:[[:space:]]+$/ { print "metadata:"; next }  # the writer also leaves a trailing space here
             { print }
-        ' "$f" > "$f.norm.$$" && mv "$f.norm.$$" "$f"
+        ' "$f" > "$f.norm.$$" && mv "$f.norm.$$" "$f" \
+            && NORMALIZED="$NORMALIZED${NORMALIZED:+, }$(basename "$f")"
     done
 }
 normalize_frontmatter "$CENTRAL"
@@ -64,6 +66,11 @@ fi
 MOUNT_MEMORY="$MOUNTS_BASE/$MOUNT_ENCODED"
 mkdir -p "$MOUNT_MEMORY"
 normalize_frontmatter "$MOUNT_MEMORY"
+
+# Say it. This rewrites files inside the user's own repo, so a silent heal shows up as a
+# change in git status that nobody made, in a repo the kit does not own. One line, only
+# when a file was actually rewritten, which is once per stamped file and then never again.
+[ -n "$NORMALIZED" ] && echo "Removed harness-stamped frontmatter keys (node_type, originSessionId, modified) from: $NORMALIZED. The rules those files hold are unchanged; only metadata the writer adds was dropped."
 
 # Step 3: Rebuild MEMORY.md = fixed header + index generated from the memory files.
 # The index is derived from each file's frontmatter, so it can never drift out of

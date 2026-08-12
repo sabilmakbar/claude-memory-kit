@@ -141,6 +141,18 @@ grep -q 'feedback_stamped.md) — keeps this' "$NH/.claude/memory/MEMORY.md" \
   && ok "normalized file still indexed" || fail "normalized file still indexed"
 [ "$CF" -nt "$REF1" ] && fail "stamp-free file never rewritten" || ok "stamp-free file never rewritten"
 
+# a rewrite inside the user's repo is never silent: it would otherwise appear in git
+# status as a change nobody made
+out=$(HOME="$NH" CLAUDE_PROJECT_DIR="$NH/proj" bash "$KIT/scripts/ensure-memory-symlink.sh" 2>/dev/null)
+[ -z "$out" ] && ok "a run that heals nothing stays silent" || fail "noise with nothing to heal ($out)"
+printf -- '---\nname: feedback_loud\ndescription: "d"\nmetadata:\n  node_type: memory\n  type: feedback\n  source: direct\n---\nb\n' \
+  > "$NH/.claude/memory/feedback_loud.md"
+out=$(HOME="$NH" CLAUDE_PROJECT_DIR="$NH/proj" bash "$KIT/scripts/ensure-memory-symlink.sh" 2>/dev/null)
+printf '%s' "$out" | grep -q "feedback_loud.md" \
+  && ok "a healed file is named in the output" || fail "healed a file silently ($out)"
+printf '%s' "$out" | grep -qE "node_type|stamped" \
+  && ok "and the output says what was removed" || fail "does not say what changed"
+
 # second run: central file already healed must not be rewritten again (mtime churn
 # would re-trigger delta pings and dirty the repo); a freshly stamped mount file heals
 MNT=$(ls -d "$NH/.claude/memory-mounts"/*/ 2>/dev/null | head -1)
@@ -585,6 +597,29 @@ HOME="$IH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2
   && ok "an edited seed file is left alone" || fail "edited seed clobbered"
 [ -f "$IH/.claude/memory/feedback_memory_generality.md" ] \
   && fail "an unmodified seed file was left behind" || ok "an unmodified seed file is retired"
+# a file git tracks is never deleted, even when it is byte-identical to the kit's copy:
+# staging a deletion in the user's history is their commit to make, not the installer's
+TH="$TMP/home-tracked"; mkdir -p "$TH/.claude/memory"
+git init -q "$TH/.claude/memory"
+git -C "$TH/.claude/memory" config user.email t@t
+git -C "$TH/.claude/memory" config user.name t
+cp "$KIT/guidance/retired-seeds/feedback_memory_generality.md" "$TH/.claude/memory/"
+git -C "$TH/.claude/memory" add feedback_memory_generality.md
+git -C "$TH/.claude/memory" commit -qm "user tracks the seed file"
+out=$(HOME="$TH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" 2>&1)
+[ -f "$TH/.claude/memory/feedback_memory_generality.md" ] \
+  && ok "a tracked seed file is not deleted" || fail "installer deleted tracked content"
+printf '%s' "$out" | grep -q "your repo tracks it" \
+  && ok "and it says why, naming the command to do it yourself" || fail "silent about the tracked file"
+[ -z "$(git -C "$TH/.claude/memory" status --porcelain)" ] \
+  && ok "the user's repo is left with nothing to commit" || fail "installer dirtied the memory repo"
+# the untracked case still retires, so the cleanup is not lost
+UT="$TMP/home-untracked"; mkdir -p "$UT/.claude/memory"
+cp "$KIT/guidance/retired-seeds/feedback_memory_generality.md" "$UT/.claude/memory/"
+HOME="$UT" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+[ ! -f "$UT/.claude/memory/feedback_memory_generality.md" ] \
+  && ok "an untracked identical copy is still retired" || fail "untracked copy left behind"
+
 [ -f "$IH/.claude/memory-kit/guidance/memory-authoring.md" ] \
   && ok "the guidance the hook points at is deployed" || fail "guidance missing from the tree"
 [ -f "$IH/.claude/skills/save-memory/SKILL.md" ] \
