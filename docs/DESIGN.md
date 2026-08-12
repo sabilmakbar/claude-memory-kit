@@ -229,6 +229,19 @@ after the write is rolled back from a kit-specific backup, or by deleting a file
 not exist beforehand. Removal prunes upward, dropping emptied groups, then events, then
 the `hooks` key.
 
+**The shape check covers the events we wire, not every event in the file.** A
+`settings.json` that parses can still hold a shape the merge cannot use, and finding that
+out mid-merge meant a raw parser error at the end of a half-finished install, so a
+preflight now refuses first. The first version of it checked every event in the file,
+which was too wide. An event this kit never wires belongs to some other tool: the merge
+only reads the keys `settings.snippet.json` declares, so a wrong-typed foreign event
+survives an install and an uninstall untouched, and refusing over it was judging config we
+did not write. The list of events comes from the snippet, so wiring a new one cannot forget
+to widen the check. Two things are still refused: `hooks` itself being the wrong type,
+because that is the container we have to write into rather than someone else's key, and an
+event of ours holding anything that is not a hook group. Nothing is ever repaired
+automatically. claude-session-kit hit the same overreach and settled on the same rule.
+
 **Uninstall undoes what install did outside its own tree, and nothing else.** Deleting
 the tree while the memory repo's `core.hooksPath` still pointed into it would leave git
 finding no hook and running nothing, so the commit guard would stop silently while the
