@@ -1,7 +1,11 @@
 # How the kit behaves
 
 Diagrams of what runs when, plus the specifics [HOW-IT-WORKS.md](HOW-IT-WORKS.md)
-deliberately leaves out. The reasons behind each choice live in [DESIGN.md](DESIGN.md).
+deliberately leaves out. The reasons behind each choice live in the five decision records:
+[DESIGN-memory.md](DESIGN-memory.md), [DESIGN-miner.md](DESIGN-miner.md),
+[DESIGN-guardrail.md](DESIGN-guardrail.md), [DESIGN-install.md](DESIGN-install.md) and
+[DESIGN-health.md](DESIGN-health.md). What those decisions rest on, meaning the observed Claude
+Code behaviour rather than our choices, is [INTERNALS.md](INTERNALS.md).
 
 One rule keeps this file from growing into a second copy of the plain-language version: a
 sentence that also belongs in HOW-IT-WORKS goes there and not here. What lives here is the

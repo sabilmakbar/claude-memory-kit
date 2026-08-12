@@ -10,12 +10,15 @@ to remember them for you.
 
 Everything runs on your machine, and nothing is saved without your approval.
 
-Three docs form the reading path, shortest first. New here?
-[HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md) explains the daily loop in plain language, and it is
-the only one you need in order to use the kit. [FLOWS.md](docs/FLOWS.md) is the next step
-down: diagrams of what runs when, with the specifics the plain-language version leaves out.
-[DESIGN.md](docs/DESIGN.md) is for anyone changing the kit rather than running it: every rule
-in the code with the reason it exists.
+The docs go shortest first. New here? [HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md) explains the
+daily loop in plain language, and it is the only one you need in order to use the kit.
+[FLOWS.md](docs/FLOWS.md) is the next step down: diagrams of what runs when, with the
+specifics the plain-language version leaves out. The five `docs/DESIGN-*.md` files are
+decision records, one per feature, for anyone changing the kit rather than running it: every
+rule in the code with the reason it exists. Underneath those,
+[INTERNALS.md](docs/INTERNALS.md) is about Claude Code rather than about this kit: what was
+observed about undocumented behaviour the kit leans on, each entry dated, versioned, and
+written so you can re-run the check yourself.
 
 If something is broken rather than unclear, go straight to
 [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
@@ -49,8 +52,9 @@ belonging to another tool is reported rather than claimed, an event the kit does
 never even read, and a run that fails later puts the previous contents back. Add `--dry-run` to
 see the plan before any of it happens.
 
-[DESIGN.md](docs/DESIGN.md) says why each of those rules exists, including why the shape check
-deliberately stops at the events this kit wires rather than judging the rest of your file.
+[DESIGN-install.md](docs/DESIGN-install.md) says why each of those rules exists, including why
+the shape check deliberately stops at the events this kit wires rather than judging the rest of
+your file.
 
 You need `jq`. The miner and sync also use `git` and the `claude` CLI. Details in
 [DEPENDENCIES.md](docs/DEPENDENCIES.md).
@@ -250,7 +254,7 @@ Two test suites cover the kit: a fixture suite that gates every install and ever
 and a smoke suite that checks the kit against your machine's real data. After a Claude
 Code update, a background hook re-runs the smoke suite and records the result, so a
 harness change that breaks something gets noticed instead of failing silently. The full
-story is in [DESIGN.md](docs/DESIGN.md).
+story is in [DESIGN-health.md](docs/DESIGN-health.md).
 
 Verified against Claude Code 2.1.222. The smoke suite also passes over transcripts written
 by 20 versions, 2.1.177 through 2.1.222. Older versions are untested.
@@ -351,8 +355,9 @@ the leak checks: no em-dashes on lines added to `README.md` or `docs/*.md`.
 git -C . config core.hooksPath guardrail
 ```
 
-[DESIGN.md](docs/DESIGN.md) says why every rule exists, including the ones that look
-arbitrary. Read it before changing one.
+[CONTRIBUTING.md](CONTRIBUTING.md) is the way in: it names the reading order, and the five
+decision records say why every rule exists, including the ones that look arbitrary. Read the one
+covering what you are changing before you change it.
 
 ## Related projects
 
