@@ -758,6 +758,94 @@ check "a broken settings.json refuses the install" 1 $?
 [ "$(cat "$BH/.claude/settings.json")" = "not json at all" ] \
   && ok "and the file was left exactly as it was" || fail "touched a file it could not parse"
 
+# ---------- .verified holds every version that passed ----------
+# A single value moves backwards on a machine running several versions at once: a smoke
+# run started while only older sessions are live overwrites a newer pass, and the suite
+# re-runs work it had already cleared. The record is a set, and the question the hook
+# asks is whether THIS version is in it.
+echo "version record:"
+VH="$TMP/home-verified"; VK="$VH/.claude/memory-kit"
+mkdir -p "$VH/.claude/sessions" "$VK/tests" "$VK/core"
+printf '{"version":"2.1.100"}\n' > "$VH/.claude/sessions/s.json"
+cp "$KIT/core/lib.sh" "$VK/core/lib.sh"; printf '#!/bin/sh\nexit 0\n' > "$VK/tests/smoke.sh"
+cp "$KIT/hooks/memory-kit-version-check.sh" "$VK/hooks-check.sh" 2>/dev/null || \
+  { mkdir -p "$VK/hooks"; cp "$KIT/hooks/memory-kit-version-check.sh" "$VK/hooks/vc.sh"; }
+VC="$VK/hooks/vc.sh"; [ -f "$VC" ] || { mkdir -p "$VK/hooks"; cp "$KIT/hooks/memory-kit-version-check.sh" "$VC"; }
+
+printf '2.1.100\n2.1.222\n' > "$VK/.verified"
+HOME="$VH" bash "$VC" </dev/null >/dev/null 2>&1
+[ ! -f "$VK/.smoke-attempt" ] \
+  && ok "a version already in the record does not re-run the suite" || fail "re-ran for a recorded version"
+# the same file with only a NEWER version recorded is the regression case: the running
+# version passed once, and a later stamp must not have erased it
+printf '2.1.222\n' > "$VK/.verified"
+HOME="$VH" bash "$VC" </dev/null >/dev/null 2>&1
+[ -f "$VK/.smoke-attempt" ] \
+  && ok "a version missing from the record does re-run it" || fail "did not re-verify an unrecorded version"
+
+# ---------- degraded mode: the kit says when it has stopped working ----------
+# Every other hook exits quietly when jq is missing, which is the kit's healthy state
+# too, so a broken machine looks exactly like a working one. The health hook reports it
+# because it needs no jq itself. The PATH is built from resolved tool paths so this is
+# the same test on macOS and in CI, where jq may live anywhere.
+echo "degraded mode (no jq):"
+NOJQ="$TMP/nojq/bin"; mkdir -p "$NOJQ"
+for b in bash sh cat cut date dirname find grep head ls mkdir sed tail tr basename rm \
+         mktemp mv awk sort xargs stat hostname; do
+  src=$(command -v "$b" 2>/dev/null) && ln -sf "$src" "$NOJQ/$b"
+done
+# probed through a fresh shell: bash caches command locations, so the builtin lookup
+# would report the cached jq no matter what PATH says
+if ! [ -x "$NOJQ/bash" ] || env PATH="$NOJQ" sh -c 'command -v jq' >/dev/null 2>&1; then
+  ok "SKIP: could not build a jq-less PATH on this machine"
+else
+  out=$(echo '{"session_id":"nojq1"}' | PATH="$NOJQ" "$NOJQ/bash" "$KIT/hooks/memory-kit-health.sh" 2>/dev/null)
+  printf '%s' "$out" | grep -q "jq is not on PATH" \
+    && ok "a missing jq is reported by the one hook that does not need it" \
+    || fail "the kit went silent about its own dependency ($out)"
+  printf '%s' "$out" | grep -q "write guard" \
+    && ok "and it names what stopped working" || fail "does not say what is affected"
+  # the hooks that need jq must still fail open rather than blocking a tool call
+  for h in memory-kit-version-check memory-write-guard; do
+    o=$(echo '{"session_id":"n"}' | PATH="$NOJQ" "$NOJQ/bash" "$KIT/hooks/$h.sh" 2>/dev/null); rc=$?
+    [ "$rc" = 0 ] && [ -z "$o" ] || fail "$h without jq: rc=$rc out=$o"
+  done
+  ok "the hooks that need jq stay silent and fail open"
+fi
+
+# ---------- settings.json shapes that parse but are not what we expect ----------
+# Unparseable was already covered. This is the other half: a file that IS valid JSON but
+# holds a shape the merge cannot use, and a file whose odd corners must survive untouched.
+# Ported from claude-session-kit, which had the survive case and we did not.
+echo "settings.json shapes:"
+SHAPE_DIR=""   # set by shape_case; the result lines and the path cannot share stdout
+shape_case() { # shape_case <desc> <json> <expect-rc> <expect-our-hooks>
+  local d="$1" json="$2" want_rc="$3" want_ours="$4" rc ours
+  SHAPE_DIR=$(mktemp -d); mkdir -p "$SHAPE_DIR/.claude"
+  printf '%s' "$json" > "$SHAPE_DIR/.claude/settings.json"
+  HOME="$SHAPE_DIR" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1; rc=$?
+  ours=$(jq '[.hooks[]?[]?.hooks[]?.command | select(contains("memory-kit/"))] | length' \
+         "$SHAPE_DIR/.claude/settings.json" 2>/dev/null || echo -1)
+  if [ "$rc" = "$want_rc" ] && [ "$ours" = "$want_ours" ]; then ok "$d"
+  else fail "$d (rc=$rc want $want_rc, ourhooks=$ours want $want_ours)"; fi
+}
+shape_case "hooks as a number: refuses, wires nothing" '{"hooks":42}' 1 0; h="$SHAPE_DIR"
+[ "$(cat "$h/.claude/settings.json")" = '{"hooks":42}' ] \
+  && ok "and leaves the file byte-identical" || fail "rewrote a file it could not merge"
+[ ! -d "$h/.claude/memory-kit" ] \
+  && ok "and refuses before deploying anything" || fail "deployed despite an unusable settings.json"
+rm -rf "$h"
+shape_case "an event that is not an array: refuses" '{"hooks":{"SessionStart":"nope"}}' 1 0; h="$SHAPE_DIR"
+rm -rf "$h"
+# the survive case: odd corners inside a well-shaped file are none of our business
+shape_case "a malformed group survives, and our hooks still wire" \
+      '{"hooks":{"SessionStart":[{"hooks":"nope"}]},"other":"keep me"}' 0 9; h="$SHAPE_DIR"
+jq -e '.other == "keep me"' "$h/.claude/settings.json" >/dev/null \
+  && ok "an unrelated top-level key survives" || fail "dropped a key that was not ours"
+jq -e '[.hooks.SessionStart[] | select(.hooks == "nope")] | length == 1' "$h/.claude/settings.json" >/dev/null \
+  && ok "the malformed group is preserved, not tidied away" || fail "rewrote someone else's malformed entry"
+rm -rf "$h"
+
 echo
 echo "passed $PASS, failed $FAIL"
 [ "$FAIL" = 0 ]

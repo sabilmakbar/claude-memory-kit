@@ -24,9 +24,9 @@ command -v jq >/dev/null 2>&1 || exit 0
 cur=$(mk_claude_version 2>/dev/null)
 [ -n "$cur" ] || exit 0
 
-seen=""
-[ -r "$KIT/.verified" ] && seen=$(head -1 "$KIT/.verified" 2>/dev/null | tr -d '[:space:]')
-[ "$cur" = "$seen" ] && exit 0
+# .verified holds every version that has passed, one per line, so the question is
+# whether THIS version is in the set, not whether it is the most recent entry.
+[ -r "$KIT/.verified" ] && grep -qxF "$cur" "$KIT/.verified" 2>/dev/null && exit 0
 
 # one attempt per (version, day) — a persistently failing suite must not re-run
 # on every session start
