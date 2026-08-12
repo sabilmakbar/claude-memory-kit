@@ -758,6 +758,39 @@ check "a broken settings.json refuses the install" 1 $?
 [ "$(cat "$BH/.claude/settings.json")" = "not json at all" ] \
   && ok "and the file was left exactly as it was" || fail "touched a file it could not parse"
 
+# ---------- settings.json shapes that parse but are not what we expect ----------
+# Unparseable was already covered. This is the other half: a file that IS valid JSON but
+# holds a shape the merge cannot use, and a file whose odd corners must survive untouched.
+# Ported from claude-session-kit, which had the survive case and we did not.
+echo "settings.json shapes:"
+SHAPE_DIR=""   # set by shape_case; the result lines and the path cannot share stdout
+shape_case() { # shape_case <desc> <json> <expect-rc> <expect-our-hooks>
+  local d="$1" json="$2" want_rc="$3" want_ours="$4" rc ours
+  SHAPE_DIR=$(mktemp -d); mkdir -p "$SHAPE_DIR/.claude"
+  printf '%s' "$json" > "$SHAPE_DIR/.claude/settings.json"
+  HOME="$SHAPE_DIR" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1; rc=$?
+  ours=$(jq '[.hooks[]?[]?.hooks[]?.command | select(contains("memory-kit/"))] | length' \
+         "$SHAPE_DIR/.claude/settings.json" 2>/dev/null || echo -1)
+  if [ "$rc" = "$want_rc" ] && [ "$ours" = "$want_ours" ]; then ok "$d"
+  else fail "$d (rc=$rc want $want_rc, ourhooks=$ours want $want_ours)"; fi
+}
+shape_case "hooks as a number: refuses, wires nothing" '{"hooks":42}' 1 0; h="$SHAPE_DIR"
+[ "$(cat "$h/.claude/settings.json")" = '{"hooks":42}' ] \
+  && ok "and leaves the file byte-identical" || fail "rewrote a file it could not merge"
+[ ! -d "$h/.claude/memory-kit" ] \
+  && ok "and refuses before deploying anything" || fail "deployed despite an unusable settings.json"
+rm -rf "$h"
+shape_case "an event that is not an array: refuses" '{"hooks":{"SessionStart":"nope"}}' 1 0; h="$SHAPE_DIR"
+rm -rf "$h"
+# the survive case: odd corners inside a well-shaped file are none of our business
+shape_case "a malformed group survives, and our hooks still wire" \
+      '{"hooks":{"SessionStart":[{"hooks":"nope"}]},"other":"keep me"}' 0 9; h="$SHAPE_DIR"
+jq -e '.other == "keep me"' "$h/.claude/settings.json" >/dev/null \
+  && ok "an unrelated top-level key survives" || fail "dropped a key that was not ours"
+jq -e '[.hooks.SessionStart[] | select(.hooks == "nope")] | length == 1' "$h/.claude/settings.json" >/dev/null \
+  && ok "the malformed group is preserved, not tidied away" || fail "rewrote someone else's malformed entry"
+rm -rf "$h"
+
 echo
 echo "passed $PASS, failed $FAIL"
 [ "$FAIL" = 0 ]

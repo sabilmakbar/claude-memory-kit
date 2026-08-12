@@ -149,7 +149,11 @@ hooks_wire() {
                ([refs($managed; true)[] | select(. as $b | $have | index($b))] | length) == 0)))
            | map(select((.hooks | length) > 0))) as $new
         | .[$ev] = ($existing + $new)))
-  ' "$snap" "$SNIPPET" > "$tmp"
+  ' "$snap" "$SNIPPET" > "$tmp" 2>/dev/null || {
+    rm -f "$tmp" "$snap"
+    echo "install.sh: the settings.json merge could not run, so your file was left alone" >&2
+    return 1
+  }
 
   # Wiring only ever adds, so a result that is invalid JSON, or that holds fewer hooks
   # than we started with, means the merge went wrong and the live file is better alone.
@@ -329,6 +333,19 @@ fi
 if [ -f "$SETT" ] && ! jq -e 'type == "object"' "$SETT" >/dev/null 2>&1; then
   echo "  ✗ $SETT is not a valid JSON object, so the hooks cannot be wired" >&2
   echo "    fix or move that file and re-run. Nothing has been installed or changed." >&2
+  exit 1
+fi
+# A file can parse and still be unusable: .hooks has to be an object keyed by event, and
+# each event an array. Checking the shape here rather than discovering it mid-merge is
+# what turns a raw jq parser error at the end of a half-finished run into a sentence.
+# Nothing is repaired automatically, because a .hooks of the wrong type holds something
+# this installer did not write and must not guess at.
+if [ -f "$SETT" ] && ! jq -e '(.hooks // {}) as $h
+      | ($h | type) == "object"
+      and ([$h[] | select(type != "array")] | length) == 0' "$SETT" >/dev/null 2>&1; then
+  echo "  ✗ $SETT parses, but its \"hooks\" is not an object of event arrays" >&2
+  echo "    that is not a shape this installer can merge into, and it will not rewrite" >&2
+  echo "    what it did not write. Fix that key and re-run; nothing has been changed." >&2
   exit 1
 fi
 
