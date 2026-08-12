@@ -356,11 +356,6 @@ arbitrary. Read it before changing one.
 
 ## Related projects
 
-- **[claude-setup-template](https://github.com/sabilmakbar/claude-setup-template)**: one
-  manifest for a whole Claude Code setup. You declare the kits, CLI tools, plugins, and
-  hooks a machine should have, and its `setup.sh` converges the machine onto it. Its
-  example manifest installs this kit, so start there if you are setting up a machine
-  rather than adding one piece.
 - **[claude-session-kit](https://github.com/sabilmakbar/claude-session-kit)**: the sibling
   kit. It gives sessions real names, leaves you a note for next time, and moves or splits
   them cleanly, where this kit looks after what Claude remembers about you.
