@@ -26,6 +26,9 @@ development and written down only as a clause inside a decision. They are marked
 trustworthy entries here until someone re-verifies them and fills the date in. The count is `grep -c '^ *First observed: *not recorded' docs/INTERNALS.md`, anchored to the
 field so it cannot count this sentence, and so it cannot drift from the entries again.
 
+O5 has since been re-verified and now carries a date, a version and the exact refusal message, so
+only its first sighting is undated. O6 is still the weakest entry in the file.
+
 Commands that answer this file's own claims, so none of the counts above have to be believed:
 
 ```bash
@@ -131,19 +134,35 @@ version, nor which interface was silent. Anyone who can reproduce it should repl
 
 ## The config root
 
-### O5. A headless session cannot write inside `~/.claude`
+### O5. A write inside `~/.claude` is a sensitive-file edit, so it needs permission
 
     First observed:     not recorded
-    Re-verified:        not since
+    Re-verified:        2026-08-13 · 2.1.228
     Surface:            `~/.claude` itself
-    How:                not recorded. Learned from an incident: the miner's first write was
-                        silently blocked, attributed to sensitive-file protection over the config
-                        root
-    Needs:              a headless session
-    Checkable:          manual (requires running a headless session)
+    How:                one headless session with `--allowedTools Write`, asked to write two
+                        files. The write outside `~/.claude` succeeded. The write to
+                        `~/.claude/<probe>.txt` was refused with "Claude requested permissions to
+                        edit <path> which is a sensitive file". A headless session has nobody to
+                        ask, so the write never lands
+    Needs:              an installed Claude Code, a headless session
+    Docs:               not documented
+    Checkable:          automated, but not hermetic: it has to probe the real config root,
+                        because a fake HOME cannot authenticate and fails as "Not logged in"
+                        before reaching any write
 
 This is why the miner's tracker lives at `~/.local/share/claude-feedback` rather than beside the
-kit. The mechanism was never confirmed against a version, only inferred from the failure.
+kit.
+
+**The original wording said a headless session cannot write inside `~/.claude`. That is nearly
+right, and the mechanism is worth having exactly.** The path is not forbidden. It is classified
+sensitive, which turns the write into a permission request, and a headless session has no way to
+answer one. An interactive session writes there constantly, since that is where every memory file
+comes from, so the boundary is the permission prompt rather than the directory.
+
+**Not tested: whether a permission bypass or an explicit allow rule gets a headless session
+through.** It probably does, and the kit deliberately does not rely on it. Driving a rewrite of
+someone's memory from a headless session with permissions bypassed removes the one thing that
+makes the operation safe, which is a person watching it happen.
 
 ### O7. `settings.json` hooks is an object keyed by event, each event an array of groups
 
