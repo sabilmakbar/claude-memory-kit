@@ -91,9 +91,17 @@ a commit for them to make. A file the kit once seeded is removed only when it is
 byte-identical to the copy the kit ships, so anything deleted is reproducible from this tree,
 and when the repo tracks it the installer says so and names the command instead.
 
-**A rewrite is never silent**, because a heal the user did not make would otherwise surface as
-an unexplained change in `git status`, so the index pass names each file it touched and what it
-dropped.
+**The kit no longer rewrites a memory file at all, so the question of silence is settled by not
+doing it.** The index pass used to strip harness-stamped frontmatter in place and name what it had
+touched afterwards. Announcing after the fact is the wrong order under D8: managed says what it
+will do before doing it, and a hook cannot hold that conversation. So the pass now reports which
+files carry stamped keys and a skill applies the strip, with the user's go-ahead in managed and by
+the user's own hand in advisory.
+
+The report has to be throttled through `mk_notice_due`, the same mechanism the review reminder and
+the proposals ping use. Claude Code re-stamps `modified` on every native save, so an unthrottled
+report would fire on essentially every prompt and become noise nobody reads, which is a worse
+outcome than the silent rewrite it replaced.
 
 **The two git settings are undone by `--uninstall`**, meaning the guardrail `hooksPath` and the
 `skip-worktree` flag on the generated index.
@@ -158,16 +166,29 @@ does it all day.
 Advisory therefore leaves a machine unconsolidated until it is switched to managed. That is the
 point of it rather than a gap: advisory means tell me, not touch it.
 
-**The advisory line is drawn by what is written, not by who asked.** Saying advisory only
-constrains automatic action, on the grounds that invoking a skill is consent, breaks at the edge:
-it would let a skill reorganise and delete memory in the mode whose whole promise is that nothing
-changes. So advisory forbids the kit changing memory the user did not just author, meaning no
-index regeneration, no frontmatter healing, no consolidation, no rewriting and no deletion. It
-still allows recording something the user explicitly dictated, which is what `save-memory` does,
-because one file the user asked for is the user authoring through the kit rather than the kit
-editing the user. A rule that blocked that would break the most-used skill in the most cautious
-mode. Every skill is installed in both modes, since a skill is inert until called; what changes is
-what it may do once called.
+**The mode is about who holds the pen, not about what is automatic.** Managed means the kit makes
+the change, and never without saying first what it is about to do. Advisory means the user makes
+the change, and the kit only says what it thinks should happen. Both announce. The difference is
+who executes. Neither is ever fully automatic over a user's own memory, because these files hold
+preferences and an automated edit fails in ways the person it belongs to would not see.
+
+**So the line runs between a derived artifact and the user's files, not between hook and skill.**
+`MEMORY.md` is generated from the files and holds nothing anyone wrote, so the kit regenerates it
+in both modes: stopping would let the index drift out of step with the files, which is the exact
+failure D3 exists to prevent, and recall would degrade with nobody told. Everything else in the
+store is the user's, so the kit does not edit it unasked in either mode.
+
+**Consent has two grains in managed, so that "always ask" does not become a prompt per keystroke.**
+Passing `--mode=managed` is the consent for the mechanical writes: the setting, the marker, the
+record. All are reversible, all are announced, and none touch a memory file. Per-group
+confirmation inside a skill is the consent for anything that changes memory content.
+
+**`save-memory` is not an exception to any of this.** Recording one file the user dictated is the
+user authoring through the kit, not the kit editing the user, so it works in both modes. A rule
+that blocked it would break the most-used skill in the most cautious mode.
+
+Every skill is installed in both modes, since a skill is inert until called. What changes is what
+it may do once called.
 
 `CLAUDE.md` is untouched throughout: it is a different mechanism, user-written and per-project,
 and this setting does not address it.
