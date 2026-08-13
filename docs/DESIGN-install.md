@@ -137,8 +137,77 @@ remembered is weaker than a test that cannot be forgotten. One fails when the co
 `config.example` does not declare. The other fails when a machine's own config sets a knob the
 code no longer reads.
 
+## D10. Install writes one setting into `settings.json`, and refuses rather than degrades
+
+`autoMemoryDirectory` is the mechanism the store now relies on (`DESIGN-memory.md` D8), so install
+has to write a key into the file D5 already treats as shared. Three constraints follow, and none
+of them are new: they are the shared-file discipline applied to a value rather than a hook.
+
+**The key is written, never merged into.** It is a single string, so there is no array to append
+to and no other tool's entry to preserve inside it. A value already present is left alone and
+reported, on the same reasoning as D4: something we did not write is not ours to overwrite, and
+silently replacing it would relocate a user's memory without telling them.
+
+**`--uninstall` removes it, and only if we wrote it**, which is D5 and D7 unchanged. The uninstall
+contract is that the kit undoes what it did outside its own tree and nothing else, so a value the
+kit adopted rather than authored is left behind on purpose.
+
+**Below the floor, install refuses instead of falling back.** D8 records why there is no symlink
+path to fall back to. A kit that half-installs is the failure mode D5 and D6 exist to prevent, so
+the check runs before anything is written and says the version it found and the version it needs.
+The floor is at or below the oldest build available to test (O12), so this is a guard against a
+machine nobody has seen rather than a branch anyone will hit.
+
+The version accessor already exists for the health hook (O4), so this adds a caller rather than a
+mechanism.
+
+**Every change this decision makes outside the kit's own tree is reversible, and the reversal is
+tested, not assumed.** The key is one line, so removing it returns the machine to the default. The
+old symlinks are deliberately left in place (`DESIGN-memory.md` D8), so that reversal needs no
+restore step at all. Nothing else is written.
+
+**Renaming a wired hook breaks that reversibility unless the old name is remembered, so it is.**
+`managed_names` is derived from `settings.snippet.json`, which after a rename lists only the new
+name, so an uninstall would leave the old entry standing and pointing at a script that no longer
+exists. That is the D3 failure mode in a new disguise: a spelling the merge cannot see. The kit
+therefore carries an explicit list of names it has previously wired, and both the upgrade and the
+uninstall act on the current names plus that list. The list only grows, and a rename adds to it in
+the same commit that performs the rename, so the two cannot drift apart.
+
+This is the general rule the rest of the file already follows and is worth stating once: an
+operation the kit cannot undo is not performed automatically. Refusing below the version floor,
+leaving a value the kit did not write, and reporting several stores rather than merging them are
+all the same rule.
+
+## D11. The mode is a required argument on a first install, and remembered after that
+
+`MEMORY_KIT_MODE` decides whether the kit may rewrite a user's memory, so it is the one setting
+this installer will not pick for you. A first install on a machine with no recorded mode refuses
+until given `--mode=managed` or `--mode=advisory`, and prints what it found first so the choice is
+informed rather than a coin toss.
+
+**Requiring it on every run was considered and rejected.** `README.md` states in two places that
+re-running the installer is the upgrade path, and 44 invocation sites across the tests and docs
+call it. A flag mandatory on every run would mean every upgrade restates the mode, and a value
+that differs from last time would change how the machine behaves during what the user thought was
+a routine upgrade. The hard stop belongs where the decision is actually made, and nowhere else.
+
+**So the choice is recorded in the config file** beside every other knob (D8), and later runs read
+it. Passing `--mode` again overrides, re-records, and says out loud that it changed, because a
+mode flip is a behaviour change and silence there is the failure this whole file guards against.
+
+This replaces the detection default that an earlier draft carried, where several stores implied
+advisory. Detection still runs and still prints what it found; it just advises instead of
+deciding.
+
 ## What would reopen this
 
+- **D11, if the installer ever needs to run unattended on a fresh machine.** A required argument
+  is fine for a person at a terminal and fatal for provisioning. The answer then is a recorded
+  mode shipped with the machine's config, not a default.
+- **D10, if Claude Code gained a settings scope the kit should prefer over user scope.** The key
+  is written at user scope because that is what covers every repository (O8). A managed or policy
+  scope with different precedence would change where it belongs, not whether it is written.
 - **D1, if the fixture suite ever became slow enough that the gate is skipped in practice.** A
   gate people work around is worse than no gate, because it carries the reassurance without the
   check.

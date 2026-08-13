@@ -16,7 +16,7 @@ diagrams, and the detail a reader has to have asked for.
 ```mermaid
 flowchart TD
     subgraph session["Every Claude Code session"]
-        UPS[UserPromptSubmit] --> ENGINE[ensure-memory-symlink.sh<br/>symlink + regenerate index]
+        UPS[UserPromptSubmit] --> ENGINE[refresh-memory-index.sh<br/>symlink + regenerate index]
         UPS --> DELTA[memory-delta-ping.sh<br/>announce changed memory]
         SS[SessionStart] --> REMIND[memory-review-reminder.sh]
         SS --> PING[feedback-proposals-ping.sh]

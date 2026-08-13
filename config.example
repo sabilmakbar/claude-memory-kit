@@ -27,3 +27,13 @@
 # What this machine calls itself in review-marker commits. Defaults to the short
 # hostname. Set it when the hostname is not the name you think of the machine by.
 #MEMORY_KIT_MACHINE_LABEL=laptop
+
+# Who makes the change: managed means the kit does it and says what it will do
+# first; advisory means the kit reports and you make the change yourself. Neither
+# is ever fully automatic over your own memory files.
+#
+# You do not normally edit this. install.sh requires --mode=managed|advisory on a
+# first install and writes the answer here, so later upgrades need no flag. Passing
+# --mode again overrides it and says the mode changed.
+# See docs/DESIGN-memory.md D8 and docs/DESIGN-install.md D11.
+#MEMORY_KIT_MODE=advisory

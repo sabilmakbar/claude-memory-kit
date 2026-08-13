@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$HOME/.claude/memory-kit/scripts/ensure-memory-symlink.sh\" 2>/dev/null || true",
+            "command": "\"$HOME/.claude/memory-kit/scripts/refresh-memory-index.sh\" 2>/dev/null || true",
             "async": true
           }
         ]

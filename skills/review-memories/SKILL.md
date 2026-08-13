@@ -12,6 +12,15 @@ mount's entries under `~/.claude/memory-mounts/` if present).
 
 ## What to look for
 
+- **Harness-stamped frontmatter** — `node_type`, `originSessionId` and `modified` keys that
+  Claude Code's own writer adds on every save. They carry nothing across machines, and
+  `modified` changes on every write, which turns a synced memory repo into commit noise and
+  merge conflicts over metadata nobody typed. The index pass reports these and deliberately
+  no longer strips them, because a hook cannot ask first. Strip them here: remove only those
+  keys, leave every other field and the entire body alone, and drop the trailing space the
+  writer leaves after `metadata:`. Never touch a `modified:` that sits in the body rather
+  than the frontmatter. Expect them back after the next save; that is the harness, not a
+  failed strip.
 - **Overlaps / merge candidates** — two files covering the same rule; propose a merge.
 - **Stale content** — facts or references that later sessions have superseded; rules
   contradicted by newer feedback files.

@@ -1,57 +1,53 @@
 #!/bin/bash
-# Ensures the current project's Claude memory dir is symlinked to the central store,
-# and injects the current mount's memory entries into the central MEMORY.md.
+# Regenerates the central MEMORY.md index, including the current mount's entries, and
+# reports memory files whose frontmatter carries harness-stamped keys.
 # Runs automatically via UserPromptSubmit hook. Safe to run repeatedly (idempotent).
+#
+# It writes the generated index and nothing else. A memory file is the user's, and
+# DESIGN-memory.md D7 and D8 put every change to one behind a person: managed says
+# what it will do first, and a hook cannot hold that conversation.
+
+_LIB="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)/core/lib.sh"
+[ -r "$_LIB" ] && . "$_LIB"
 
 CENTRAL="$HOME/.claude/memory"
 CENTRAL_MD="$CENTRAL/MEMORY.md"
 MOUNTS_BASE="$HOME/.claude/memory-mounts"
 mkdir -p "$CENTRAL" "$MOUNTS_BASE"
 
+# Used only to find the mount below. The kit no longer derives where Claude Code keeps
+# memory: install names it with autoMemoryDirectory (DESIGN-memory.md D8). Deriving it
+# was wrong two ways, and both are gone with the code rather than fixed in it: dots
+# were not replaced (O11), and memory comes from the git root while this value is a
+# working directory (O13). Issue 40.
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
-ENCODED=$(echo "$PROJECT_DIR" | tr '/' '-')
-MEMORY_DIR="$HOME/.claude/projects/$ENCODED/memory"
 
-# Step 1: Ensure project memory → central symlink
-if ! { [ -L "$MEMORY_DIR" ] && [ "$(readlink "$MEMORY_DIR")" = "$CENTRAL" ]; }; then
-    mkdir -p "$(dirname "$MEMORY_DIR")"
-    if [ -d "$MEMORY_DIR" ] && [ ! -L "$MEMORY_DIR" ]; then
-        find "$MEMORY_DIR" -maxdepth 1 -type f -exec cp -n {} "$CENTRAL/" \; 2>/dev/null || true
-        # keep the old dir as a backup: cp -n skips name collisions and never copies
-        # subdirs, so deleting here would silently destroy them
-        mv "$MEMORY_DIR" "$MEMORY_DIR.pre-kit.$(date +%s).bak"
-    fi
-    ln -sfn "$CENTRAL" "$MEMORY_DIR"
-fi
-
-# Strip harness-stamped frontmatter keys (issue #16). Claude Code's native memory
+# Report harness-stamped frontmatter keys (issue #16). Claude Code's native memory
 # writer adds node_type / originSessionId / modified on every save; none carry
 # cross-machine value, and `modified` churns on every write (commit noise, merge
-# friction). Manual strips don't stick — the next native save re-adds them — so the
-# index pass heals files automatically. Only well-formed frontmatter is touched, and
-# a file is rewritten only when a stamped key is actually present: one heal per
-# stamped file, then a no-op.
+# friction).
+#
+# This pass used to strip them in place and name afterwards what it had touched.
+# Announcing after the fact is the wrong order once managed must announce before, and
+# a hook has nobody to ask, so the hook reports and /review-memories does the strip.
 STAMPED='^[[:space:]]*(node_type|originSessionId|modified):'
-NORMALIZED=""
-normalize_frontmatter() { # <dir> — heal root-level .md files in place
+STAMPED_FILES=""
+find_stamped() { # <dir> — name root-level .md files whose FRONTMATTER carries a stamp
     for f in $(grep -lE "$STAMPED" "$1"/*.md 2>/dev/null); do
         case "$(basename "$f")" in MEMORY.md) continue ;; esac
         [ "$(head -1 "$f")" = "---" ] || continue
         end=$(awk 'NR>1 && /^---$/ {print NR; exit}' "$f")
         [ -n "$end" ] && [ "$end" -gt 2 ] || continue
-        # candidate grep saw the whole file; confirm the stamp is in the frontmatter, not the body
+        # the candidate grep saw the whole file; confirm the stamp sits in the
+        # frontmatter rather than the body, so a rule that merely writes "modified:"
+        # in its text is never named
         sed -n "2,$((end-1))p" "$f" | grep -qE "$STAMPED" || continue
-        awk -v end="$end" -v re="$STAMPED" '
-            NR>1 && NR<end && $0 ~ re { next }
-            NR>1 && NR<end && /^metadata:[[:space:]]+$/ { print "metadata:"; next }  # the writer also leaves a trailing space here
-            { print }
-        ' "$f" > "$f.norm.$$" && mv "$f.norm.$$" "$f" \
-            && NORMALIZED="$NORMALIZED${NORMALIZED:+, }$(basename "$f")"
+        STAMPED_FILES="$STAMPED_FILES${STAMPED_FILES:+, }$(basename "$f")"
     done
 }
-normalize_frontmatter "$CENTRAL"
+find_stamped "$CENTRAL"
 
-# Step 2: Detect current mount point
+# Step 1: Detect current mount point
 MOUNT=$(df -P "$PROJECT_DIR" 2>/dev/null | awk 'NR==2 {print $NF}')
 [ -z "$MOUNT" ] && exit 0
 
@@ -65,14 +61,21 @@ else
 fi
 MOUNT_MEMORY="$MOUNTS_BASE/$MOUNT_ENCODED"
 mkdir -p "$MOUNT_MEMORY"
-normalize_frontmatter "$MOUNT_MEMORY"
+find_stamped "$MOUNT_MEMORY"
 
-# Say it. This rewrites files inside the user's own repo, so a silent heal shows up as a
-# change in git status that nobody made, in a repo the kit does not own. One line, only
-# when a file was actually rewritten, which is once per stamped file and then never again.
-[ -n "$NORMALIZED" ] && echo "Removed harness-stamped frontmatter keys (node_type, originSessionId, modified) from: $NORMALIZED. The rules those files hold are unchanged; only metadata the writer adds was dropped."
+# Say it, at most once a day. Claude Code re-stamps `modified` on every native save, so
+# the same files qualify again the moment they are cleaned; an unthrottled report would
+# fire on nearly every prompt and become noise nobody reads, which is worse than the
+# silent rewrite it replaces. Same throttle as the review reminder and the proposals ping.
+if [ -n "$STAMPED_FILES" ] && command -v mk_notice_due >/dev/null 2>&1; then
+    _SID=$(mk_session_id 2>/dev/null || printf '')
+    if mk_notice_due "$_SID" heal 2>/dev/null; then
+        mk_notice_stamp "$_SID" heal 2>/dev/null
+        echo "Harness-stamped frontmatter keys (node_type, originSessionId, modified) are in the frontmatter of: $STAMPED_FILES. They carry no value across machines and churn on every save. Run /review-memories to strip them. Nothing has been changed."
+    fi
+fi
 
-# Step 3: Rebuild MEMORY.md = fixed header + index generated from the memory files.
+# Step 2: Rebuild MEMORY.md = fixed header + index generated from the memory files.
 # The index is derived from each file's frontmatter, so it can never drift out of
 # sync with the files that actually exist (no writer can silently drop an entry).
 cat > "$CENTRAL_MD" <<'HDR'

@@ -51,6 +51,22 @@ for f in "$(mk_health_dir)"/*; do
     case "$days" in 1) age="1 day" ;; *) age="$days days" ;; esac
     MSG="$MSG${MSG:+; }$reason (for $age)"
 done
+
+# Files left staged by an unfinished consolidation (DESIGN-memory.md D10). Staged
+# files are deliberately invisible to the index, so these are memories the user HAS
+# and that no session loads. install names the skill once and nothing repeats it, so
+# without this the folder can sit for months holding memory nobody can reach. That is
+# worse than an unfinished chore, which is why it is reported rather than left to
+# whoever happens to remember.
+_mk_staged="$(mk_memory_dir)/.staged"
+if [ -d "$_mk_staged" ]; then
+    _mk_n=$(find "$_mk_staged" -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+    if [ "${_mk_n:-0}" -gt 0 ]; then
+        case "$_mk_n" in 1) _mk_w="1 memory file is" ;; *) _mk_w="$_mk_n memory files are" ;; esac
+        MSG="$MSG${MSG:+; }$_mk_w staged and loaded into no session: run /initialize-memory to finish bringing them in"
+    fi
+fi
+
 [ -n "$MSG" ] || exit 0
 
 mk_notice_stamp "$SID" health

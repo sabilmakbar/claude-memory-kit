@@ -58,7 +58,7 @@ doing any work. Adding `CONTRIBUTING` made six exemptions where three would do, 
 
 **The list is also duplicated, and has already drifted once.** It exists twice, in two syntaxes:
 a regex alternation in `guardrail/pre-commit`, and a shell `case` pattern in
-`scripts/ensure-memory-symlink.sh`, where a root-level document not on the list is reported as an
+`scripts/refresh-memory-index.sh`, where a root-level document not on the list is reported as an
 unindexed memory file. The `CONTRIBUTING` exemption patched only the first copy, so for several
 hours one half of the kit exempted that file and the other half complained about it. The next
 exemption had to fix both at once to catch up. Two copies of a list that must be remembered is
