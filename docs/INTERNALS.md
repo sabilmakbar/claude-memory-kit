@@ -5,9 +5,9 @@
 > `DESIGN-*.md` records, which cite these by number. For how the kit behaves, read
 > [FLOWS.md](FLOWS.md).
 
-    Observed against:   Claude Code 2.1.222 (O1–O7) · 2.1.228 (O8–O12)
+    Observed against:   Claude Code 2.1.222 (O1–O7) · 2.1.228 (O8–O13)
     Platform:           macOS, VS Code extension
-    Last re-verified:   2026-08-12 (O1–O7) · 2026-08-13 (O8–O12)
+    Last re-verified:   2026-08-12 (O1–O7) · 2026-08-13 (O8–O13)
     Needs to re-run:    jq, find, a machine with an installed Claude Code
 
 Nothing here is promised by Claude Code. Every entry carries the date and version it was seen
@@ -68,8 +68,12 @@ reorganised.
     Needs:              find
     Checkable:          automated
 
-The directory name is the working directory with separators replaced, and the file stem is the
-session id. Nothing joins them but that convention.
+The directory name is the working directory with separators replaced, dots included (O11), and the
+file stem is the session id. Nothing joins them but that convention.
+
+This describes the transcript directory only. Memory for the same session can sit under a
+different encoded name, because it derives from the repository root rather than the working
+directory (O13).
 
 ### O2. Subagent transcripts exist, nested below the session that spawned them
 
@@ -215,6 +219,10 @@ The settings schema shipped with 2.1.228 contradicts this, describing the defaul
 and matches the documentation, so the schema's wording is the thing that is wrong. Worth knowing
 because the schema is otherwise the more reliable of the two surfaces (O8).
 
+The schema's `<sanitized-cwd>` is not simply loose wording. The transcript directory really is
+derived that way (O1), so the schema states a real rule against the wrong directory. The two
+derivations differ, which is O13.
+
 ### O11. The encoded directory name replaces dots as well as path separators
 
     First observed:     2026-08-13 · 2.1.228
@@ -234,6 +242,32 @@ The kit replaces only path separators, so for any path with a dot segment it com
 name than Claude Code does, and writes its symlink into a directory nothing reads. Both spellings
 exist on the machine this was observed on, with the kit's symlink in the unread one and a real,
 isolated memory directory in the one Claude Code uses.
+
+The same sanitizer applies to the transcript directory, not only the memory one: on that machine
+the dot-collapsed spelling is the directory that holds real session data, and the kit's spelling
+holds nothing but the symlink.
+
+### O13. Transcripts and memory derive from different paths, so the two directories can differ
+
+    First observed:     2026-08-13 · 2.1.228
+    Re-verified:        2.1.228
+    Surface:            transcript and memory directory
+    How:                started two sessions in a subdirectory of a git repository. Both transcripts
+                        landed under the subdirectory's encoded name, while both sessions reported
+                        their memory directory under the repository root's encoded name
+    Needs:              an installed Claude Code, a repository with a subdirectory
+    Docs:               not documented. The page gives the memory directory's derivation (O10) and
+                        never says that transcripts follow a different rule
+    Checkable:          automated
+
+O1 records the transcript directory as the working directory encoded. O10 records the memory
+directory as the repository root encoded. Both are correct, and they are not the same path, so a
+session started below a repository root writes its transcript under one encoded name and reads its
+memory from another.
+
+Anything that computes one of these and uses it as the other is wrong for every session started
+below a repository root. That is the second fault in issue 40, and it is why fixing the dot
+sanitizing alone would not have been enough.
 
 ## The binary
 
