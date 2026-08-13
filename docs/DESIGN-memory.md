@@ -98,8 +98,45 @@ dropped.
 **The two git settings are undone by `--uninstall`**, meaning the guardrail `hooksPath` and the
 `skip-worktree` flag on the generated index.
 
+## D8. The store is named, not reached: `autoMemoryDirectory` replaces the symlink
+
+The kit made memory global by computing where Claude Code keeps a project's memory and symlinking
+that onto `~/.claude/memory`. Computing it was the mistake. The setting names the destination, so
+there is nothing to derive and nothing to link.
+
+**One user-scope value covers every repository**, which is what the symlink was approximating one
+project at a time. Three working directories, two of them unrelated repositories and one not a
+repository at all, all resolved to a single configured path (O8).
+
+**The setting wins over links already on disk** (O9). A machine part-way through the migration is
+therefore not a broken state, and the old links can be cleaned up afterwards instead of unwound
+first in some correct order.
+
+**There is no version-gated fallback.** The key is declared in every build available to test, back
+to 2.1.205 (O12), so the gate would never fire. Keeping the symlink as a fallback would mean
+keeping the derivation alive to maintain, and the derivation is the defect.
+
+**The derivation was wrong two independent ways, and both are deleted rather than fixed.** Claude
+Code replaces dots as well as separators, which the kit did not (O11), and it derives memory from
+the git repository root while transcripts come from the working directory, which the kit treated
+as a single value (O10, O13). Patching either one leaves the other standing. Naming the
+destination removes the question instead of answering it twice. Issue 40 closes here.
+
+**Where the key points is a mode decision, not a detection trick.** Auto memory is on by default,
+so a machine can already hold several stores, one per repository where Claude chose to save
+something. The count is unpredictable, and folding several stores into one is a merge rather than
+a move. So an existing `autoMemoryDirectory` is left exactly as it is; a single existing store is
+adopted where it stands; and several stores are reported rather than guessed between, with managed
+mode proposing a target and acting only on consent, and advisory mode reporting and changing
+nothing. `CLAUDE.md` is untouched throughout: it is a different mechanism, user-written and
+per-project, and this setting does not address it.
+
 ## What would reopen this
 
+- **D8, if the setting stops applying at user scope, or gains a per-project form.** The whole
+  decision rests on one user-scope value covering every repository (O8). A release that scoped it
+  per project, or a supported build older than the key itself, would put the symlink back on the
+  table.
 - **D3, if masking became verifiable.** The evidence section was removed because masking could
   not be enforced, not because evidence is worthless. A check that could prove a quote carries
   no work-identifying name would reopen the trade.

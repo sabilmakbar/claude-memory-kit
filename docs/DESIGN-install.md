@@ -137,8 +137,35 @@ remembered is weaker than a test that cannot be forgotten. One fails when the co
 `config.example` does not declare. The other fails when a machine's own config sets a knob the
 code no longer reads.
 
+## D10. Install writes one setting into `settings.json`, and refuses rather than degrades
+
+`autoMemoryDirectory` is the mechanism the store now relies on (`DESIGN-memory.md` D8), so install
+has to write a key into the file D5 already treats as shared. Three constraints follow, and none
+of them are new: they are the shared-file discipline applied to a value rather than a hook.
+
+**The key is written, never merged into.** It is a single string, so there is no array to append
+to and no other tool's entry to preserve inside it. A value already present is left alone and
+reported, on the same reasoning as D4: something we did not write is not ours to overwrite, and
+silently replacing it would relocate a user's memory without telling them.
+
+**`--uninstall` removes it, and only if we wrote it**, which is D5 and D7 unchanged. The uninstall
+contract is that the kit undoes what it did outside its own tree and nothing else, so a value the
+kit adopted rather than authored is left behind on purpose.
+
+**Below the floor, install refuses instead of falling back.** D8 records why there is no symlink
+path to fall back to. A kit that half-installs is the failure mode D5 and D6 exist to prevent, so
+the check runs before anything is written and says the version it found and the version it needs.
+The floor is at or below the oldest build available to test (O12), so this is a guard against a
+machine nobody has seen rather than a branch anyone will hit.
+
+The version accessor already exists for the health hook (O4), so this adds a caller rather than a
+mechanism.
+
 ## What would reopen this
 
+- **D10, if Claude Code gained a settings scope the kit should prefer over user scope.** The key
+  is written at user scope because that is what covers every repository (O8). A managed or policy
+  scope with different precedence would change where it belongs, not whether it is written.
 - **D1, if the fixture suite ever became slow enough that the gate is skipped in practice.** A
   gate people work around is worse than no gate, because it carries the reassurance without the
   check.
