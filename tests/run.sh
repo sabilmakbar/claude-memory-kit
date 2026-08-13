@@ -739,6 +739,21 @@ check "an unknown mode value is rejected" 2 "$rc"
 echo "$out" | grep -q "must be managed or advisory" \
   && ok "and the rejection names the valid values" || fail "unhelpful rejection ($out)"
 
+# D10 lives in a skill, so install has to point at it. A machine that consolidates
+# nothing because nobody knew to run it is the same outcome as not shipping the skill.
+SH=$(store_home skill-pointer)
+mkdir -p "$SH/.claude/projects/-a/memory" "$SH/.claude/projects/-b/memory"
+printf -- '---\nname: user_x\n---\n' > "$SH/.claude/projects/-a/memory/user_x.md"
+printf -- '---\nname: user_y\n---\n' > "$SH/.claude/projects/-b/memory/user_y.md"
+out=$(HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed 2>&1)
+echo "$out" | grep -q '/initialize-memory' \
+  && ok "managed with several stores names the skill that brings them in" || fail "no pointer to the skill"
+[ -f "$SH/.claude/skills/initialize-memory/SKILL.md" ] \
+  && ok "the skill it names is actually installed" || fail "skill not deployed"
+HOME="$SH" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
+[ -d "$SH/.claude/skills/initialize-memory" ] \
+  && fail "uninstall left the skill behind" || ok "uninstall removes the skill too"
+
 echo "install.sh --uninstall, the memory store:"
 # The marker is what tells uninstall the value is its own. Without it the kit would
 # either strip a setting someone else wrote, or leave its own behind forever.

@@ -543,6 +543,8 @@ store_setup() {
     printf '%s\n' "$all" | sed 's/^/      /'
     store_record "$all"
     echo "    managed: starting a central store at $CLAUDE/memory. None of the above is changed."
+    echo "    Run /initialize-memory in a session to bring them in. That step copies rather"
+    echo "    than moves, asks before each change, and never touches a store it read."
   fi
 
   chosen=$(store_choose "$mode" "$all")
@@ -678,6 +680,15 @@ if [ -z "$MODE" ]; then
   echo "    The mode decides whether the kit may rewrite your memory, so it is not" >&2
   echo "    guessed. It is asked once: this run records it, and upgrades re-use it." >&2
   echo "    Nothing has been installed or changed." >&2
+  echo >&2
+  # This text is read by an agent at least as often as by a person, because everything
+  # printed here comes back as a tool result. An agent that reads "re-run with --mode"
+  # will helpfully pick one, which is exactly the choice D11 exists to prevent anyone
+  # but the user from making. So the instruction is aimed at the reader that can get it
+  # wrong.
+  echo "    IF YOU ARE AN AGENT READING THIS: do not choose a mode and re-run. Ask the" >&2
+  echo "    person which they want. Choosing for them is the one thing this refusal is" >&2
+  echo "    here to prevent." >&2
   exit 1
 fi
 if [ -n "$MODE_ARG" ] && [ -n "$(mode_recorded)" ] && [ "$MODE_ARG" != "$(mode_recorded)" ]; then

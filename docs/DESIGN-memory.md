@@ -4,12 +4,10 @@
 > future changes know what they would be overturning. For how the kit behaves day to day, read
 > [FLOWS.md](FLOWS.md). For setup, the README.
 
-    Status:            Implemented, except where a paragraph is marked NOT BUILT. Those are
-                       decided and specified here with no code behind them yet: D10, the
-                       report-only heal in D7, and the parts of D8 and D9 naming the
-                       initialize-memory skill. Those are decided and specified here, and
-                       no code exists for them yet. Anything marked NOT BUILT below
-                       describes intent, not behaviour.
+    Status:            Implemented, except where a paragraph is marked NOT BUILT. Two things
+                       are still specified only: the report-only heal in D7, and the notice
+                       D10 wants while files sit staged. A NOT BUILT paragraph describes
+                       intent, never behaviour.
     Last revised:      2026-08-13
     Verified against:  Claude Code 2.1.222 (D1 to D7) · 2.1.228 (D8 to D10)
     Supersedes:        docs/DESIGN.md, split by feature 2026-08-12
@@ -267,8 +265,6 @@ matches the existing `--purge-cache` and `--purge-tracker` flags for users who w
 
 ## D10. Consolidation stages per source, promotes what is safe, and reworks the rest
 
-**NOT BUILT.** Decided and specified; no code exists yet.
-
 Managed brings several stores into one. Copying them into a single directory as they are cannot
 work: memory files are named by convention, so two repositories will both plausibly hold
 `user_profile.md` or `feedback_editing.md`. The code this kit replaced used `cp -n`, which skipped
@@ -296,8 +292,11 @@ place. A staged file is deleted only once its content is carried into the files 
 so an interrupted rework loses nothing and resumes where it stopped.
 
 **Done means `.staged/` is empty and removed.** That is a checkable finish line rather than a
-feeling, and while it is non-empty the kit says so, because an optional step with no reminder
-becomes work nobody ever does.
+feeling.
+
+**NOT BUILT: while `.staged/` is non-empty the kit should say so**, because an optional step with
+no reminder becomes work nobody ever does. Install points at the skill once; nothing repeats it
+afterwards. The natural home is the health notice, throttled like every other one.
 
 **The mode decides who executes, as everywhere else.** Managed states what it intends for a group
 and acts on the go-ahead. Advisory produces the plan and writes nothing, so an advisory machine
