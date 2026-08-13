@@ -235,24 +235,34 @@ jq -e . "$FH/.claude/settings.json" >/dev/null 2>&1 \
 [ ! -d "$FH/.claude/memory-kit" ] && ok "the deployed tree is gone" || bad "tree survived uninstall"
 
 # ---------- 5. index engine normalization over a COPY of real memory ----------
-say "refresh-memory-index.sh (stamped-frontmatter healing, copy of real memory):"
+say "refresh-memory-index.sh (leaves real memory alone, copy of real memory):"
 if ls "$HOME/.claude/memory"/*.md >/dev/null 2>&1; then
-    EH="$TMP/norm-home"; mkdir -p "$EH/.claude/memory" "$EH/proj"
+    EH="$TMP/norm-home"; mkdir -p "$EH/.claude/memory" "$EH/proj" "$EH/.claude/memory-kit/core"
     cp "$HOME/.claude/memory"/*.md "$EH/.claude/memory/"
-    # files with no stamped keys must come out byte-identical (the rewrite gate);
-    # MEMORY.md is excluded — regenerating it is the engine's job
-    CLEAN_LIST=$(grep -LE '^[[:space:]]*(node_type|originSessionId|modified):' "$EH/.claude/memory"/*.md 2>/dev/null | grep -v 'MEMORY.md')
-    pre=$(echo "$CLEAN_LIST" | xargs cksum 2>/dev/null)
-    HOME="$EH" CLAUDE_PROJECT_DIR="$EH/proj" bash "$KIT/scripts/refresh-memory-index.sh" >/dev/null 2>&1
-    post=$(echo "$CLEAN_LIST" | xargs cksum 2>/dev/null)
-    [ "$pre" = "$post" ] && ok "stamp-free files byte-identical after index pass" || bad "index pass rewrote stamp-free files"
-    left=0
+    cp "$KIT/core/lib.sh" "$EH/.claude/memory-kit/core/lib.sh"
+    # EVERY memory file must come out byte-identical now, not just the stamp-free ones:
+    # the pass reports stamped frontmatter and strips nothing (DESIGN-memory.md D7).
+    # MEMORY.md is excluded, since regenerating it is the whole job.
+    ALL_LIST=$(ls "$EH/.claude/memory"/*.md 2>/dev/null | grep -v 'MEMORY.md')
+    pre=$(echo "$ALL_LIST" | xargs cksum 2>/dev/null)
+    out=$(HOME="$EH" CLAUDE_PROJECT_DIR="$EH/proj" bash "$KIT/scripts/refresh-memory-index.sh" 2>/dev/null </dev/null)
+    post=$(echo "$ALL_LIST" | xargs cksum 2>/dev/null)
+    [ "$pre" = "$post" ] && ok "every memory file byte-identical after the index pass" \
+                         || bad "the index pass rewrote a memory file"
+    # if this machine happens to have a stamped file, the pass has to say so rather
+    # than fix it silently. If it has none, there is nothing to report and that is fine.
+    stamped=0
     for f in "$EH/.claude/memory"/*.md; do
         [ "$(basename "$f")" = "MEMORY.md" ] && continue
         [ "$(head -1 "$f")" = "---" ] || continue
-        sed -n '2,/^---$/p' "$f" | grep -qE '^[[:space:]]*(node_type|originSessionId|modified):' && left=$((left+1))
+        sed -n '2,/^---$/p' "$f" | grep -qE '^[[:space:]]*(node_type|originSessionId|modified):' && stamped=$((stamped+1))
     done
-    [ "$left" = 0 ] && ok "no harness-stamped keys left in any file's frontmatter" || bad "$left file(s) still stamped after index pass"
+    if [ "$stamped" -gt 0 ]; then
+        printf '%s' "$out" | grep -q 'Harness-stamped' \
+            && ok "$stamped stamped file(s) reported, none rewritten" || bad "stamped files went unreported"
+    else
+        ok "no stamped files on this machine, so nothing to report"
+    fi
 else
     skip "no memory files on this machine"
 fi

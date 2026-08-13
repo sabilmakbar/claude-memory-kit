@@ -123,48 +123,50 @@ HOME="$FH" CLAUDE_PROJECT_DIR="$FH/proj" bash "$KIT/scripts/refresh-memory-index
 grep "Unindexed" "$FH/.claude/memory/MEMORY.md" | grep -qE "README|CLAUDE" \
   && fail "known docs wrongly flagged" || ok "README/CLAUDE.md exempt from unindexed warning"
 
-# --- stamped-frontmatter normalization (issue #16) ---
-# fixture mirrors the harness writer byte-for-byte: node_type/originSessionId nested
-# under a `metadata: ` line with a trailing space, `modified` at the top level
-NH="$TMP/home-norm"; mkdir -p "$NH/.claude/memory" "$NH/proj"
+# --- stamped-frontmatter reporting (issue #16, D7) ---
+# The pass used to strip these keys in place. It now names them and changes nothing:
+# managed announces before acting, and a hook has nobody to ask. These assert the
+# ABSENCE of the rewrite as much as the presence of the report.
+NH="$TMP/home-norm"; mkdir -p "$NH/.claude/memory" "$NH/proj" "$NH/.claude/memory-kit/core"
+cp "$KIT/core/lib.sh" "$NH/.claude/memory-kit/core/lib.sh"
+NIDX="$NH/.claude/memory-kit/scripts"; mkdir -p "$NIDX"
+cp "$KIT/scripts/refresh-memory-index.sh" "$NIDX/"
 SF="$NH/.claude/memory/feedback_stamped.md"
 printf -- '---\nname: feedback_stamped\ndescription: "keeps this"\nmetadata: \n  node_type: memory\n  type: feedback\n  originSessionId: cc6d0e44-5eaa-4a7b-8eff-28a7a81a4562\nmodified: 2026-08-10T08:00:00.000Z\n---\n\nBody keeps\nmodified: mentions.\n' > "$SF"
 CF="$NH/.claude/memory/feedback_clean.md"
 printf -- '---\nname: feedback_clean\ndescription: "c"\nmetadata:\n  type: feedback\n---\nmodified: in body only.\n' > "$CF"
-REF1="$TMP/norm-ref1"; touch "$REF1"; sleep 1   # any rewrite lands strictly after REF1
-HOME="$NH" CLAUDE_PROJECT_DIR="$NH/proj" bash "$KIT/scripts/refresh-memory-index.sh" >/dev/null 2>&1
+cp "$SF" "$TMP/stamped.before"; cp "$CF" "$TMP/clean.before"
+out=$(HOME="$NH" CLAUDE_PROJECT_DIR="$NH/proj" bash "$NIDX/refresh-memory-index.sh" 2>/dev/null </dev/null)
 
-fm() { sed -n '2,/^---$/p' "$1"; }   # frontmatter block of a file
-fm "$SF" | grep -q 'node_type'        && fail "node_type stripped" || ok "node_type stripped"
-fm "$SF" | grep -q 'originSessionId'  && fail "originSessionId stripped" || ok "originSessionId stripped"
-fm "$SF" | grep -q '^modified:'       && fail "modified stripped from frontmatter" || ok "modified stripped from frontmatter"
-grep -q '^modified: mentions' "$SF"   && ok "body text left alone" || fail "body text left alone"
-grep -q '^metadata:$' "$SF" && grep -q '^  type: feedback$' "$SF" && grep -q '^name: feedback_stamped$' "$SF" \
-  && ok "kept fields intact, metadata trailing space healed" || fail "kept fields intact"
+cmp -s "$SF" "$TMP/stamped.before" \
+  && ok "a stamped file is reported, never rewritten" || fail "the pass still edits a memory file"
+cmp -s "$CF" "$TMP/clean.before" \
+  && ok "a stamp-free file is untouched" || fail "clean file rewritten"
+printf '%s' "$out" | grep -q 'feedback_stamped.md' \
+  && ok "the report names the stamped file" || fail "stamped file not named ($out)"
+printf '%s' "$out" | grep -q 'feedback_clean.md' \
+  && fail "a body-only mention was reported" || ok "a body-only 'modified:' is not reported"
+printf '%s' "$out" | grep -q 'Nothing has been changed' \
+  && ok "the report says nothing was changed" || fail "report does not say it changed nothing"
+printf '%s' "$out" | grep -q '/review-memories' \
+  && ok "the report names who can strip them" || fail "no pointer to the skill"
 grep -q 'feedback_stamped.md) — keeps this' "$NH/.claude/memory/MEMORY.md" \
-  && ok "normalized file still indexed" || fail "normalized file still indexed"
-[ "$CF" -nt "$REF1" ] && fail "stamp-free file never rewritten" || ok "stamp-free file never rewritten"
+  && ok "a stamped file is still indexed" || fail "stamped file dropped from the index"
 
-# a rewrite inside the user's repo is never silent: it would otherwise appear in git
-# status as a change nobody made
-out=$(HOME="$NH" CLAUDE_PROJECT_DIR="$NH/proj" bash "$KIT/scripts/refresh-memory-index.sh" 2>/dev/null)
-[ -z "$out" ] && ok "a run that heals nothing stays silent" || fail "noise with nothing to heal ($out)"
-printf -- '---\nname: feedback_loud\ndescription: "d"\nmetadata:\n  node_type: memory\n  type: feedback\n  source: direct\n---\nb\n' \
-  > "$NH/.claude/memory/feedback_loud.md"
-out=$(HOME="$NH" CLAUDE_PROJECT_DIR="$NH/proj" bash "$KIT/scripts/refresh-memory-index.sh" 2>/dev/null)
-printf '%s' "$out" | grep -q "feedback_loud.md" \
-  && ok "a healed file is named in the output" || fail "healed a file silently ($out)"
-printf '%s' "$out" | grep -qE "node_type|stamped" \
-  && ok "and the output says what was removed" || fail "does not say what changed"
+# throttled: Claude Code re-stamps modified on every save, so an unthrottled report
+# would fire on nearly every prompt and become noise nobody reads
+out2=$(echo '{"session_id":"heal-probe"}' | HOME="$NH" CLAUDE_PROJECT_DIR="$NH/proj" bash "$NIDX/refresh-memory-index.sh" 2>/dev/null)
+out3=$(echo '{"session_id":"heal-probe"}' | HOME="$NH" CLAUDE_PROJECT_DIR="$NH/proj" bash "$NIDX/refresh-memory-index.sh" 2>/dev/null)
+printf '%s' "$out2" | grep -q 'feedback_stamped.md' \
+  && ok "the first report in a session is delivered" || fail "first report missing ($out2)"
+[ -z "$out3" ] && ok "the second in the same session is throttled" || fail "report repeated ($out3)"
 
-# second run: central file already healed must not be rewritten again (mtime churn
-# would re-trigger delta pings and dirty the repo); a freshly stamped mount file heals
 MNT=$(ls -d "$NH/.claude/memory-mounts"/*/ 2>/dev/null | head -1)
 printf -- '---\nname: proj_note\ndescription: "m"\nmetadata: \n  node_type: memory\n  type: project\n---\nb\n' > "$MNT/proj_note.md"
-REF2="$TMP/norm-ref2"; touch "$REF2"; sleep 1
-HOME="$NH" CLAUDE_PROJECT_DIR="$NH/proj" bash "$KIT/scripts/refresh-memory-index.sh" >/dev/null 2>&1
-[ "$SF" -nt "$REF2" ] && fail "healed file not rewritten again" || ok "healed file not rewritten again"
-fm "$MNT/proj_note.md" | grep -q 'node_type' && fail "mount-side file healed too" || ok "mount-side file healed too"
+cp "$MNT/proj_note.md" "$TMP/mount.before"
+echo '{"session_id":"heal-mount"}' | HOME="$NH" CLAUDE_PROJECT_DIR="$NH/proj" bash "$NIDX/refresh-memory-index.sh" >/dev/null 2>&1
+cmp -s "$MNT/proj_note.md" "$TMP/mount.before" \
+  && ok "a mount-side stamped file is also left alone" || fail "mount file rewritten"
 
 # ---------- memory-delta-ping ----------
 echo "scripts/memory-delta-ping.sh:"
@@ -558,6 +560,24 @@ echo "$out" | jq -e '.systemMessage' >/dev/null 2>&1 && echo "$out" | grep -q "f
 [ -n "$(health s3)" ] && ok "a different session still hears it" || fail "other session silenced"
 libsh 'mk_health_clear miner'
 [ -z "$(health s4)" ] && ok "recovery is silent, no manual dismissal" || fail "notice survived the fix"
+
+echo "hooks/memory-kit-health.sh staged files:"
+# D10: staged files are invisible to the index, so they are memory the user HAS and no
+# session loads. install names the skill once; without this notice the folder can sit
+# for months and nobody is told.
+SH2="$TMP/home-staged"; mkdir -p "$SH2/.claude/memory/.staged/repo-a" "$SH2/.claude/memory-kit/core"
+cp "$KIT/core/lib.sh" "$SH2/.claude/memory-kit/core/lib.sh"
+mkdir -p "$SH2/.claude/memory-kit/hooks"; cp "$KIT/hooks/memory-kit-health.sh" "$SH2/.claude/memory-kit/hooks/"
+printf -- '---\nname: user_x\n---\n' > "$SH2/.claude/memory/.staged/repo-a/user_x.md"
+printf -- '---\nname: user_y\n---\n' > "$SH2/.claude/memory/.staged/repo-a/user_y.md"
+out=$(echo '{"session_id":"staged-1"}' | HOME="$SH2" bash "$SH2/.claude/memory-kit/hooks/memory-kit-health.sh" 2>/dev/null)
+echo "$out" | grep -q '2 memory files are staged' \
+  && ok "staged files are counted and reported" || fail "no staged notice ($out)"
+echo "$out" | grep -q '/initialize-memory' \
+  && ok "and the notice names how to finish" || fail "notice does not name the skill"
+rm -rf "$SH2/.claude/memory/.staged"
+out=$(echo '{"session_id":"staged-2"}' | HOME="$SH2" bash "$SH2/.claude/memory-kit/hooks/memory-kit-health.sh" 2>/dev/null)
+[ -z "$out" ] && ok "nothing staged means silence" || fail "noisy with nothing staged ($out)"
 
 echo "run-feedback-miner.sh + memory-review-reminder.sh (blocked paths):"
 NH="$TMP/home-noclaude"; mkdir -p "$NH/.claude"

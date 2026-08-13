@@ -4,10 +4,7 @@
 > future changes know what they would be overturning. For how the kit behaves day to day, read
 > [FLOWS.md](FLOWS.md). For setup, the README.
 
-    Status:            Implemented, except where a paragraph is marked NOT BUILT. Two things
-                       are still specified only: the report-only heal in D7, and the notice
-                       D10 wants while files sit staged. A NOT BUILT paragraph describes
-                       intent, never behaviour.
+    Status:            Implemented.
     Last revised:      2026-08-13
     Verified against:  Claude Code 2.1.222 (D1 to D7) · 2.1.228 (D8 to D10)
     Supersedes:        docs/DESIGN.md, split by feature 2026-08-12
@@ -94,12 +91,12 @@ a commit for them to make. A file the kit once seeded is removed only when it is
 byte-identical to the copy the kit ships, so anything deleted is reproducible from this tree,
 and when the repo tracks it the installer says so and names the command instead.
 
-**NOT BUILT: the kit is to stop rewriting a memory file at all, so the question of silence is
-settled by not doing it.** The index pass strips harness-stamped frontmatter in place today and
-names what it touched afterwards. Announcing after the fact is the wrong order under D8: managed
-says what it will do before doing it, and a hook cannot hold that conversation. So the pass is to
-report which files carry stamped keys and leave the strip to a skill, with the user's go-ahead in
-managed and by the user's own hand in advisory. The in-place heal is still what ships.
+**The kit no longer rewrites a memory file at all, so the question of silence is settled by not
+doing it.** The index pass used to strip harness-stamped frontmatter in place and name what it had
+touched afterwards. Announcing after the fact is the wrong order under D8: managed says what it
+will do before doing it, and a hook has nobody to ask. The pass now reports which files carry
+stamped keys and `review-memories` does the strip, with the user's go-ahead in managed and by the
+user's own hand in advisory.
 
 The report has to be throttled through `mk_notice_due`, the same mechanism the review reminder and
 the proposals ping use. Claude Code re-stamps `modified` on every native save, so an unthrottled
@@ -294,9 +291,10 @@ so an interrupted rework loses nothing and resumes where it stopped.
 **Done means `.staged/` is empty and removed.** That is a checkable finish line rather than a
 feeling.
 
-**NOT BUILT: while `.staged/` is non-empty the kit should say so**, because an optional step with
-no reminder becomes work nobody ever does. Install points at the skill once; nothing repeats it
-afterwards. The natural home is the health notice, throttled like every other one.
+**While `.staged/` is non-empty the health notice says so**, because an optional step with no
+reminder becomes work nobody ever does, and staged files are invisible to the index: they are
+memory the user has and no session loads. Install points at the skill once and the notice repeats
+it daily until the folder is gone.
 
 **The mode decides who executes, as everywhere else.** Managed states what it intends for a group
 and acts on the go-ahead. Advisory produces the plan and writes nothing, so an advisory machine
