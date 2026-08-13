@@ -131,6 +131,20 @@ mode proposing a target and acting only on consent, and advisory mode reporting 
 nothing. `CLAUDE.md` is untouched throughout: it is a different mechanism, user-written and
 per-project, and this setting does not address it.
 
+**The migration is a toggle, not a one-way door, and that is bought by leaving the old links
+alone.** Removing them would be tidier and would make the change irreversible, because putting a
+symlink back means deriving the path again, which is the code this decision deletes. Since the
+setting already wins over a link on disk (O9), a stale link is inert rather than harmful. So the
+links stay, and removing the key restores the previous behaviour exactly, with nothing to restore
+from. Clearing them is a separate, explicitly invoked cleanup, never part of install.
+
+**Consolidation copies and never moves.** Folding several stores into one is the only operation
+here that could lose data, so it is bounded the way D7 bounds the rest: no source store is ever
+deleted or emptied, the copy records what it took and from where, and the record is what makes it
+undoable. Rolling back means removing the key and deleting what the record names; the sources were
+never touched, so there is nothing to put back. An operation that cannot be undone this way is not
+performed automatically, which is why several stores are reported rather than merged on a guess.
+
 ## What would reopen this
 
 - **D8, if the setting stops applying at user scope, or gains a per-project form.** The whole

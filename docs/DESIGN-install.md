@@ -161,6 +161,24 @@ machine nobody has seen rather than a branch anyone will hit.
 The version accessor already exists for the health hook (O4), so this adds a caller rather than a
 mechanism.
 
+**Every change this decision makes outside the kit's own tree is reversible, and the reversal is
+tested, not assumed.** The key is one line, so removing it returns the machine to the default. The
+old symlinks are deliberately left in place (`DESIGN-memory.md` D8), so that reversal needs no
+restore step at all. Nothing else is written.
+
+**Renaming a wired hook breaks that reversibility unless the old name is remembered, so it is.**
+`managed_names` is derived from `settings.snippet.json`, which after a rename lists only the new
+name, so an uninstall would leave the old entry standing and pointing at a script that no longer
+exists. That is the D3 failure mode in a new disguise: a spelling the merge cannot see. The kit
+therefore carries an explicit list of names it has previously wired, and both the upgrade and the
+uninstall act on the current names plus that list. The list only grows, and a rename adds to it in
+the same commit that performs the rename, so the two cannot drift apart.
+
+This is the general rule the rest of the file already follows and is worth stating once: an
+operation the kit cannot undo is not performed automatically. Refusing below the version floor,
+leaving a value the kit did not write, and reporting several stores rather than merging them are
+all the same rule.
+
 ## What would reopen this
 
 - **D10, if Claude Code gained a settings scope the kit should prefer over user scope.** The key
