@@ -125,11 +125,24 @@ destination removes the question instead of answering it twice. Issue 40 closes 
 **Where the key points is a mode decision, not a detection trick.** Auto memory is on by default,
 so a machine can already hold several stores, one per repository where Claude chose to save
 something. The count is unpredictable, and folding several stores into one is a merge rather than
-a move. So an existing `autoMemoryDirectory` is left exactly as it is; a single existing store is
-adopted where it stands; and several stores are reported rather than guessed between, with managed
-mode proposing a target and acting only on consent, and advisory mode reporting and changing
-nothing. `CLAUDE.md` is untouched throughout: it is a different mechanism, user-written and
-per-project, and this setting does not address it.
+a move. So an existing `autoMemoryDirectory` is left exactly as it is, and a single existing store
+is adopted where it stands.
+
+Several stores are reported rather than guessed between, and what install does after the report
+follows the mode. Advisory writes no setting at all, so the machine stays exactly as it was and
+the report is the entire output. Managed writes the setting with the central store as the path,
+which gives the kit somewhere to work without touching any store it found. Neither mode merges
+anything, so the choice is between doing nothing and starting clean, never between two of the
+user's stores.
+
+This makes the install-time half of the mode a dependency of this decision rather than later work.
+Install reads `MEMORY_KIT_MODE` if it is set, and otherwise decides by detection, which is what
+`DESIGN-install.md` D8 already says knobs do. Several stores is itself a detection result that
+means advisory, because it is the case where the kit would otherwise change something it does not
+understand.
+
+`CLAUDE.md` is untouched throughout: it is a different mechanism, user-written and per-project,
+and this setting does not address it.
 
 **The migration is a toggle, not a one-way door, and that is bought by leaving the old links
 alone.** Removing them would be tidier and would make the change irreversible, because putting a
@@ -145,8 +158,43 @@ undoable. Rolling back means removing the key and deleting what the record names
 never touched, so there is nothing to put back. An operation that cannot be undone this way is not
 performed automatically, which is why several stores are reported rather than merged on a guess.
 
+## D9. The kit leaves a marker in every store it touches, and the marker outlives the uninstall
+
+Without a marker the kit cannot tell a store it created from one it adopted, and it cannot know
+that it once pointed at a store it no longer points at. Rollback needs that history, and the store
+is the only place that survives a reinstall, a kit upgrade, or the kit being removed entirely.
+
+**The marker is `.memory-kit-marker.json` at the root of the store.** It records the state, the
+kit version, the time, the path the setting names, and how the kit reached this store: created,
+adopted, or copied into.
+
+**The state is one of three values.** `active` means the setting names this store. `legacy` means
+the kit used it before and no longer does. `reverted` means the kit was removed and left the store
+as it found it.
+
+**It is deliberately not a `.md` file**, because the index scan and the guardrail lint both select
+`*.md` and would otherwise report the marker as an unindexed or badly named memory file. Being
+invisible to both is a property of the name, not a pair of new exemptions to keep in step.
+
+**A store under git gets the marker added to `.git/info/exclude`, never to `.gitignore`.** The
+marker records what happened on this machine, and the store may sync to others, so committing it
+would claim a history that is not true elsewhere. A local exclude keeps a machine-local fact
+machine-local and changes no tracked file, which keeps D7 intact.
+
+**Writing the marker is announced once**, on the same reasoning as the frontmatter heal in D7: a
+file appearing in someone's repo that they did not create is not something to do quietly.
+
+**`--uninstall` sets the state to `reverted` and does not delete the marker.** This is a
+deliberate exception to D5, and the reason is the whole point of the marker: a record of what the
+kit did is what makes the change reversible after the kit is gone, so deleting it on the way out
+destroys the only copy at the exact moment it becomes useful. `--purge-marker` deletes it, which
+matches the existing `--purge-cache` and `--purge-tracker` flags for users who want no trace.
+
 ## What would reopen this
 
+- **D9, if Claude Code gained a place to record which tool manages a store.** The marker exists
+  because there is nowhere else to put provenance. A first-class field would make a file in the
+  user's own repo unnecessary.
 - **D8, if the setting stops applying at user scope, or gains a per-project form.** The whole
   decision rests on one user-scope value covering every repository (O8). A release that scoped it
   per project, or a supported build older than the key itself, would put the symlink back on the
