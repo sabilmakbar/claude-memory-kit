@@ -135,11 +135,39 @@ which gives the kit somewhere to work without touching any store it found. Neith
 anything, so the choice is between doing nothing and starting clean, never between two of the
 user's stores.
 
-This makes the install-time half of the mode a dependency of this decision rather than later work.
-Install reads `MEMORY_KIT_MODE` if it is set, and otherwise decides by detection, which is what
-`DESIGN-install.md` D8 already says knobs do. Several stores is itself a detection result that
-means advisory, because it is the case where the kit would otherwise change something it does not
-understand.
+**The mode is stated, never inferred.** An earlier version of this decision had install guess by
+detection, treating several stores as advisory. Guessing was wrong here: the mode governs whether
+the kit may rewrite a user's memory, and a machine that quietly picked for you is exactly the
+machine you cannot trust with that. So a first install refuses until told which mode it is in, and
+`DESIGN-install.md` D11 covers how that is asked for and remembered.
+
+**Setup is two steps, and only the first is mechanical.** Install writes settings and markers and
+never touches a memory file. Everything that moves, rewrites or deletes memory happens in the
+`initialize-memory` skill, where a person is present. That split is forced rather than chosen: a
+write inside `~/.claude` is a sensitive-file edit needing permission (O5), so a headless session
+launched by an installer is the one caller that cannot do the work, while an interactive session
+does it all day.
+
+**What each mode does across those two steps:**
+
+| | managed | advisory |
+|---|---|---|
+| install | writes the setting, marks the store, records what it found | writes nothing, reports what it found |
+| the skill | states what it intends, then writes on your go-ahead | produces a plan and writes nothing |
+
+Advisory therefore leaves a machine unconsolidated until it is switched to managed. That is the
+point of it rather than a gap: advisory means tell me, not touch it.
+
+**The advisory line is drawn by what is written, not by who asked.** Saying advisory only
+constrains automatic action, on the grounds that invoking a skill is consent, breaks at the edge:
+it would let a skill reorganise and delete memory in the mode whose whole promise is that nothing
+changes. So advisory forbids the kit changing memory the user did not just author, meaning no
+index regeneration, no frontmatter healing, no consolidation, no rewriting and no deletion. It
+still allows recording something the user explicitly dictated, which is what `save-memory` does,
+because one file the user asked for is the user authoring through the kit rather than the kit
+editing the user. A rule that blocked that would break the most-used skill in the most cautious
+mode. Every skill is installed in both modes, since a skill is inert until called; what changes is
+what it may do once called.
 
 `CLAUDE.md` is untouched throughout: it is a different mechanism, user-written and per-project,
 and this setting does not address it.
@@ -185,6 +213,13 @@ when there is a real value to put in it.
 **The state is one of three values.** `active` means the setting names this store. `legacy` means
 the kit used it before and no longer does. `reverted` means the kit was removed and left the store
 as it found it.
+
+**An `initialized` field makes the setup skill idempotent.** Absent means `initialize-memory` still
+has work to do, so it re-runs and picks up where it stopped. A timestamp means it finished and the
+skill exits early. Re-running a finished setup means deleting the field, which is a deliberate act
+rather than a flag someone passes by accident. The field lives here rather than in a second marker
+file because this one already sits in the store, already survives `--uninstall`, and already
+records what the kit did to it.
 
 **It is deliberately not a `.md` file**, because the index scan and the guardrail lint both select
 `*.md` and would otherwise report the marker as an unindexed or badly named memory file. Being

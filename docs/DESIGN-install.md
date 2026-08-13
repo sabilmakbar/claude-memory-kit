@@ -179,8 +179,32 @@ operation the kit cannot undo is not performed automatically. Refusing below the
 leaving a value the kit did not write, and reporting several stores rather than merging them are
 all the same rule.
 
+## D11. The mode is a required argument on a first install, and remembered after that
+
+`MEMORY_KIT_MODE` decides whether the kit may rewrite a user's memory, so it is the one setting
+this installer will not pick for you. A first install on a machine with no recorded mode refuses
+until given `--mode=managed` or `--mode=advisory`, and prints what it found first so the choice is
+informed rather than a coin toss.
+
+**Requiring it on every run was considered and rejected.** `README.md` states in two places that
+re-running the installer is the upgrade path, and 44 invocation sites across the tests and docs
+call it. A flag mandatory on every run would mean every upgrade restates the mode, and a value
+that differs from last time would change how the machine behaves during what the user thought was
+a routine upgrade. The hard stop belongs where the decision is actually made, and nowhere else.
+
+**So the choice is recorded in the config file** beside every other knob (D8), and later runs read
+it. Passing `--mode` again overrides, re-records, and says out loud that it changed, because a
+mode flip is a behaviour change and silence there is the failure this whole file guards against.
+
+This replaces the detection default that an earlier draft carried, where several stores implied
+advisory. Detection still runs and still prints what it found; it just advises instead of
+deciding.
+
 ## What would reopen this
 
+- **D11, if the installer ever needs to run unattended on a fresh machine.** A required argument
+  is fine for a person at a terminal and fatal for provisioning. The answer then is a recorded
+  mode shipped with the machine's config, not a default.
 - **D10, if Claude Code gained a settings scope the kit should prefer over user scope.** The key
   is written at user scope because that is what covers every repository (O8). A managed or policy
   scope with different precedence would change where it belongs, not whether it is written.
