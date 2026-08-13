@@ -7,8 +7,10 @@
 # suite: a tree the tests reject is never deployed. Skills go where Claude Code finds
 # them. Memory files are yours, and neither half of this script writes them.
 #
-# Usage: ./install.sh [--dry-run] [--uninstall] [--purge-cache] [--purge-tracker]
-#        [--purge-marker]
+# Usage: ./install.sh --mode=managed|advisory [--dry-run]
+#        ./install.sh [--uninstall] [--purge-cache] [--purge-tracker] [--purge-marker]
+#
+# --mode is required on a first install and remembered after that (DESIGN-install.md D11).
 #
 # The settings.json contract matches claude-session-kit's, deliberately: two kits
 # writing one shared file under two different contracts is worse than either choice
@@ -35,7 +37,7 @@ FLOOR=2.1.205
 # at the deploy step is unaffected by this one.
 if [ -r "$REPO/core/lib.sh" ]; then . "$REPO/core/lib.sh"; fi
 
-DRY=0; UNINSTALL=0; PURGE_CACHE=0; PURGE_TRACKER=0; PURGE_MARKER=0
+DRY=0; UNINSTALL=0; PURGE_CACHE=0; PURGE_TRACKER=0; PURGE_MARKER=0; MODE_ARG=""
 for arg in "$@"; do
   case "$arg" in
     --dry-run)       DRY=1 ;;
@@ -43,6 +45,8 @@ for arg in "$@"; do
     --purge-cache)   PURGE_CACHE=1 ;;
     --purge-tracker) PURGE_TRACKER=1 ;;
     --purge-marker)  PURGE_MARKER=1 ;;
+    --mode=managed|--mode=advisory) MODE_ARG="${arg#--mode=}" ;;
+    --mode=*)        echo "install.sh: --mode must be managed or advisory, not '${arg#--mode=}'" >&2; exit 2 ;;
     *) echo "install.sh: unknown option $arg" >&2; exit 2 ;;
   esac
 done
@@ -333,21 +337,42 @@ stores_find() {
   done
 }
 
-# managed | advisory. The knob wins; without it the count decides.
+# The mode says who makes the change: managed means the kit does it and says what it
+# will do first, advisory means the user does it (DESIGN-memory.md D8).
 #
-# More than one store means advisory because that is the case where the kit would
-# otherwise change something it does not understand. The wider conformance detection
-# D8 describes arrives with the rest of the mode work; store count is the only input
-# this decision needs.
+# It is never guessed. An earlier version let the store count decide, treating several
+# stores as advisory, and guessing is wrong here: the mode governs whether the kit may
+# rewrite someone's memory, and a machine that quietly picked for you is the one you
+# cannot trust with that (D11). Detection still runs and still prints; it advises.
+#
+# Precedence is the flag, then the environment, then the value recorded by an earlier
+# install. Empty means unresolved, which preflight turns into a refusal.
+MODE=""
+mode_recorded() { printf '%s' "${MEMORY_KIT_MODE:-$(mk_conf MEMORY_KIT_MODE "")}"; }
 mode_resolve() {
-  local knob n
-  knob="${MEMORY_KIT_MODE:-$(mk_conf MEMORY_KIT_MODE "")}"
-  case "$(printf '%s' "$knob" | tr 'A-Z' 'a-z')" in
-    managed)  printf 'managed';  return 0 ;;
-    advisory) printf 'advisory'; return 0 ;;
+  local m
+  # Not written as ${MODE_ARG:-...}: that idiom means "read from the environment" to the
+  # knob inventory test, and this one is set by this script's own argument parser.
+  m="$MODE_ARG"
+  [ -n "$m" ] || m="$(mode_recorded)"
+  case "$(printf '%s' "$m" | tr 'A-Z' 'a-z')" in
+    managed)  printf 'managed' ;;
+    advisory) printf 'advisory' ;;
+    *)        printf '' ;;
   esac
-  n=$(stores_find | wc -l | tr -d ' ')
-  if [ "$n" -gt 1 ]; then printf 'advisory'; else printf 'managed'; fi
+}
+
+# Record the mode so a later run needs no flag. README states in two places that
+# re-running the installer is the upgrade path, so a flag mandatory on every run would
+# mean every upgrade restates it, and a value differing from last time would change
+# behaviour during what looked routine (D11).
+conf_set() { # <key> <value>
+  local cf="$DEST/config" tmp
+  [ -f "$cf" ] || return 0
+  tmp="$(mktemp "$cf.tmp.XXXXXX")"
+  grep -v "^[[:space:]]*$1=" "$cf" > "$tmp" 2>/dev/null || true
+  printf '%s=%s\n' "$1" "$2" >> "$tmp"
+  mv "$tmp" "$cf"
 }
 
 # The path the setting should name, or nothing when the kit must not choose one.
@@ -478,11 +503,33 @@ store_setup() {
   existing=$(jq -r '.autoMemoryDirectory // empty' "$SETT" 2>/dev/null || true)
   all=$(stores_find)
   count=$(printf '%s' "$all" | grep -c . || true)
-  mode=$(mode_resolve)
+  mode="$MODE"
   echo "→ naming the memory store (mode: $mode)"
-  echo "    managed: the kit makes the change and says what it will do first."
-  echo "    advisory: the kit reports and you make the change yourself."
-  echo "    Set MEMORY_KIT_MODE=managed|advisory in $DEST/config to choose."
+
+  # Advisory writes nothing about the store: no setting and no marker. The kit reports
+  # and the user makes the change, which is the whole of D8. It still records what it
+  # found, outside every store, because that record is the kit's own bookkeeping rather
+  # than a change to anyone's memory (D9).
+  if [ "$mode" = advisory ]; then
+    if [ -n "$existing" ]; then
+      echo "  autoMemoryDirectory is $existing"
+    elif [ "$count" -eq 0 ]; then
+      echo "  no memory store found, and no setting written"
+      echo "    managed would name $CLAUDE/memory here"
+    else
+      echo "  $count memory store(s) found:"
+      printf '%s\n' "$all" | sed 's/^/      /'
+      store_record "$all"
+      if [ "$count" -eq 1 ]; then
+        echo "    managed would point autoMemoryDirectory at that store, moving nothing"
+      else
+        echo "    managed would name $CLAUDE/memory and merge none of them"
+      fi
+    fi
+    echo "  nothing written. To make the change yourself, set autoMemoryDirectory in $SETT"
+    echo "    or re-run with --mode=managed to have the kit do it."
+    return 0
+  fi
 
   # A value we did not write is not ours to replace. Overwriting it would relocate
   # someone's memory without saying so, which is the D4 rule applied to a value.
@@ -495,12 +542,6 @@ store_setup() {
     echo "  ! $count memory stores found:"
     printf '%s\n' "$all" | sed 's/^/      /'
     store_record "$all"
-    if [ "$mode" = advisory ]; then
-      echo "    advisory: nothing written and nothing moved. Set autoMemoryDirectory"
-      echo "    yourself to the one you want, or re-run with MEMORY_KIT_MODE=managed to"
-      echo "    start a central store at $CLAUDE/memory. Neither mode merges them."
-      return 0
-    fi
     echo "    managed: starting a central store at $CLAUDE/memory. None of the above is changed."
   fi
 
@@ -615,6 +656,37 @@ elif version_lt "$CC_VERSION" "$FLOOR"; then
   exit 1
 else
   echo "  ✓ Claude Code $CC_VERSION"
+fi
+
+# The mode is required before anything is written, for the same reason as the floor
+# above: a refusal has to leave the machine as it found it. D11 puts the hard stop on
+# a first install only, since re-running is the upgrade path and a flag mandatory
+# every time would let a routine upgrade change behaviour by omission.
+MODE="$(mode_resolve)"
+if [ -z "$MODE" ]; then
+  echo "  ✗ no mode set, and the installer will not choose one for you" >&2
+  echo >&2
+  _mk_all="$(stores_find)"; _mk_n=$(printf '%s' "$_mk_all" | grep -c . || true)
+  if [ "$_mk_n" -gt 0 ]; then
+    echo "    $_mk_n memory store(s) are already on this machine:" >&2
+    printf '%s\n' "$_mk_all" | sed 's/^/        /' >&2
+    echo >&2
+  fi
+  echo "    --mode=managed   the kit makes the change, and says what it will do first" >&2
+  echo "    --mode=advisory  the kit reports what it thinks should change, and you do it" >&2
+  echo >&2
+  echo "    The mode decides whether the kit may rewrite your memory, so it is not" >&2
+  echo "    guessed. It is asked once: this run records it, and upgrades re-use it." >&2
+  echo "    Nothing has been installed or changed." >&2
+  exit 1
+fi
+if [ -n "$MODE_ARG" ] && [ -n "$(mode_recorded)" ] && [ "$MODE_ARG" != "$(mode_recorded)" ]; then
+  echo "  ! mode changing from $(mode_recorded) to $MODE_ARG"
+fi
+if [ "$MODE" = managed ]; then
+  echo "  ✓ mode: managed, so the kit makes the change and says what it will do first"
+else
+  echo "  ✓ mode: advisory, so the kit reports and you make the change yourself"
 fi
 
 run mkdir -p "$CLAUDE/skills" "$CLAUDE/memory"
@@ -773,6 +845,9 @@ for f in "$REPO"/scripts/*; do run rm -f "$CLAUDE/scripts/$(basename "$f")"; don
 # earlier never touches the file every other tool shares.
 echo "→ wiring hooks into settings.json (append-only, deduped per hook)"
 hooks_wire
+# Recorded only when the file does not already say it, so a plain upgrade rewrites
+# nothing and leaves no mtime churn in a file the user edits by hand.
+if [ "$(mk_conf MEMORY_KIT_MODE "")" != "$MODE" ]; then conf_set MEMORY_KIT_MODE "$MODE"; fi
 store_setup
 
 echo "✓ done — start a new Claude Code session to load memory, hooks, and skills."

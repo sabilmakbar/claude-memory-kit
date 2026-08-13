@@ -491,7 +491,7 @@ echo "knob renames:"
 RH2="$TMP/home-rename"; mkdir -p "$RH2/.claude/memory-kit"
 RC="$RH2/.claude/memory-kit/config"
 printf '#FEEDBACK_MINER_MODEL=sonnet\nMEMORY_MACHINE_LABEL=oldbox\nMEMORY_KIT_NO_MINER=1\n' > "$RC"
-HOME="$RH2" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$RH2" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 grep -q '^MEMORY_KIT_MACHINE_LABEL=oldbox$' "$RC" \
   && ok "install rewrites a set legacy key, keeping its value" || fail "set legacy key not migrated"
 grep -q '^#MEMORY_KIT_MINER_MODEL=sonnet$' "$RC" \
@@ -597,7 +597,7 @@ VF="$TMP/vfloor"; mkdir -p "$VF/.claude/sessions"
 printf '{"version":"2.1.100"}' > "$VF/.claude/sessions/a.json"
 printf '{"model":"opus"}\n' > "$VF/.claude/settings.json"
 cp "$VF/.claude/settings.json" "$TMP/vfloor.before"
-HOME="$VF" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$VF" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 check "refuses a build below the floor" 1 $?
 cmp -s "$VF/.claude/settings.json" "$TMP/vfloor.before" \
   && ok "the refusal leaves settings.json byte-identical" || fail "settings.json changed on refusal"
@@ -607,14 +607,14 @@ cmp -s "$VF/.claude/settings.json" "$TMP/vfloor.before" \
 # build the key was ever seen in, which is the one this floor was derived from
 VG="$TMP/vfloor-ok"; mkdir -p "$VG/.claude/sessions"
 printf '{"version":"2.1.205"}' > "$VG/.claude/sessions/a.json"
-out=$(HOME="$VG" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" 2>&1)
+out=$(HOME="$VG" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed 2>&1)
 echo "$out" | grep -q "Claude Code 2.1.205" && echo "$out" | grep -qv "older than" \
   && ok "the floor version itself installs" || fail "floor version refused ($out)"
 # an unreadable version is not a refusal. The stub keeps this hermetic: without it the
 # result depends on whether the machine running the tests has claude on PATH.
 mkdir -p "$TMP/nobin"; printf '#!/bin/sh\nexit 0\n' > "$TMP/nobin/claude"; chmod +x "$TMP/nobin/claude"
 VU="$TMP/vfloor-unknown"; mkdir -p "$VU/.claude"
-out=$(HOME="$VU" PATH="$TMP/nobin:$PATH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" 2>&1)
+out=$(HOME="$VU" PATH="$TMP/nobin:$PATH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed 2>&1)
 echo "$out" | grep -q "version not readable" \
   && ok "an unreadable version continues rather than refusing" || fail "unreadable version ($out)"
 
@@ -627,13 +627,13 @@ store_home() { # <name> [extra store]
   printf '%s' "$h"
 }
 SH=$(store_home store-none)
-HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 [ "$(jq -r '.autoMemoryDirectory' "$SH/.claude/settings.json")" = "$SH/.claude/memory" ] \
   && ok "no existing store: the key names the central store" || fail "greenfield path"
 
 SH=$(store_home store-one); mkdir -p "$SH/.claude/projects/-p/memory"
 printf -- '---\nname: user_x\n---\n' > "$SH/.claude/projects/-p/memory/user_x.md"
-HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 [ "$(jq -r '.autoMemoryDirectory' "$SH/.claude/settings.json")" = "$SH/.claude/projects/-p/memory" ] \
   && ok "one existing store: adopted where it stands, nothing moved" || fail "single-store adoption"
 [ -f "$SH/.claude/projects/-p/memory/user_x.md" ] \
@@ -643,18 +643,26 @@ SH=$(store_home store-many)
 mkdir -p "$SH/.claude/projects/-a/memory" "$SH/.claude/projects/-b/memory"
 printf -- '---\nname: user_x\n---\n' > "$SH/.claude/projects/-a/memory/user_x.md"
 printf -- '---\nname: user_y\n---\n' > "$SH/.claude/projects/-b/memory/user_y.md"
-out=$(HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" 2>&1)
-echo "$out" | grep -q "mode: advisory" && ok "two stores with no knob detects advisory" || fail "detection ($out)"
+# no mode and nothing recorded is a refusal, not a guess (D11)
+out=$(HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" 2>&1); rc=$?
+check "no mode and nothing recorded refuses" 1 $rc
+echo "$out" | grep -q "will not choose one for you" && ok "the refusal says why" || fail "refusal text ($out)"
+echo "$out" | grep -q "2 memory store(s) are already on this machine" \
+  && ok "the refusal lists what it found, so the choice is informed" || fail "no inventory in refusal"
+[ -f "$SH/.claude/settings.json" ] && fail "the refusal wrote settings.json" || ok "the refusal writes nothing"
+out=$(HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=advisory 2>&1)
+echo "$out" | grep -q "mode: advisory" && ok "--mode=advisory is honoured" || fail "advisory flag ($out)"
 [ "$(jq -r '.autoMemoryDirectory // "ABSENT"' "$SH/.claude/settings.json")" = ABSENT ] \
-  && ok "advisory with two stores writes no setting" || fail "advisory wrote a setting"
-echo "$out" | grep -q "2 memory stores found" && ok "advisory reports what it found" || fail "no report"
+  && ok "advisory writes no setting" || fail "advisory wrote a setting"
+echo "$out" | grep -q "2 memory store(s) found" && ok "advisory reports what it found" || fail "no report"
+echo "$out" | grep -q "nothing written" && ok "advisory says it wrote nothing" || fail "no nothing-written line"
 echo "$out" | grep -qi "broken pipe" && fail "broken pipe in the store scan" || ok "the store scan closes no pipe early"
 
 SH=$(store_home store-many-managed)
 mkdir -p "$SH/.claude/projects/-a/memory" "$SH/.claude/projects/-b/memory"
 printf -- '---\nname: user_x\n---\n' > "$SH/.claude/projects/-a/memory/user_x.md"
 printf -- '---\nname: user_y\n---\n' > "$SH/.claude/projects/-b/memory/user_y.md"
-HOME="$SH" MEMORY_KIT_MODE=managed CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$SH" MEMORY_KIT_MODE=managed CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 [ "$(jq -r '.autoMemoryDirectory' "$SH/.claude/settings.json")" = "$SH/.claude/memory" ] \
   && ok "managed with two stores starts a central store" || fail "managed multi-store path"
 [ -f "$SH/.claude/projects/-a/memory/user_x.md" ] && [ -f "$SH/.claude/projects/-b/memory/user_y.md" ] \
@@ -663,7 +671,7 @@ HOME="$SH" MEMORY_KIT_MODE=managed CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/
 # a value the kit did not write is not ours to replace, which is D4 applied to a value
 SH=$(store_home store-foreign)
 printf '{"autoMemoryDirectory":"/somewhere/else"}' > "$SH/.claude/settings.json"
-HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 [ "$(jq -r '.autoMemoryDirectory' "$SH/.claude/settings.json")" = "/somewhere/else" ] \
   && ok "a value the kit did not write is left alone" || fail "foreign value overwritten"
 
@@ -672,7 +680,7 @@ echo "install.sh store marker and record:"
 # whole point: a marker in a store the kit merely found would mean advisory mode
 # changes something, which is the one thing advisory mode promises not to do.
 SH=$(store_home marker-new)
-HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 M="$SH/.claude/memory/.memory-kit-marker.json"
 [ -f "$M" ] && ok "a store the kit created gets a marker" || fail "no marker after install"
 [ "$(jq -r .state "$M" 2>/dev/null)" = active ] && ok "the marker state is active" || fail "marker state"
@@ -689,7 +697,7 @@ git -C "$SH/.claude/projects/-p/memory" config user.email t@t
 git -C "$SH/.claude/projects/-p/memory" config user.name t
 git -C "$SH/.claude/projects/-p/memory" add -A >/dev/null 2>&1
 git -C "$SH/.claude/projects/-p/memory" commit -qm init >/dev/null 2>&1
-HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 [ -f "$SH/.claude/projects/-p/memory/.memory-kit-marker.json" ] \
   && ok "an adopted store gets a marker" || fail "no marker in adopted store"
 [ -z "$(git -C "$SH/.claude/projects/-p/memory" status --porcelain)" ] \
@@ -703,13 +711,33 @@ SH=$(store_home record-many)
 mkdir -p "$SH/.claude/projects/-a/memory" "$SH/.claude/projects/-b/memory"
 printf -- '---\nname: user_x\n---\n' > "$SH/.claude/projects/-a/memory/user_x.md"
 printf -- '---\nname: user_y\n---\n' > "$SH/.claude/projects/-b/memory/user_y.md"
-HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=advisory >/dev/null 2>&1
 [ "$(jq -r '.stores | length' "$SH/.local/share/claude-memory-kit/stores.json" 2>/dev/null)" = 2 ] \
   && ok "advisory records both stores it found" || fail "found stores not recorded"
 [ -f "$SH/.claude/projects/-a/memory/.memory-kit-marker.json" ] \
   || [ -f "$SH/.claude/projects/-b/memory/.memory-kit-marker.json" ] \
   && fail "advisory wrote a marker into a store it only read" \
   || ok "advisory writes no marker into a store it only read"
+[ -f "$SH/.claude/memory/.memory-kit-marker.json" ] \
+  && fail "advisory marked the central store it never adopted" \
+  || ok "advisory marks nothing at all"
+
+# D11: the flag overrides a recorded mode and says so, because a silent mode flip is a
+# behaviour change, and silence there is the failure this installer guards against
+SH=$(store_home mode-override)
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+out=$(HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=advisory 2>&1)
+echo "$out" | grep -q "mode changing from managed to advisory" \
+  && ok "changing the mode is announced, not silent" || fail "mode flip was silent ($out)"
+grep -qx 'MEMORY_KIT_MODE=advisory' "$SH/.claude/memory-kit/config" \
+  && ok "the new mode is re-recorded" || fail "override not recorded"
+[ "$(grep -c '^MEMORY_KIT_MODE=' "$SH/.claude/memory-kit/config")" = 1 ] \
+  && ok "re-recording replaces rather than appends a second line" || fail "duplicate mode keys"
+
+out=$(HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=sometimes 2>&1); rc=$?
+check "an unknown mode value is rejected" 2 "$rc"
+echo "$out" | grep -q "must be managed or advisory" \
+  && ok "and the rejection names the valid values" || fail "unhelpful rejection ($out)"
 
 echo "install.sh --uninstall, the memory store:"
 # The marker is what tells uninstall the value is its own. Without it the kit would
@@ -717,7 +745,7 @@ echo "install.sh --uninstall, the memory store:"
 SH=$(store_home revert); mkdir -p "$SH/.claude/projects/-p/memory"
 printf -- '---\nname: user_x\n---\n' > "$SH/.claude/projects/-p/memory/user_x.md"
 git init -q "$SH/.claude/projects/-p/memory"
-HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 HOME="$SH" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
 M="$SH/.claude/projects/-p/memory/.memory-kit-marker.json"
 [ "$(jq -r '.autoMemoryDirectory // "ABSENT"' "$SH/.claude/settings.json")" = ABSENT ] \
@@ -731,7 +759,7 @@ grep -qxF '.memory-kit-marker.json' "$SH/.claude/projects/-p/memory/.git/info/ex
 # a value with no marker beside it belongs to someone else, and D5 leaves it alone
 SH=$(store_home revert-foreign)
 printf '{"autoMemoryDirectory":"/somewhere/else"}' > "$SH/.claude/settings.json"
-HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 HOME="$SH" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
 [ "$(jq -r '.autoMemoryDirectory' "$SH/.claude/settings.json")" = "/somewhere/else" ] \
   && ok "uninstall leaves a value the kit did not write" || fail "foreign value stripped"
@@ -743,7 +771,7 @@ SH=$(store_home revert-keeps-record)
 mkdir -p "$SH/.claude/projects/-a/memory" "$SH/.claude/projects/-b/memory"
 printf -- '---\nname: user_x\n---\n' > "$SH/.claude/projects/-a/memory/user_x.md"
 printf -- '---\nname: user_y\n---\n' > "$SH/.claude/projects/-b/memory/user_y.md"
-HOME="$SH" MEMORY_KIT_MODE=managed CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$SH" MEMORY_KIT_MODE=managed CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 HOME="$SH" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
 [ "$(jq -r '.stores | length' "$SH/.local/share/claude-memory-kit/stores.json" 2>/dev/null)" = 2 ] \
   && ok "a plain uninstall keeps the found-store record" || fail "record lost on uninstall"
@@ -752,7 +780,7 @@ SH=$(store_home revert-purge)
 mkdir -p "$SH/.claude/projects/-a/memory" "$SH/.claude/projects/-b/memory"
 printf -- '---\nname: user_x\n---\n' > "$SH/.claude/projects/-a/memory/user_x.md"
 printf -- '---\nname: user_y\n---\n' > "$SH/.claude/projects/-b/memory/user_y.md"
-HOME="$SH" MEMORY_KIT_MODE=managed CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$SH" MEMORY_KIT_MODE=managed CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 HOME="$SH" bash "$KIT/install.sh" --uninstall --purge-marker >/dev/null 2>&1
 [ -f "$SH/.claude/memory/.memory-kit-marker.json" ] \
   && fail "--purge-marker left the marker" || ok "--purge-marker deletes the marker"
@@ -771,7 +799,7 @@ jq -n '{hooks:{UserPromptSubmit:[{hooks:[
     {type:"command",command:"\"$HOME/.claude/memory-kit/scripts/ensure-memory-symlink.sh\" 2>/dev/null || true"},
     {type:"command",command:"/somewhere/else/foreign.sh"}
   ]}]}}' > "$LH/.claude/settings.json"
-HOME="$LH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$LH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 grep -q 'ensure-memory-symlink' "$LH/.claude/settings.json" \
   && fail "upgrade left the old hook name wired" || ok "upgrade unwires a name the kit no longer ships"
 grep -q 'refresh-memory-index' "$LH/.claude/settings.json" \
@@ -790,8 +818,8 @@ IH="$TMP/home3"; mkdir -p "$IH/.claude/memory"
 # untouched one is kit property and goes, because the rules are a write-time check now
 printf 'customized\n' > "$IH/.claude/memory/feedback_memory_conventions.md"
 cp "$KIT/guidance/retired-seeds/feedback_memory_generality.md" "$IH/.claude/memory/"
-HOME="$IH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
-HOME="$IH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$IH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+HOME="$IH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 [ "$(cat "$IH/.claude/memory/feedback_memory_conventions.md")" = "customized" ] \
   && ok "an edited seed file is left alone" || fail "edited seed clobbered"
 [ -f "$IH/.claude/memory/feedback_memory_generality.md" ] \
@@ -805,7 +833,7 @@ git -C "$TH/.claude/memory" config user.name t
 cp "$KIT/guidance/retired-seeds/feedback_memory_generality.md" "$TH/.claude/memory/"
 git -C "$TH/.claude/memory" add feedback_memory_generality.md
 git -C "$TH/.claude/memory" commit -qm "user tracks the seed file"
-out=$(HOME="$TH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" 2>&1)
+out=$(HOME="$TH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed 2>&1)
 [ -f "$TH/.claude/memory/feedback_memory_generality.md" ] \
   && ok "a tracked seed file is not deleted" || fail "installer deleted tracked content"
 printf '%s' "$out" | grep -q "your repo tracks it" \
@@ -815,7 +843,7 @@ printf '%s' "$out" | grep -q "your repo tracks it" \
 # the untracked case still retires, so the cleanup is not lost
 UT="$TMP/home-untracked"; mkdir -p "$UT/.claude/memory"
 cp "$KIT/guidance/retired-seeds/feedback_memory_generality.md" "$UT/.claude/memory/"
-HOME="$UT" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$UT" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 [ ! -f "$UT/.claude/memory/feedback_memory_generality.md" ] \
   && ok "an untracked identical copy is still retired" || fail "untracked copy left behind"
 
@@ -834,9 +862,17 @@ n2=$(jq '[.hooks[][].hooks[].command] | unique | length' "$IH/.claude/settings.j
   && ok "install seeds a config from the example" || fail "config not seeded"
 printf 'MEMORY_KIT_HEALTH_GRACE=42\n' > "$IH/.claude/memory-kit/config"
 printf 'stale example\n' > "$IH/.claude/memory-kit/config.example"
-HOME="$IH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
-[ "$(cat "$IH/.claude/memory-kit/config")" = "MEMORY_KIT_HEALTH_GRACE=42" ] \
+HOME="$IH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+grep -qx 'MEMORY_KIT_HEALTH_GRACE=42' "$IH/.claude/memory-kit/config" \
   && ok "upgrade keeps an edited config" || fail "config overwritten on upgrade"
+# the mode is the one key an install may add back, because D11 records it so that
+# later upgrades need no flag. Everything the user wrote is still above it.
+grep -qx 'MEMORY_KIT_MODE=managed' "$IH/.claude/memory-kit/config" \
+  && ok "an install records the mode it was given" || fail "mode not recorded"
+cp "$IH/.claude/memory-kit/config" "$TMP/conf.before"
+HOME="$IH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+cmp -s "$IH/.claude/memory-kit/config" "$TMP/conf.before" \
+  && ok "a plain upgrade rewrites the config not at all" || fail "upgrade churned the config"
 grep -q "^#MEMORY_KIT_NO_MINER" "$IH/.claude/memory-kit/config.example" \
   && ok "upgrade refreshes the example so new knobs appear" || fail "example not refreshed"
 # migration: a pre-tree layout (script copies + old-path hooks) converges to the tree
@@ -844,7 +880,7 @@ MH2="$TMP/home8"; mkdir -p "$MH2/.claude/scripts"
 printf '#!/bin/sh\n' > "$MH2/.claude/scripts/feedback-proposals-ping.sh"
 printf '#!/bin/sh\n' > "$MH2/.claude/scripts/unrelated-tool.sh"
 printf '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"\\"$HOME/.claude/scripts/feedback-proposals-ping.sh\\" 2>/dev/null || true"},{"type":"command","command":"\\"$HOME/.claude/scripts/unrelated-tool.sh\\" || true"}]}]}}\n' > "$MH2/.claude/settings.json"
-HOME="$MH2" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$MH2" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 # exactly ONE entry for the migrated script: the old command re-pointed in place,
 # not left mangled beside a merge-appended duplicate
 pcount=$(jq '[.hooks[][].hooks[].command | select(contains("feedback-proposals-ping.sh"))] | length' "$MH2/.claude/settings.json")
@@ -892,7 +928,7 @@ printf 'a cached copy of messages\n' > "$UH2/.local/share/claude-feedback/digest
 jq -n '{hooks:{SessionStart:[{hooks:[{type:"command",command:"$HOME/other-tool/hooks/memory-kit-health.sh"}]}]}}' \
   > "$UH2/.claude/settings.json"
 
-HOME="$UH2" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$UH2" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 [ -d "$UH2/.claude/memory-kit" ] && ok "install: tree deployed for the uninstall fixture" || fail "fixture install failed"
 [ "$(git -C "$UH2/.claude/memory" config --get core.hooksPath)" = "$UH2/.claude/memory-kit/guardrail" ] \
   && ok "install: guardrail wired via core.hooksPath" || fail "hooksPath not set"
@@ -936,7 +972,7 @@ printf '%s' "$out" | grep -q "re-propose" && ok "--purge-tracker warns what is l
 UH3="$TMP/home-foreign-hookspath"; mkdir -p "$UH3/.claude/memory"
 git init -q "$UH3/.claude/memory"
 git -C "$UH3/.claude/memory" config core.hooksPath /somewhere/else
-HOME="$UH3" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$UH3" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 git -C "$UH3/.claude/memory" config core.hooksPath /somewhere/else   # install re-points it; put it back
 out=$(HOME="$UH3" bash "$KIT/install.sh" --uninstall 2>&1)
 [ "$(git -C "$UH3/.claude/memory" config --get core.hooksPath)" = "/somewhere/else" ] \
@@ -944,14 +980,14 @@ out=$(HOME="$UH3" bash "$KIT/install.sh" --uninstall 2>&1)
 
 # --dry-run must change nothing at all
 DH="$TMP/home-dry"; mkdir -p "$DH/.claude"
-HOME="$DH" bash "$KIT/install.sh" --dry-run >/dev/null 2>&1
+HOME="$DH" bash "$KIT/install.sh" --mode=managed --dry-run >/dev/null 2>&1
 [ ! -d "$DH/.claude/memory-kit" ] && [ ! -f "$DH/.claude/settings.json" ] \
   && ok "--dry-run writes nothing" || fail "dry run had side effects"
 
 # a settings.json that is already broken stops the run before anything is installed
 BH="$TMP/home-broken"; mkdir -p "$BH/.claude"
 printf 'not json at all\n' > "$BH/.claude/settings.json"
-HOME="$BH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$BH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 check "a broken settings.json refuses the install" 1 $?
 [ ! -d "$BH/.claude/memory-kit" ] && ok "and nothing was deployed first" || fail "deployed despite bad settings"
 [ "$(cat "$BH/.claude/settings.json")" = "not json at all" ] \
@@ -1022,7 +1058,7 @@ shape_case() { # shape_case <desc> <json> <expect-rc> <expect-our-hooks>
   local d="$1" json="$2" want_rc="$3" want_ours="$4" rc ours
   SHAPE_DIR=$(mktemp -d); mkdir -p "$SHAPE_DIR/.claude"
   printf '%s' "$json" > "$SHAPE_DIR/.claude/settings.json"
-  HOME="$SHAPE_DIR" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1; rc=$?
+  HOME="$SHAPE_DIR" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1; rc=$?
   # Counted by recursive descent, not by the hooks path: these fixtures are deliberately
   # odd shapes, and `.hooks[]?` guards the iteration but not the field access before it,
   # so the obvious expression dies on the very inputs this section exists to cover.

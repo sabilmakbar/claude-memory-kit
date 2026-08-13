@@ -198,9 +198,9 @@ say "install.sh (throwaway \$HOME seeded with a copy of real settings):"
 # reality, the fixture gate has its own suite (and its own gate-refusal fixture)
 FH="$TMP/home"; mkdir -p "$FH/.claude"
 [ -f "$HOME/.claude/settings.json" ] && cp "$HOME/.claude/settings.json" "$FH/.claude/settings.json"
-HOME="$FH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1; rc1=$?
+HOME="$FH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1; rc1=$?
 c1=$(jq -r '[.hooks[]?[]?.hooks[]?.command] | length' "$FH/.claude/settings.json" 2>/dev/null)
-HOME="$FH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1; rc2=$?
+HOME="$FH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1; rc2=$?
 c2=$(jq -r '[.hooks[]?[]?.hooks[]?.command] | length' "$FH/.claude/settings.json" 2>/dev/null)
 [ "$rc1" = 0 ] && [ "$rc2" = 0 ] && ok "installer runs twice cleanly" || bad "installer rc: $rc1/$rc2"
 [ -n "$c1" ] && [ "$c1" = "$c2" ] && ok "settings merge is idempotent ($c1 hook cmds)" || bad "hook count drifted: $c1 → $c2"
@@ -212,7 +212,7 @@ jq -e . "$FH/.claude/settings.json" >/dev/null 2>&1 && ok "merged settings still
 # dropped as a "duplicate" of the group it belongs to
 jq '.hooks.SessionStart |= (map(.hooks |= map(select(.command | contains("memory-kit-version-check") | not))) | map(select((.hooks|length) > 0)))' \
     "$FH/.claude/settings.json" > "$FH/.claude/settings.json.t" && mv "$FH/.claude/settings.json.t" "$FH/.claude/settings.json"
-HOME="$FH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" >/dev/null 2>&1
+HOME="$FH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
 grep -q 'memory-kit-version-check' "$FH/.claude/settings.json" \
     && ok "upgrade re-adds a hook missing from an existing group" || bad "upgrade path drops new hooks in existing groups"
 

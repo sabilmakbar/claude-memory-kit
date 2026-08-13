@@ -61,8 +61,12 @@ You need `jq`. The miner and sync also use `git` and the `claude` CLI. Details i
 
 ```bash
 git clone https://github.com/sabilmakbar/claude-memory-kit.git ~/claude-memory-kit
-~/claude-memory-kit/install.sh
+~/claude-memory-kit/install.sh --mode=managed
 ```
+
+`--mode` is required the first time and remembered afterwards. It says who makes changes to your
+memory: `managed` is the kit, `advisory` is you. There is more on it below, and running without
+it prints the choice rather than guessing.
 
 The installer runs its own test suite first and refuses to install if anything fails.
 It then places the kit in `~/.claude/memory-kit`, adds its hooks to your Claude Code
@@ -106,14 +110,22 @@ in any repository where Claude decided something was worth saving. Folding sever
 merge, not a move, and a merge done by guesswork can bury a store you wanted. So the kit refuses
 to guess.
 
-**The mode says who makes the change.** `managed` means the kit does it, and says what it is
-about to do first. `advisory` means the kit tells you what it thinks should change and you make
-the change yourself. Neither mode is ever fully automatic over your own memory files, because
-those hold your preferences and an automated edit goes wrong in ways you would not see.
+**The mode says who makes the change**, and you have to choose it. `managed` means the kit does
+it, and says what it is about to do first. `advisory` means the kit tells you what it thinks
+should change and you make the change yourself, so nothing about your memory is written at all.
+Neither mode is ever fully automatic over your own memory files, because those hold your
+preferences and an automated edit goes wrong in ways you would not see.
 
-Set it with `MEMORY_KIT_MODE=managed` or `MEMORY_KIT_MODE=advisory` in
-`~/.claude/memory-kit/config`. With several stores and no mode set, the kit picks advisory,
-because that is the case where acting on a guess does damage.
+A first install refuses until you say which one, and lists what it found first so the choice is
+informed:
+
+```bash
+~/claude-memory-kit/install.sh --mode=managed
+```
+
+It is asked once. The answer is recorded, so upgrading stays a plain re-run with no flag.
+Passing `--mode` again changes it and says so. The installer will not pick for you, because this
+is the setting that decides whether the kit may rewrite your memory.
 
 **To undo any of it, delete the `autoMemoryDirectory` key.** Every project goes back to its own
 folder. `./install.sh --uninstall` does it for you, and only when the kit was the one that wrote
