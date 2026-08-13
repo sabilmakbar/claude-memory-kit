@@ -5,14 +5,20 @@
 > `DESIGN-*.md` records, which cite these by number. For how the kit behaves, read
 > [FLOWS.md](FLOWS.md).
 
-    Observed against:   Claude Code 2.1.222
+    Observed against:   Claude Code 2.1.222 (O1–O7) · 2.1.228 (O8–O12)
     Platform:           macOS, VS Code extension
-    Last re-verified:   2026-08-12
+    Last re-verified:   2026-08-12 (O1–O7) · 2026-08-13 (O8–O12)
     Needs to re-run:    jq, find, a machine with an installed Claude Code
 
 Nothing here is promised by Claude Code. Every entry carries the date and version it was seen
 on, the surface it was read from, how it was checked, and what you need to re-run the check, so
 it can be re-run rather than believed.
+
+Entries that touch something Anthropic has published carry a `Docs:` line naming the page and
+saying whether it agrees. Documentation is not a substitute for the observation: it describes
+intent, it is versioned separately from the binary, and on two entries here it disagrees with
+what the binary itself declares (O8, O10). Where the two conflict, the entry records both and
+the observation decides.
 
 **Two entries have no recorded provenance**: O5 and O6 were learned from incidents during
 development and written down only as a clause inside a decision. They are marked
@@ -48,6 +54,7 @@ reorganised.
 | CLI binary | on `PATH`, or inside the VS Code extension | Anthropic, per release | per release |
 | `settings.json` | `~/.claude/settings.json` | Claude Code, this kit, and any other tool | permanent, shared |
 | `~/.claude` itself | the config root | Claude Code | permanent |
+| Memory directory | `~/.claude/projects/<encoded-cwd>/memory/`, or wherever `autoMemoryDirectory` points (O8) | Claude Code and this kit | permanent |
 
 ## The transcript
 
@@ -149,6 +156,85 @@ A file can parse as JSON and still hold a shape no merge can use, which is a dif
 from invalid JSON and needs a different message. The kit shares this file with Claude Code and
 with every other tool, so it is the one surface where being wrong damages someone else's work.
 
+## The memory directory
+
+### O8. `autoMemoryDirectory` in user settings redirects auto memory for every working directory
+
+    First observed:     2026-08-13 · 2.1.228
+    Re-verified:        2.1.228
+    Surface:            memory directory
+    How:                set the key in `~/.claude/settings.json` to a path outside `~/.claude`,
+                        then asked a headless session in three working directories (two unrelated
+                        git repositories and one non-repository) for its memory directory. All
+                        three reported the configured path. Restored the file from a copy after
+    Needs:              jq, an installed Claude Code, a writable `~/.claude/settings.json`
+    Docs:               https://code.claude.com/docs/en/memory. Documents the key, the accepted
+                        scopes and the `~/` or absolute value rule, but not that one user-scope
+                        value covers every repository. That is the part this entry tests
+    Checkable:          automated, but it writes user settings, so copy the file first
+
+This is what lets the kit make memory global by declaration rather than by symlinking each
+project's directory onto one store. Only user scope was tested. For project scope the published
+documentation and the schema shipped inside the binary disagree: the schema says a checked-in
+`.claude/settings.json` value is ignored for security, the documentation says it is honoured once
+the workspace trust dialog is accepted. Neither was tested, and the kit needs neither.
+
+### O9. The configured directory wins over a symlink left at the default location
+
+    First observed:     2026-08-13 · 2.1.228
+    Re-verified:        2.1.228
+    Surface:            memory directory
+    How:                during the O8 probe, all three default locations still held the kit's
+                        `memory` symlink, and the non-repository one held a real directory at the
+                        spelling Claude Code reads. Every session followed the setting anyway
+    Needs:              the O8 setup, plus a pre-existing symlink or directory
+    Docs:               not documented
+    Checkable:          automated, same caveat as O8
+
+This is the exact state a machine is in while migrating off the symlink, so a migration can set
+the key first and clean up links afterwards, rather than having to unwind them in the right order.
+It says nothing about what happens when the setting is later removed while the links remain.
+
+### O10. The default directory is derived from the git repository root, not the working directory
+
+    First observed:     2026-08-13 · 2.1.228
+    Re-verified:        2.1.228
+    Surface:            memory directory
+    How:                asked a headless session started in `~/claude-memory-kit/core` for its
+                        memory directory; it reported the encoding of the repository root, not of
+                        the subdirectory
+    Needs:              an installed Claude Code, a repository with a subdirectory
+    Docs:               https://code.claude.com/docs/en/memory. Agrees: "derived from the git
+                        repository, so all worktrees and subdirectories within the same repo share
+                        one auto memory directory. Outside a git repo, the project root is used
+                        instead"
+    Checkable:          automated
+
+The settings schema shipped with 2.1.228 contradicts this, describing the default as
+`~/.claude/projects/<sanitized-cwd>/memory/`. The observed behaviour follows the repository root
+and matches the documentation, so the schema's wording is the thing that is wrong. Worth knowing
+because the schema is otherwise the more reliable of the two surfaces (O8).
+
+### O11. The encoded directory name replaces dots as well as path separators
+
+    First observed:     2026-08-13 · 2.1.228
+    Re-verified:        2.1.228
+    Surface:            memory directory
+    How:                a headless session started in `~/.local/share/claude-feedback`, which is
+                        not a repository, reported a memory directory whose encoded name ended
+                        `--local-share-claude-feedback`, where the kit computes
+                        `-.local-share-claude-feedback`. The leading dot of `.local` had collapsed
+                        into a second dash
+    Needs:              an installed Claude Code, a path containing a dot segment
+    Docs:               not documented; the page describes how the name is derived but never which
+                        characters are replaced
+    Checkable:          automated
+
+The kit replaces only path separators, so for any path with a dot segment it computes a different
+name than Claude Code does, and writes its symlink into a directory nothing reads. Both spellings
+exist on the machine this was observed on, with the kit's symlink in the unread one and a real,
+isolated memory directory in the one Claude Code uses.
+
 ## The binary
 
 ### O4. The CLI is on `PATH` or inside the VS Code extension, and reports its own version
@@ -166,3 +252,25 @@ with every other tool, so it is the one surface where being wrong damages someon
 The extension path carries a version in the directory name, so the newest match is the current
 install. A machine with neither the CLI on `PATH` nor the extension present has no binary to
 find, which the kit treats as a blocked feature rather than an error.
+
+### O12. Each extension build ships the settings schema it accepts, and `autoMemoryDirectory` is in every one back to 2.1.205
+
+    First observed:     2026-08-13 · 2.1.228
+    Re-verified:        present in all 20 builds on the machine, 2.1.205 through 2.1.228
+    Surface:            CLI binary
+    How:                read `claude-code-settings.schema.json` from every
+                        `~/.vscode/extensions/anthropic.claude-code-*` build present and checked
+                        for the property; found in all of them, the oldest being 2.1.205
+    Needs:              jq, more than one installed extension build
+    Docs:               https://code.claude.com/docs/en/memory. Documents the key but states no
+                        minimum version, unlike several neighbouring behaviours on the same page
+    Checkable:          automated
+
+No lower bound was found, because the key predates the oldest build available to test. A version
+gate for it would therefore never fire on any machine that can run the kit at all.
+
+The schema sits next to the binary and declares what that build accepts, which makes it better
+evidence than the documentation for questions of the form "does this version know this key". It
+is not evidence of behaviour: it is a declaration of accepted input, and O10 is a case where its
+prose describes the behaviour wrongly. Use it to date a key, and a probe to learn what the key
+does.
