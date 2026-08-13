@@ -158,11 +158,21 @@ undoable. Rolling back means removing the key and deleting what the record names
 never touched, so there is nothing to put back. An operation that cannot be undone this way is not
 performed automatically, which is why several stores are reported rather than merged on a guess.
 
-## D9. The kit leaves a marker in every store it touches, and the marker outlives the uninstall
+## D9. The kit marks a store it acts on, and records a store it only reads somewhere else
 
-Without a marker the kit cannot tell a store it created from one it adopted, and it cannot know
-that it once pointed at a store it no longer points at. Rollback needs that history, and the store
-is the only place that survives a reinstall, a kit upgrade, or the kit being removed entirely.
+Without a record the kit cannot tell a store it created from one it adopted, and it cannot know
+that it once pointed at a store it no longer points at. Rollback needs that history, and it has to
+survive a reinstall, a kit upgrade, and the kit being removed entirely.
+
+**A marker goes only into a store the kit creates, adopts, or copies into.** Finding a store is
+not acting on it. Writing a marker into a store the kit merely read would break the advisory
+contract, which is that advisory mode changes nothing, so the two rules would contradict each
+other on the exact machine the mode exists to protect.
+
+**A store the kit only found is recorded outside the user's stores**, in
+`~/.local/share/claude-memory-kit/`. That is the same placement as the miner's tracker and for one
+of the same reasons: it survives `--uninstall`, which state inside the deployed tree does not. So
+the kit still knows every store it has ever seen, and a store it did not act on stays untouched.
 
 **The marker is `.memory-kit-marker.json` at the root of the store.** It records the state, the
 kit version, the time, the path the setting names, and how the kit reached this store: created,
