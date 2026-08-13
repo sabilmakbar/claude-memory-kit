@@ -4,9 +4,14 @@
 > future changes know what they would be overturning. For how the kit behaves day to day, read
 > [FLOWS.md](FLOWS.md). For setup, the README.
 
-    Status:            Implemented
-    Last revised:      2026-08-12
-    Verified against:  Claude Code 2.1.222
+    Status:            Implemented, except where a paragraph is marked NOT BUILT. Those are
+                       decided and specified here with no code behind them yet: D10, the
+                       report-only heal in D7, and the parts of D8 and D9 naming the
+                       initialize-memory skill. Those are decided and specified here, and
+                       no code exists for them yet. Anything marked NOT BUILT below
+                       describes intent, not behaviour.
+    Last revised:      2026-08-13
+    Verified against:  Claude Code 2.1.222 (D1 to D7) · 2.1.228 (D8 to D10)
     Supersedes:        docs/DESIGN.md, split by feature 2026-08-12
 
 What a memory is, where the two tiers divide, and what this kit may and may not do to a git repo
@@ -91,12 +96,12 @@ a commit for them to make. A file the kit once seeded is removed only when it is
 byte-identical to the copy the kit ships, so anything deleted is reproducible from this tree,
 and when the repo tracks it the installer says so and names the command instead.
 
-**The kit no longer rewrites a memory file at all, so the question of silence is settled by not
-doing it.** The index pass used to strip harness-stamped frontmatter in place and name what it had
-touched afterwards. Announcing after the fact is the wrong order under D8: managed says what it
-will do before doing it, and a hook cannot hold that conversation. So the pass now reports which
-files carry stamped keys and a skill applies the strip, with the user's go-ahead in managed and by
-the user's own hand in advisory.
+**NOT BUILT: the kit is to stop rewriting a memory file at all, so the question of silence is
+settled by not doing it.** The index pass strips harness-stamped frontmatter in place today and
+names what it touched afterwards. Announcing after the fact is the wrong order under D8: managed
+says what it will do before doing it, and a hook cannot hold that conversation. So the pass is to
+report which files carry stamped keys and leave the strip to a skill, with the user's go-ahead in
+managed and by the user's own hand in advisory. The in-place heal is still what ships.
 
 The report has to be throttled through `mk_notice_due`, the same mechanism the review reminder and
 the proposals ping use. Claude Code re-stamps `modified` on every native save, so an unthrottled
@@ -260,8 +265,49 @@ kit did is what makes the change reversible after the kit is gone, so deleting i
 destroys the only copy at the exact moment it becomes useful. `--purge-marker` deletes it, which
 matches the existing `--purge-cache` and `--purge-tracker` flags for users who want no trace.
 
+## D10. Consolidation stages per source, promotes what is safe, and reworks the rest
+
+**NOT BUILT.** Decided and specified; no code exists yet.
+
+Managed brings several stores into one. Copying them into a single directory as they are cannot
+work: memory files are named by convention, so two repositories will both plausibly hold
+`user_profile.md` or `feedback_editing.md`. The code this kit replaced used `cp -n`, which skipped
+a collision without a word and lost the second copy, and that silent skip is the class of failure
+the whole store rework exists to remove.
+
+**Each source is copied into its own folder under `~/.claude/memory/.staged/<source-tag>/`.** A
+copy, never a move, so the source store is untouched and undoing is deleting what was copied.
+Per-source folders make a collision impossible rather than handled.
+
+**Staging inside the store is invisible to everything that reads it.** The index generator, the
+unindexed warning, the guardrail lint and the write guard all select root-level `*.md` only, so a
+staged file enters no recall, trips no warning and breaks no naming rule while it waits. That was
+measured before the design was chosen rather than assumed.
+
+**A staged file is promoted the moment it can be**, meaning its name is free at the root and it
+matches `user_*` or `feedback_*`. Promotion is two string tests and a move, so it needs no
+judgement and no model. This is what keeps memory live: without it a machine would install and
+have nothing in recall until a person finished a rework.
+
+**What stays staged is exactly what needs a person**: names that collide, and names that do not
+conform. The rework goes group by group. One file may split into several because it holds two
+ideas, several may merge into one because they say the same thing, and some are a rewrite in
+place. A staged file is deleted only once its content is carried into the files that replace it,
+so an interrupted rework loses nothing and resumes where it stopped.
+
+**Done means `.staged/` is empty and removed.** That is a checkable finish line rather than a
+feeling, and while it is non-empty the kit says so, because an optional step with no reminder
+becomes work nobody ever does.
+
+**The mode decides who executes, as everywhere else.** Managed states what it intends for a group
+and acts on the go-ahead. Advisory produces the plan and writes nothing, so an advisory machine
+stays unconsolidated until it is switched, which is the point of advisory rather than a gap.
+
 ## What would reopen this
 
+- **D10, if memory filenames ever became unique by construction.** Every part of it exists
+  because two stores can hold the same filename. A naming scheme that could not collide would
+  reduce staging to a plain copy.
 - **D9, if Claude Code gained a place to record which tool manages a store.** The marker exists
   because there is nowhere else to put provenance. A first-class field would make a file in the
   user's own repo unnecessary.
