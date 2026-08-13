@@ -85,6 +85,40 @@ run and nothing else will work either.
 If you had memories before installing, run `/review-memories` once. It finds files the
 index cannot see yet and proposes the small renames that fix them.
 
+### Where your memory lives, and what the installer decides
+
+Claude Code normally keeps one memory folder per repository, so memories you build in one
+project are invisible in the next. The kit makes them global by setting `autoMemoryDirectory`
+in your `settings.json`, which names the folder directly. Every project then reads and writes
+the same store.
+
+The installer prints which of these four situations it found:
+
+| What you have | What it does |
+|---|---|
+| `autoMemoryDirectory` already set | Leaves it alone. A value the kit did not write is not its to replace |
+| One memory store | Points the setting at it, where it already is. Nothing is moved or copied |
+| Several memory stores | Lists them and never merges them. What happens next depends on the mode |
+| No memory at all | Uses `~/.claude/memory` |
+
+Several stores is normal rather than unusual: auto memory is on by default, so a folder appears
+in any repository where Claude decided something was worth saving. Folding several into one is a
+merge, not a move, and a merge done by guesswork can bury a store you wanted. So the kit refuses
+to guess.
+
+**The mode says who makes the change.** `managed` means the kit does it, and says what it is
+about to do first. `advisory` means the kit tells you what it thinks should change and you make
+the change yourself. Neither mode is ever fully automatic over your own memory files, because
+those hold your preferences and an automated edit goes wrong in ways you would not see.
+
+Set it with `MEMORY_KIT_MODE=managed` or `MEMORY_KIT_MODE=advisory` in
+`~/.claude/memory-kit/config`. With several stores and no mode set, the kit picks advisory,
+because that is the case where acting on a guess does damage.
+
+**To undo any of it, delete the `autoMemoryDirectory` key.** Every project goes back to its own
+folder. `./install.sh --uninstall` does it for you, and only when the kit was the one that wrote
+it. Your memory files are never moved, copied or deleted by any of this.
+
 ## What you will notice day to day
 
 Session starts may greet you with a short note: a reminder that a memory review is due,

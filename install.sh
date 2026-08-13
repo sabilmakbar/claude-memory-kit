@@ -480,6 +480,9 @@ store_setup() {
   count=$(printf '%s' "$all" | grep -c . || true)
   mode=$(mode_resolve)
   echo "→ naming the memory store (mode: $mode)"
+  echo "    managed: the kit makes the change and says what it will do first."
+  echo "    advisory: the kit reports and you make the change yourself."
+  echo "    Set MEMORY_KIT_MODE=managed|advisory in $DEST/config to choose."
 
   # A value we did not write is not ours to replace. Overwriting it would relocate
   # someone's memory without saying so, which is the D4 rule applied to a value.
@@ -515,6 +518,9 @@ store_setup() {
   if jq --arg d "$chosen" '.autoMemoryDirectory = $d' "$SETT" > "$tmp" 2>/dev/null; then
     mv "$tmp" "$SETT"
     echo "  ✓ autoMemoryDirectory = $chosen"
+    echo "    Every project now uses this one store. Claude Code reads the path from that"
+    echo "    setting, so nothing has to guess where your memory lives and no symlink is"
+    echo "    involved. Deleting the key puts every project back on its own store."
     if [ "$count" -eq 1 ]; then store_mark "$chosen" adopted; else store_mark "$chosen" created; fi
   else
     rm -f "$tmp"
