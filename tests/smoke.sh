@@ -235,7 +235,7 @@ jq -e . "$FH/.claude/settings.json" >/dev/null 2>&1 \
 [ ! -d "$FH/.claude/memory-kit" ] && ok "the deployed tree is gone" || bad "tree survived uninstall"
 
 # ---------- 5. index engine normalization over a COPY of real memory ----------
-say "ensure-memory-symlink.sh (stamped-frontmatter healing, copy of real memory):"
+say "refresh-memory-index.sh (stamped-frontmatter healing, copy of real memory):"
 if ls "$HOME/.claude/memory"/*.md >/dev/null 2>&1; then
     EH="$TMP/norm-home"; mkdir -p "$EH/.claude/memory" "$EH/proj"
     cp "$HOME/.claude/memory"/*.md "$EH/.claude/memory/"
@@ -243,7 +243,7 @@ if ls "$HOME/.claude/memory"/*.md >/dev/null 2>&1; then
     # MEMORY.md is excluded — regenerating it is the engine's job
     CLEAN_LIST=$(grep -LE '^[[:space:]]*(node_type|originSessionId|modified):' "$EH/.claude/memory"/*.md 2>/dev/null | grep -v 'MEMORY.md')
     pre=$(echo "$CLEAN_LIST" | xargs cksum 2>/dev/null)
-    HOME="$EH" CLAUDE_PROJECT_DIR="$EH/proj" bash "$KIT/scripts/ensure-memory-symlink.sh" >/dev/null 2>&1
+    HOME="$EH" CLAUDE_PROJECT_DIR="$EH/proj" bash "$KIT/scripts/refresh-memory-index.sh" >/dev/null 2>&1
     post=$(echo "$CLEAN_LIST" | xargs cksum 2>/dev/null)
     [ "$pre" = "$post" ] && ok "stamp-free files byte-identical after index pass" || bad "index pass rewrote stamp-free files"
     left=0

@@ -175,8 +175,12 @@ of the same reasons: it survives `--uninstall`, which state inside the deployed 
 the kit still knows every store it has ever seen, and a store it did not act on stays untouched.
 
 **The marker is `.memory-kit-marker.json` at the root of the store.** It records the state, the
-kit version, the time, the path the setting names, and how the kit reached this store: created,
-adopted, or copied into.
+time, the path the setting names, how the kit reached this store (created, adopted, or copied
+into), and the Claude Code version it was written under.
+
+It does not record a kit version. The kit cannot report one yet, and a field holding a guess is
+worse than an absent field, because a later reader cannot tell the two apart. The field arrives
+when there is a real value to put in it.
 
 **The state is one of three values.** `active` means the setting names this store. `legacy` means
 the kit used it before and no longer does. `reverted` means the kit was removed and left the store

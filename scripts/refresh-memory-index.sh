@@ -1,6 +1,6 @@
 #!/bin/bash
-# Ensures the current project's Claude memory dir is symlinked to the central store,
-# and injects the current mount's memory entries into the central MEMORY.md.
+# Heals harness-stamped frontmatter in the central store, then regenerates the central
+# MEMORY.md index, including the current mount's entries.
 # Runs automatically via UserPromptSubmit hook. Safe to run repeatedly (idempotent).
 
 CENTRAL="$HOME/.claude/memory"
@@ -8,21 +8,12 @@ CENTRAL_MD="$CENTRAL/MEMORY.md"
 MOUNTS_BASE="$HOME/.claude/memory-mounts"
 mkdir -p "$CENTRAL" "$MOUNTS_BASE"
 
+# Used only to find the mount below. The kit no longer derives where Claude Code keeps
+# memory: install names it with autoMemoryDirectory (DESIGN-memory.md D8). Deriving it
+# was wrong two ways, and both are gone with the code rather than fixed in it: dots
+# were not replaced (O11), and memory comes from the git root while this value is a
+# working directory (O13). Issue 40.
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
-ENCODED=$(echo "$PROJECT_DIR" | tr '/' '-')
-MEMORY_DIR="$HOME/.claude/projects/$ENCODED/memory"
-
-# Step 1: Ensure project memory → central symlink
-if ! { [ -L "$MEMORY_DIR" ] && [ "$(readlink "$MEMORY_DIR")" = "$CENTRAL" ]; }; then
-    mkdir -p "$(dirname "$MEMORY_DIR")"
-    if [ -d "$MEMORY_DIR" ] && [ ! -L "$MEMORY_DIR" ]; then
-        find "$MEMORY_DIR" -maxdepth 1 -type f -exec cp -n {} "$CENTRAL/" \; 2>/dev/null || true
-        # keep the old dir as a backup: cp -n skips name collisions and never copies
-        # subdirs, so deleting here would silently destroy them
-        mv "$MEMORY_DIR" "$MEMORY_DIR.pre-kit.$(date +%s).bak"
-    fi
-    ln -sfn "$CENTRAL" "$MEMORY_DIR"
-fi
 
 # Strip harness-stamped frontmatter keys (issue #16). Claude Code's native memory
 # writer adds node_type / originSessionId / modified on every save; none carry
@@ -51,7 +42,7 @@ normalize_frontmatter() { # <dir> — heal root-level .md files in place
 }
 normalize_frontmatter "$CENTRAL"
 
-# Step 2: Detect current mount point
+# Step 1: Detect current mount point
 MOUNT=$(df -P "$PROJECT_DIR" 2>/dev/null | awk 'NR==2 {print $NF}')
 [ -z "$MOUNT" ] && exit 0
 
@@ -72,7 +63,7 @@ normalize_frontmatter "$MOUNT_MEMORY"
 # when a file was actually rewritten, which is once per stamped file and then never again.
 [ -n "$NORMALIZED" ] && echo "Removed harness-stamped frontmatter keys (node_type, originSessionId, modified) from: $NORMALIZED. The rules those files hold are unchanged; only metadata the writer adds was dropped."
 
-# Step 3: Rebuild MEMORY.md = fixed header + index generated from the memory files.
+# Step 2: Rebuild MEMORY.md = fixed header + index generated from the memory files.
 # The index is derived from each file's frontmatter, so it can never drift out of
 # sync with the files that actually exist (no writer can silently drop an entry).
 cat > "$CENTRAL_MD" <<'HDR'

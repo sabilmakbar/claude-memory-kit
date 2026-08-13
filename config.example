@@ -27,3 +27,11 @@
 # What this machine calls itself in review-marker commits. Defaults to the short
 # hostname. Set it when the hostname is not the name you think of the machine by.
 #MEMORY_KIT_MACHINE_LABEL=laptop
+
+# How much the kit may do on its own: managed or advisory. Managed regenerates the
+# index, heals frontmatter, and denies a write that breaks the conventions.
+# Advisory reports the same findings and changes nothing. Unset means the kit
+# decides at install time: more than one existing memory store means advisory,
+# because that is the case where it would otherwise change what it does not
+# understand. See docs/DESIGN-memory.md D8.
+#MEMORY_KIT_MODE=advisory
