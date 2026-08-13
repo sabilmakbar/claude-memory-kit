@@ -240,12 +240,17 @@ derivations differ, which is O13.
 
 The kit replaces only path separators, so for any path with a dot segment it computes a different
 name than Claude Code does, and writes its symlink into a directory nothing reads. Both spellings
-exist on the machine this was observed on, with the kit's symlink in the unread one and a real,
-isolated memory directory in the one Claude Code uses.
+exist on the machine this was observed on, with the kit's symlink in the unread one.
 
 The same sanitizer applies to the transcript directory, not only the memory one: on that machine
 the dot-collapsed spelling is the directory that holds real session data, and the kit's spelling
 holds nothing but the symlink.
+
+**What the harness-spelled directory holds at any moment was not pinned down**, and an earlier
+draft of this entry overstated it. A `memory` directory was observed there once and was absent
+about an hour later with no session having run in between, which suggests it is created on demand
+rather than kept. The consequence does not rest on that: the kit's symlink is in the directory
+Claude Code does not read for memory, so the project does not get the central store either way.
 
 ### O13. Transcripts and memory derive from different paths, so the two directories can differ
 
