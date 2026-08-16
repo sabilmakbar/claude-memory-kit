@@ -166,6 +166,14 @@ tested, not assumed.** The key is one line, so removing it returns the machine t
 old symlinks are deliberately left in place (`DESIGN-memory.md` D8), so that reversal needs no
 restore step at all. Nothing else is written.
 
+Because those symlinks stay, the sentence install prints when it writes the key says the machine
+goes back to where it was before the install, not that each project goes back to its own store.
+The second phrasing is true only on a machine that never had the symlinks, and it was the phrasing
+shipped first. On an upgraded machine, deleting the key sends every project back through its
+symlink into the central store, which is the pre-install behaviour and is exactly what reversal is
+supposed to mean. The wording had to name that, rather than describe the fresh case and leave every
+upgraded machine reading a false statement about its own rollback.
+
 **Renaming a wired hook breaks that reversibility unless the old name is remembered, so it is.**
 `managed_names` is derived from `settings.snippet.json`, which after a rename lists only the new
 name, so an uninstall would leave the old entry standing and pointing at a script that no longer
