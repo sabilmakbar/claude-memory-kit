@@ -48,7 +48,13 @@ TRACKER="$HOME/.local/share/claude-feedback/proposals.md"
 snap() {
     { [ -f "$HOME/.claude/settings.json" ] && cat "$HOME/.claude/settings.json"
       [ -f "$TRACKER" ] && cat "$TRACKER"
-      ls "$HOME/.claude/memory" 2>/dev/null
+      # Contents, not just names. A listing reads the same before and after a file is
+      # rewritten in place, and that blind spot is what let an uninstall in a
+      # throwaway $HOME flip the real store's marker and strip the kit's line out of
+      # the real .git/info/exclude while this very check reported success.
+      find "$HOME/.claude/memory" -maxdepth 1 -type f -exec cksum {} + 2>/dev/null | sort
+      [ -f "$HOME/.claude/memory/.git/info/exclude" ] \
+        && cat "$HOME/.claude/memory/.git/info/exclude"
     } | cksum
 }
 BEFORE=$(snap)
@@ -112,12 +118,17 @@ done
 
 # this machine's real config: every knob it names must be one the kit still reads,
 # or a rename has silently turned a live setting into a dead line
+#
+# install.sh is searched alongside the scripts and hooks because a knob may be written
+# and read by the installer alone. MEMORY_KIT_MODE is one: install records it so that
+# an upgrade needs no flag, and reads it back on the next run. Searching only the two
+# directories reported it as a dead line on the first machine that had one.
 cfg="$(. "$KIT/core/lib.sh" && printf '%s' "$(mk_state_dir)/config")"
 if [ -r "$cfg" ]; then
     unknown=""
     while IFS= read -r k; do
         [ -n "$k" ] || continue          # an all-commented config yields no keys at all
-        grep -rq "\${$k:-" "$KIT/scripts" "$KIT/hooks" 2>/dev/null || unknown="$unknown $k"
+        grep -rq "\${$k:-" "$KIT/scripts" "$KIT/hooks" "$KIT/install.sh" 2>/dev/null || unknown="$unknown $k"
     done <<EOF
 $(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$cfg" | tr -d '=')
 EOF
