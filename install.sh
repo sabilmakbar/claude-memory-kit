@@ -836,6 +836,19 @@ run cp "$REPO"/guardrail/pre-commit "$REPO"/guardrail/denylist.local.example "$D
 # ship what re-verification and self-uninstall need: both read from the deployed tree
 run install -m 0755 "$REPO/install.sh" "$DEST/install.sh"
 run install -m 0644 "$REPO/settings.snippet.json" "$DEST/settings.snippet.json"
+# record which release this is. The deployed tree is a file copy with no .git, so
+# `git describe` works in the checkout and returns nothing here. Without this, the smoke
+# output a user pastes names bash and jq and cannot name the kit, which is the one thing
+# the reader of a bug report needs. Derived rather than maintained: a tracked VERSION
+# file fails by lying the first time a tag ships without a bump, and a confident wrong
+# version is worse than an absent one. An install from a downloaded archive records
+# "unknown", which is the honest answer for a tree with no provenance.
+if [ "$DRY" -eq 1 ]; then
+  printf '  would: record the kit version in %s\n' "$DEST/.kit-version"
+else
+  _mk_kv=$(git -C "$REPO" describe --tags --always --dirty 2>/dev/null) || _mk_kv=""
+  printf '%s\n' "${_mk_kv:-unknown}" > "$DEST/.kit-version"
+fi
 # knobs: the example refreshes every install so new knobs show up; the live config is
 # seeded once and never overwritten, the same deal denylist.local gets above. Both sit
 # at the tree root, which the wipe above does not touch.
