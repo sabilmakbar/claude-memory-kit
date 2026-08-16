@@ -443,6 +443,48 @@ store_record() { # <newline-separated store list>
   echo "  ✓ $n store(s) recorded in $STORE_RECORD_DIR, and nothing written inside them"
 }
 
+# The reverse of store_exclude. It was the kit's line, and it names a file that is now
+# either gone or no longer the kit's business.
+exclude_drop() { # <store-path>
+  local top ex
+  command -v git >/dev/null 2>&1 || return 0
+  top=$(git -C "$1" rev-parse --show-toplevel 2>/dev/null) || return 0
+  [ -n "$top" ] || return 0
+  ex="$top/.git/info/exclude"
+  [ -f "$ex" ] || return 0
+  grep -qxF "$MARKER_NAME" "$ex" 2>/dev/null || return 0
+  grep -vxF "$MARKER_NAME" "$ex" > "$ex.tmp" 2>/dev/null || true
+  mv "$ex.tmp" "$ex" && echo "  removed $MARKER_NAME from $ex"
+  return 0
+}
+
+# --purge-marker deletes the records rather than keeping them, and it sweeps rather
+# than following the setting.
+#
+# It used to run inside store_revert, off the path in autoMemoryDirectory, so it
+# reached nothing once that key was gone. Uninstall first and purge second, which is
+# the order anyone reaches for after reading the line uninstall prints, and it found
+# no setting, returned early, and left behind the exact two things it names. A sweep
+# has no such order to get wrong.
+#
+# The sweep looks only where the kit can have written a marker: the central store and
+# the per-project stores, all under $CLAUDE by construction.
+store_purge() {
+  local d n=0
+  for d in "$CLAUDE/memory" "$CLAUDE"/projects/*/memory; do
+    [ -f "$d/$MARKER_NAME" ] || continue
+    n=$((n+1))
+    if [ "$DRY" -eq 1 ]; then printf '  would: delete %s from %s\n' "$MARKER_NAME" "$d"; continue; fi
+    rm -f "$d/$MARKER_NAME" && echo "  ! --purge-marker: deleted $MARKER_NAME from $d"
+    exclude_drop "$d"
+  done
+  [ "$n" -gt 0 ] || echo "  --purge-marker: no $MARKER_NAME found under $CLAUDE"
+  [ -d "$STORE_RECORD_DIR" ] || return 0
+  if [ "$DRY" -eq 1 ]; then printf '  would: delete %s\n' "$STORE_RECORD_DIR"; return 0; fi
+  rm -rf "$STORE_RECORD_DIR" && echo "  ! --purge-marker: deleted $STORE_RECORD_DIR"
+  return 0
+}
+
 # DESIGN-install.md D10 and DESIGN-memory.md D9. Uninstall removes the setting only
 # when the kit wrote it, and the marker beside the store is how it knows: a value with
 # no marker was set by someone else, and D5 leaves those alone.
@@ -451,10 +493,27 @@ store_record() { # <newline-separated store list>
 # what makes the change reversible after the kit is gone, so deleting it on the way
 # out destroys the only copy at the moment it becomes useful.
 store_revert() {
-  local cur marker top ex tmp
+  local cur marker tmp
   [ -f "$SETT" ] || return 0
   cur=$(jq -r '.autoMemoryDirectory // empty' "$SETT" 2>/dev/null || true)
   [ -n "$cur" ] || return 0
+
+  # Every other part of the kit stays inside the $HOME it was invoked with. This value
+  # does not have to: it is an absolute path, read from a settings.json this run did
+  # not necessarily write, and followed wherever it points. A harness that seeds a
+  # throwaway $HOME with a copy of the real settings.json therefore reverted the real
+  # store, flipping a live marker and stripping the kit's line out of a real
+  # .git/info/exclude, with the run reporting success throughout.
+  #
+  # Nothing the kit chooses can land outside $HOME, because store_choose returns
+  # $CLAUDE/memory or a store found beneath it. So a path outside belongs to another
+  # installation, and the only correct move is to leave it alone.
+  case "$cur/" in
+    "$HOME"/*) ;;
+    *) echo "  kept autoMemoryDirectory=$cur: it is outside this \$HOME ($HOME), so another installation owns it"
+       return 0 ;;
+  esac
+
   marker="$cur/$MARKER_NAME"
   if [ ! -f "$marker" ]; then
     echo "  kept autoMemoryDirectory=$cur: no $MARKER_NAME beside it, so this kit did not write it"
@@ -469,10 +528,10 @@ store_revert() {
     rm -f "$tmp"
   fi
 
-  if [ "$PURGE_MARKER" -eq 1 ]; then
-    rm -f "$marker" && echo "  ! --purge-marker: deleted $MARKER_NAME from $cur"
-    rm -rf "$STORE_RECORD_DIR" && echo "  ! --purge-marker: deleted $STORE_RECORD_DIR"
-  else
+  # Deletion belongs to the sweep, so this only has to record. Marking a marker
+  # reverted and then deleting it in the same run would print two contradictory
+  # sentences about one file.
+  if [ "$PURGE_MARKER" -eq 0 ]; then
     tmp="$(mktemp "$marker.tmp.XXXXXX")"
     if jq --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
          '.state = "reverted" | .reverted = $t' "$marker" > "$tmp" 2>/dev/null; then
@@ -482,18 +541,7 @@ store_revert() {
     else
       rm -f "$tmp"
     fi
-  fi
-
-  # The local exclude goes either way: it was the kit's line, and it names a file that
-  # is now either gone or no longer the kit's business.
-  command -v git >/dev/null 2>&1 || return 0
-  top=$(git -C "$cur" rev-parse --show-toplevel 2>/dev/null) || return 0
-  [ -n "$top" ] || return 0
-  ex="$top/.git/info/exclude"
-  [ -f "$ex" ] || return 0
-  if grep -qxF "$MARKER_NAME" "$ex" 2>/dev/null; then
-    grep -vxF "$MARKER_NAME" "$ex" > "$ex.tmp" 2>/dev/null || true
-    mv "$ex.tmp" "$ex" && echo "  removed $MARKER_NAME from $ex"
+    exclude_drop "$cur"
   fi
   return 0
 }
@@ -563,7 +611,8 @@ store_setup() {
     echo "  ✓ autoMemoryDirectory = $chosen"
     echo "    Every project now uses this one store. Claude Code reads the path from that"
     echo "    setting, so nothing has to guess where your memory lives and no symlink is"
-    echo "    involved. Deleting the key puts every project back on its own store."
+    echo "    involved. Deleting the key puts every project back where it was before"
+    echo "    this install."
     if [ "$count" -eq 1 ]; then store_mark "$chosen" adopted; else store_mark "$chosen" created; fi
   else
     rm -f "$tmp"
@@ -578,6 +627,9 @@ if [ "$UNINSTALL" -eq 1 ]; then
   # Unwire BEFORE the tree goes: the snippet naming our hooks may be the deployed copy.
   hooks_unwire
   store_revert
+  # After store_revert, not inside it: the sweep must run whether or not there was a
+  # setting left to revert, which is the whole point of making it a sweep.
+  [ "$PURGE_MARKER" -eq 1 ] && store_purge
 
   # The guardrail is wired by pointing the memory repo's core.hooksPath into the tree
   # this is about to delete. Leaving that behind is the worst failure available here:

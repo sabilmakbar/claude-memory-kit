@@ -824,6 +824,90 @@ HOME="$SH" bash "$KIT/install.sh" --uninstall --purge-marker >/dev/null 2>&1
 [ -f "$SH/.claude/projects/-a/memory/user_x.md" ] && [ -f "$SH/.claude/projects/-b/memory/user_y.md" ] \
   && ok "--purge-marker still keeps every memory file" || fail "purge took memory with it"
 
+# --purge-marker is a sweep, so the order it is asked in cannot matter. Reaching it
+# only through the setting meant uninstalling first and purging second silently left
+# behind the two things the flag names, and that is the order the uninstall message
+# invites: it mentions the flag only once the plain run has already happened.
+SH=$(store_home purge-after-uninstall)
+mkdir -p "$SH/.claude/projects/-a/memory" "$SH/.claude/projects/-b/memory"
+printf -- '---\nname: user_x\n---\n' > "$SH/.claude/projects/-a/memory/user_x.md"
+printf -- '---\nname: user_y\n---\n' > "$SH/.claude/projects/-b/memory/user_y.md"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+HOME="$SH" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
+[ -f "$SH/.claude/memory/.memory-kit-marker.json" ] \
+  && ok "a plain uninstall still keeps the marker" || fail "plain uninstall deleted the marker"
+HOME="$SH" bash "$KIT/install.sh" --uninstall --purge-marker >/dev/null 2>&1
+[ -f "$SH/.claude/memory/.memory-kit-marker.json" ] \
+  && fail "--purge-marker after a plain uninstall reached nothing" \
+  || ok "--purge-marker works after a plain uninstall, not only during one"
+[ -d "$SH/.local/share/claude-memory-kit" ] \
+  && fail "--purge-marker after a plain uninstall left the record" \
+  || ok "and it takes the found-store record with it"
+
+# the sweep looks in the per-project stores too, since that is where an adopted
+# marker lives, and it takes that store's exclude line back out as it goes
+SH=$(store_home purge-sweeps-projects); mkdir -p "$SH/.claude/projects/-p/memory"
+printf -- '---\nname: user_x\n---\n' > "$SH/.claude/projects/-p/memory/user_x.md"
+git init -q "$SH/.claude/projects/-p/memory"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+HOME="$SH" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
+HOME="$SH" bash "$KIT/install.sh" --uninstall --purge-marker >/dev/null 2>&1
+[ -f "$SH/.claude/projects/-p/memory/.memory-kit-marker.json" ] \
+  && fail "the sweep missed an adopted store" || ok "the sweep reaches a marker in a project store"
+grep -qxF '.memory-kit-marker.json' "$SH/.claude/projects/-p/memory/.git/info/exclude" 2>/dev/null \
+  && fail "the sweep left the exclude line behind" || ok "and takes that store's exclude line out"
+[ -f "$SH/.claude/projects/-p/memory/user_x.md" ] \
+  && ok "the sweep keeps every memory file" || fail "sweep took memory with it"
+
+# nothing to find is not an error: --purge-marker on a machine that never installed
+# has to say so and exit cleanly, or the flag becomes one nobody dares run twice
+SH=$(store_home purge-nothing)
+out=$(HOME="$SH" bash "$KIT/install.sh" --uninstall --purge-marker 2>&1); rc=$?
+check "--purge-marker with nothing to purge exits clean" 0 "$rc"
+echo "$out" | grep -q "no .memory-kit-marker.json found" \
+  && ok "and says it found none" || fail "silent about finding nothing ($out)"
+
+echo "install.sh --uninstall stays inside its own \$HOME:"
+# autoMemoryDirectory is an absolute path read from a settings.json this run did not
+# necessarily write. Following it wherever it points is how a smoke run in a throwaway
+# $HOME, seeded with a copy of the real settings.json, reverted the REAL store: it
+# flipped a live marker and stripped the kit's line out of a real .git/info/exclude,
+# reporting success the whole way. Nothing the kit chooses can land outside $HOME, so
+# a path outside belongs to another installation.
+VICTIM="$TMP/victim-store-outside-home"; rm -rf "$VICTIM"; mkdir -p "$VICTIM"
+git init -q "$VICTIM"
+jq -n --arg p "$VICTIM" '{state:"active",path:$p,reason:"adopted",written:"t"}' \
+  > "$VICTIM/.memory-kit-marker.json"
+printf '.memory-kit-marker.json\n' > "$VICTIM/.git/info/exclude"
+VSUM=$(cksum < "$VICTIM/.memory-kit-marker.json")
+SH=$(store_home revert-outside-home)
+mkdir -p "$SH/.claude"
+jq -n --arg d "$VICTIM" '{autoMemoryDirectory:$d}' > "$SH/.claude/settings.json"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+out=$(HOME="$SH" bash "$KIT/install.sh" --uninstall 2>&1)
+[ "$(cksum < "$VICTIM/.memory-kit-marker.json")" = "$VSUM" ] \
+  && ok "an uninstall leaves a marker outside its \$HOME untouched" \
+  || fail "uninstall reverted a store belonging to another installation"
+[ "$(jq -r .state "$VICTIM/.memory-kit-marker.json")" = active ] \
+  && ok "that marker still reads active" || fail "outside marker flipped to reverted"
+grep -qxF '.memory-kit-marker.json' "$VICTIM/.git/info/exclude" \
+  && ok "and its exclude line survives" || fail "uninstall stripped an exclude line outside its \$HOME"
+echo "$out" | grep -q 'outside this \$HOME' \
+  && ok "and it says why it kept the value" || fail "silent about refusing ($out)"
+[ "$(jq -r '.autoMemoryDirectory' "$SH/.claude/settings.json")" = "$VICTIM" ] \
+  && ok "the setting it will not act on is left alone" || fail "setting stripped anyway"
+
+# the outside-$HOME guard must not shadow the no-marker rule, so prove that one
+# separately with a path that IS inside $HOME
+SH=$(store_home revert-no-marker); mkdir -p "$SH/.claude/elsewhere"
+jq -n --arg d "$SH/.claude/elsewhere" '{autoMemoryDirectory:$d}' > "$SH/.claude/settings.json"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+out=$(HOME="$SH" bash "$KIT/install.sh" --uninstall 2>&1)
+[ "$(jq -r '.autoMemoryDirectory' "$SH/.claude/settings.json")" = "$SH/.claude/elsewhere" ] \
+  && ok "a value inside \$HOME with no marker is still left alone" || fail "no-marker value stripped"
+echo "$out" | grep -q "no .memory-kit-marker.json beside it" \
+  && ok "and the reason given is the missing marker" || fail "wrong reason ($out)"
+
 echo "install.sh legacy hook names:"
 # A machine that installed the kit BEFORE the rename. managed_names comes from the
 # snippet, which now lists only the new name, so without the legacy list an upgrade

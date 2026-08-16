@@ -20,7 +20,19 @@ says nothing about the other.
 
 ## Unreleased
 
-Nothing yet.
+### Added
+
+- Auto memory is pointed at one store with the `autoMemoryDirectory` setting, replacing the
+  derived path and the per-project symlinks. `install.sh` requires `--mode=managed` or
+  `--mode=advisory` and records the answer, and `/initialize-memory` is the second half of setup,
+  where anything that moves or rewrites a memory file happens with a person present. [#41](https://github.com/sabilmakbar/claude-memory-kit/pull/41)
+
+### Fixed
+
+- `--uninstall` acts only on a store inside the `$HOME` it was invoked with. It followed the
+  absolute path in `autoMemoryDirectory` wherever it pointed, so a suite running in a throwaway
+  `$HOME` seeded from the real `settings.json` reverted the real store. `--purge-marker` now
+  sweeps rather than reading that setting, so it still works after a plain uninstall. [#42](https://github.com/sabilmakbar/claude-memory-kit/pull/42)
 
 ## 0.1.0
 

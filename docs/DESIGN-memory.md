@@ -260,6 +260,29 @@ kit did is what makes the change reversible after the kit is gone, so deleting i
 destroys the only copy at the exact moment it becomes useful. `--purge-marker` deletes it, which
 matches the existing `--purge-cache` and `--purge-tracker` flags for users who want no trace.
 
+**The revert acts only on a store inside the `$HOME` it was invoked with.** `autoMemoryDirectory`
+is an absolute path, read from a `settings.json` this run did not necessarily write, and the first
+version followed it wherever it pointed. Every other part of the kit is confined to its `$HOME` by
+construction, so the whole test suite trusted that confinement, and this one line broke it: the
+smoke suite seeds a throwaway `$HOME` with a copy of the real `settings.json`, so its uninstall
+read the real store's absolute path, flipped a live marker to `reverted` and stripped the kit's
+line out of a real `.git/info/exclude`. It reported success throughout, and a session-start hook
+runs it unattended once per version per day, so the first anyone knew of it was a marker
+contradicting a working install.
+
+The guard is a path check rather than a flag for tests, because a mode that only tests use proves
+nothing about the code anyone runs. Nothing the kit chooses can land outside `$HOME` anyway:
+`store_choose` returns `$CLAUDE/memory` or a store found beneath it. A path outside therefore
+belongs to another installation, and leaving it alone is the same rule as D5, applied to a machine
+boundary rather than a file.
+
+**`--purge-marker` sweeps rather than following the setting.** Reached through
+`autoMemoryDirectory`, it did nothing once that key was already gone, so uninstalling first and
+purging second left behind the exact two things the flag names. That is the order the uninstall
+message invites, since it mentions the flag only after the plain run has happened. A sweep over
+`$CLAUDE/memory` and the per-project stores has no order to get wrong, and it stays inside `$HOME`
+for the same reason as the revert above.
+
 ## D10. Consolidation stages per source, promotes what is safe, and reworks the rest
 
 Managed brings several stores into one. Copying them into a single directory as they are cannot
