@@ -966,6 +966,55 @@ grep -q 'user_real' "$SH/.claude/projects/-r/memory/MEMORY.md" 2>/dev/null \
   && fail "a stray index was built in the default location" \
   || ok "and no stray index appears in the default location"
 
+echo "the guardrail follows the store too:"
+# The guardrail is the last check before content becomes permanent history, and it
+# used to be wired at the default location, from a line that ran BEFORE the store
+# was chosen. On an install that adopts a project store it therefore guarded a
+# directory holding none of the memories, silently. Both stores are git repos here
+# so the wrong target is detectable rather than merely absent.
+SH=$(store_home guard-adopted); mkdir -p "$SH/.claude/memory" "$SH/.claude/projects/-r/memory"
+git init -q "$SH/.claude/memory"                 # a repo, but holds no memory files
+git init -q "$SH/.claude/projects/-r/memory"
+printf -- '---\nname: user_x\n---\n' > "$SH/.claude/projects/-r/memory/user_x.md"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+[ "$(git -C "$SH/.claude/projects/-r/memory" config core.hooksPath)" = "$SH/.claude/memory-kit/guardrail" ] \
+  && ok "the guardrail is wired on the adopted store" || fail "adopted store left unguarded"
+[ -z "$(git -C "$SH/.claude/memory" config core.hooksPath 2>/dev/null)" ] \
+  && ok "and not on the default location it did not choose" || fail "guardrail wired to the wrong store"
+HOME="$SH" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
+[ -z "$(git -C "$SH/.claude/projects/-r/memory" config core.hooksPath 2>/dev/null)" ] \
+  && ok "uninstall unsets it on the adopted store" \
+  || fail "core.hooksPath left pointing into the deleted tree"
+
+# The uninstall reads the store BEFORE store_revert deletes the setting. Asked
+# afterwards it would name the default and leave the real store still pointing at
+# a tree that no longer exists, which is the silent-disable case above.
+SH=$(store_home guard-revert-order); mkdir -p "$SH/.claude/projects/-r/memory"
+git init -q "$SH/.claude/projects/-r/memory"
+printf -- '---\nname: user_x\n---\n' > "$SH/.claude/projects/-r/memory/user_x.md"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+out=$(HOME="$SH" bash "$KIT/install.sh" --uninstall 2>&1)
+echo "$out" | grep -q "unset core.hooksPath in $SH/.claude/projects/-r/memory" \
+  && ok "and names the store it actually unset" || fail "unset reported against the wrong path ($out)"
+
+# The invariant that makes moving store_setup unsafe, locked down: hooks_wire copies
+# settings.json to the single backup slot unconditionally while store_setup only
+# copies when nobody has, so their order decides whether the backup holds the
+# pre-install file. A rollback restoring a state that never existed would otherwise
+# report success.
+SH=$(store_home guard-backup-order); mkdir -p "$SH/.claude"
+printf '{"theirOwnKey":"untouched"}' > "$SH/.claude/settings.json"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+# Compared as JSON, not as bytes: hooks_wire runs hooks_migrate and
+# hooks_drop_legacy before it snapshots, and those jq passes reformat the file even
+# when they change nothing. The invariant under test is the contents, not the layout.
+[ "$(jq -S . "$SH/.claude/settings.json.memory-kit.bak")" = '{
+  "theirOwnKey": "untouched"
+}' ] && ok "the settings backup still holds the pre-install contents" \
+     || fail "the backup was taken after the install had written to settings.json"
+[ "$(jq -r '.autoMemoryDirectory // "ABSENT"' "$SH/.claude/settings.json.memory-kit.bak")" = ABSENT ] \
+  && ok "and carries none of this run's own writes" || fail "backup contains autoMemoryDirectory"
+
 echo "install.sh legacy hook names:"
 # A machine that installed the kit BEFORE the rename. managed_names comes from the
 # snippet, which now lists only the new name, so without the legacy list an upgrade

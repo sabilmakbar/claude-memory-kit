@@ -624,6 +624,13 @@ store_setup() {
 # --- uninstall ----------------------------------------------------------------
 if [ "$UNINSTALL" -eq 1 ]; then
   echo "uninstalling"
+  # Captured BEFORE store_revert, which deletes autoMemoryDirectory. The guardrail
+  # unset below has to know which store was wired, and that answer disappears with
+  # the key: asked afterwards it would name the default, leave core.hooksPath in the
+  # real store pointing into a tree about to be deleted, and report nothing wrong.
+  # git then finds no hook file and runs nothing, so the repo still looks guarded
+  # while the check that keeps private terms out of a public push is off.
+  GUARD_STORE="$(mk_memory_dir)"
   # Unwire BEFORE the tree goes: the snippet naming our hooks may be the deployed copy.
   hooks_unwire
   store_revert
@@ -636,19 +643,19 @@ if [ "$UNINSTALL" -eq 1 ]; then
   # git finds no hook file and runs nothing, so the commit guard stops silently while
   # the repo still looks configured, and that guard is what stands between private
   # terms and a public push. Only ever unset a path that points into OUR tree.
-  if [ -d "$CLAUDE/memory/.git" ] && command -v git >/dev/null 2>&1; then
-    hp=$(git -C "$CLAUDE/memory" config --get core.hooksPath 2>/dev/null || true)
+  if [ -d "$GUARD_STORE/.git" ] && command -v git >/dev/null 2>&1; then
+    hp=$(git -C "$GUARD_STORE" config --get core.hooksPath 2>/dev/null || true)
     case "$hp" in
       "$DEST"|"$DEST"/*)
-        run git -C "$CLAUDE/memory" config --unset core.hooksPath
-        echo "  unset core.hooksPath in ~/.claude/memory (it pointed into the tree being removed)" ;;
+        run git -C "$GUARD_STORE" config --unset core.hooksPath
+        echo "  unset core.hooksPath in $GUARD_STORE (it pointed into the tree being removed)" ;;
       "") ;;
-      *) echo "  ! core.hooksPath in ~/.claude/memory is $hp, which is not ours, so it stays" ;;
+      *) echo "  ! core.hooksPath in $GUARD_STORE is $hp, which is not ours, so it stays" ;;
     esac
     # MEMORY.md was marked skip-worktree to keep index churn out of diffs. Undo it, or
     # the file stays invisible to git once the kit is gone.
-    if git -C "$CLAUDE/memory" ls-files -v MEMORY.md 2>/dev/null | grep -q '^S'; then
-      run git -C "$CLAUDE/memory" update-index --no-skip-worktree MEMORY.md
+    if git -C "$GUARD_STORE" ls-files -v MEMORY.md 2>/dev/null | grep -q '^S'; then
+      run git -C "$GUARD_STORE" update-index --no-skip-worktree MEMORY.md
       echo "  MEMORY.md is visible to git again (skip-worktree cleared)"
     fi
   fi
@@ -896,16 +903,6 @@ for f in "$REPO"/guidance/retired-seeds/*.md; do
   fi
 done
 
-# Auto-wire the guardrail when the memory dir is itself a git repo (the README's
-# recommended setup), and hide index churn from its diffs. Points at the DEPLOYED
-# guardrail: a stable, tested path that survives the checkout moving. --uninstall
-# unsets both of these again.
-if [ -d "$CLAUDE/memory/.git" ]; then
-  run git -C "$CLAUDE/memory" config core.hooksPath "$DEST/guardrail"
-  [ "$DRY" -eq 1 ] || git -C "$CLAUDE/memory" update-index --skip-worktree MEMORY.md 2>/dev/null || true
-  echo "→ guardrail wired into the memory repo at ~/.claude/memory"
-fi
-
 # The commit guardrail can also be used by any other consuming repo via
 #   git -C <repo> config core.hooksPath ~/.claude/memory-kit/guardrail
 echo "→ commit guardrail available at: $DEST/guardrail"
@@ -925,6 +922,30 @@ hooks_wire
 # nothing and leaves no mtime churn in a file the user edits by hand.
 if [ "$(mk_conf MEMORY_KIT_MODE "")" != "$MODE" ]; then conf_set MEMORY_KIT_MODE "$MODE"; fi
 store_setup
+
+# Auto-wire the guardrail when the store is itself a git repo (the README's
+# recommended setup), and hide index churn from its diffs. Points at the DEPLOYED
+# guardrail: a stable, tested path that survives the checkout moving. --uninstall
+# unsets both of these again.
+#
+# AFTER store_setup, and reading the store back through mk_memory_dir rather than
+# assuming the default. It used to run further up, before the store had been
+# chosen, so on an install that adopts a project store it wired the guard to a
+# directory holding none of the memories. That failure is silent and it disables
+# the last check before content becomes permanent history.
+#
+# store_setup is deliberately NOT moved up to meet it. hooks_wire copies
+# settings.json to the single backup slot unconditionally, while store_setup only
+# copies when nobody has yet, so running store_setup first would have hooks_wire
+# overwrite the backup with a file that already carries autoMemoryDirectory. A
+# failed run would then "roll back" to a state that never existed, and say so.
+# This block touches git config alone, so moving it down cannot affect any of that.
+GUARD_STORE="$(mk_memory_dir)"
+if [ -d "$GUARD_STORE/.git" ]; then
+  run git -C "$GUARD_STORE" config core.hooksPath "$DEST/guardrail"
+  [ "$DRY" -eq 1 ] || git -C "$GUARD_STORE" update-index --skip-worktree MEMORY.md 2>/dev/null || true
+  echo "→ guardrail wired into the memory repo at $GUARD_STORE"
+fi
 
 echo "✓ done — start a new Claude Code session to load memory, hooks, and skills."
 echo "  ./install.sh --uninstall removes the hooks, the tree and the skills, and keeps your memory."
