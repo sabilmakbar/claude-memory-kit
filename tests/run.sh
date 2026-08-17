@@ -908,6 +908,64 @@ out=$(HOME="$SH" bash "$KIT/install.sh" --uninstall 2>&1)
 echo "$out" | grep -q "no .memory-kit-marker.json beside it" \
   && ok "and the reason given is the missing marker" || fail "wrong reason ($out)"
 
+echo "the kit follows the store it named:"
+# install NAMES the store with autoMemoryDirectory (D8), so every consumer has to
+# read that key back. They recomputed the default instead, which agrees with the
+# setting on any machine where the default was the store chosen, and diverges
+# silently everywhere else: an adopted project store left the index, the guard and
+# the reminders all pointed at an empty directory. No test covered that case.
+lib_dir() { HOME="$1" bash -c ". \"$KIT/core/lib.sh\"; mk_memory_dir"; }
+
+SH=$(store_home follows-setting)
+mkdir -p "$SH/.claude"
+jq -n --arg d "$SH/.claude/projects/-p/memory" '{autoMemoryDirectory:$d}' > "$SH/.claude/settings.json"
+[ "$(lib_dir "$SH")" = "$SH/.claude/projects/-p/memory" ] \
+  && ok "mk_memory_dir returns the named store" || fail "accessor ignored the setting: $(lib_dir "$SH")"
+
+# the setting explicitly permits a ~/ prefix, and a bare ~ never expands inside a
+# shell variable, so an unexpanded value would become a literal directory named ~
+SH=$(store_home follows-tilde); mkdir -p "$SH/.claude"
+printf '{"autoMemoryDirectory":"~/somewhere/mem"}' > "$SH/.claude/settings.json"
+[ "$(lib_dir "$SH")" = "$SH/somewhere/mem" ] \
+  && ok "a ~/ prefix in the setting is expanded" || fail "tilde not expanded: $(lib_dir "$SH")"
+
+SH=$(store_home follows-default); mkdir -p "$SH/.claude"
+printf '{}' > "$SH/.claude/settings.json"
+[ "$(lib_dir "$SH")" = "$SH/.claude/memory" ] \
+  && ok "no setting falls back to the default store" || fail "bad fallback: $(lib_dir "$SH")"
+SH=$(store_home follows-nofile)
+[ "$(lib_dir "$SH")" = "$SH/.claude/memory" ] \
+  && ok "no settings file falls back too" || fail "bad fallback with no file: $(lib_dir "$SH")"
+
+# the guardrail runs as a git hook in whatever environment the commit came from,
+# so jq is not a given; without it the accessor has to degrade to the old
+# behaviour rather than to an empty path that every caller would then join onto
+mkdir -p "$TMP/nojq"
+SH=$(store_home follows-nojq); mkdir -p "$SH/.claude"
+jq -n --arg d "$SH/elsewhere" '{autoMemoryDirectory:$d}' > "$SH/.claude/settings.json"
+# bash by absolute path: the empty PATH is the point of the test, and resolving
+# the shell through it would fail the run for a reason that is not the one asked
+BASH_ABS=$(command -v bash)
+got=$(HOME="$SH" PATH="$TMP/nojq" "$BASH_ABS" -c ". \"$KIT/core/lib.sh\"; mk_memory_dir")
+[ "$got" = "$SH/.claude/memory" ] \
+  && ok "without jq it degrades to the default, not to empty" || fail "bad no-jq fallback: '$got'"
+
+# the bug itself, end to end: install adopts a project store, and the index pass
+# must build in THAT store rather than beside it
+SH=$(store_home follows-index); mkdir -p "$SH/.claude/projects/-r/memory" "$SH/proj"
+printf -- '---\nname: user_real\ndescription: the real one\n---\nbody\n' \
+  > "$SH/.claude/projects/-r/memory/user_real.md"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+[ "$(jq -r .autoMemoryDirectory "$SH/.claude/settings.json")" = "$SH/.claude/projects/-r/memory" ] \
+  && ok "install adopts the project store" || fail "install did not adopt it"
+echo '{"session_id":"follows"}' | HOME="$SH" CLAUDE_PROJECT_DIR="$SH/proj" \
+  bash "$KIT/scripts/refresh-memory-index.sh" >/dev/null 2>&1
+grep -q 'user_real' "$SH/.claude/projects/-r/memory/MEMORY.md" 2>/dev/null \
+  && ok "the index is built in the adopted store" || fail "adopted store left unindexed"
+[ -f "$SH/.claude/memory/MEMORY.md" ] \
+  && fail "a stray index was built in the default location" \
+  || ok "and no stray index appears in the default location"
+
 echo "install.sh legacy hook names:"
 # A machine that installed the kit BEFORE the rename. managed_names comes from the
 # snippet, which now lists only the new name, so without the legacy list an upgrade

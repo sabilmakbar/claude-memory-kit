@@ -10,7 +10,11 @@
 _LIB="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)/core/lib.sh"
 [ -r "$_LIB" ] && . "$_LIB"
 
-CENTRAL="$HOME/.claude/memory"
+# Asked, not recomputed. This line carried its own copy of the default, so an
+# install that adopted a different store had the index built in an empty
+# directory while the real memories sat unindexed elsewhere. lib.sh may be
+# unreadable here (the sourcing above is conditional), hence the same fallback.
+CENTRAL="$(mk_memory_dir 2>/dev/null || printf '%s/.claude/memory' "$HOME")"
 CENTRAL_MD="$CENTRAL/MEMORY.md"
 MOUNTS_BASE="$HOME/.claude/memory-mounts"
 mkdir -p "$CENTRAL" "$MOUNTS_BASE"

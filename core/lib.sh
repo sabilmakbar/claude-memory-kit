@@ -10,7 +10,30 @@
 
 # ---- fixed locations -------------------------------------------------------
 
-mk_memory_dir()   { printf '%s/.claude/memory' "$HOME"; }
+# The store is NAMED by autoMemoryDirectory, not computed (DESIGN-memory.md D8).
+# install writes that key, so recomputing the default here means the kit ignores
+# the choice it just made: an install that adopts a project store leaves every
+# consumer indexing, guarding and reminding against an empty directory while
+# Claude Code reads the real one. The divergence is silent, because the two agree
+# on any machine where the default happened to be the store chosen.
+#
+# Falls back to the default whenever the key cannot be read, which covers a
+# machine with no setting, no settings file, and no jq. The guardrail runs as a
+# git hook in whatever environment the commit came from, so jq is not a given,
+# and a missing tool has to degrade to the old behaviour rather than to nothing.
+mk_memory_dir() {
+    _mk_md="$HOME/.claude/memory"
+    if command -v jq >/dev/null 2>&1 && [ -r "$HOME/.claude/settings.json" ]; then
+        _mk_set=$(jq -r '.autoMemoryDirectory // empty' "$HOME/.claude/settings.json" 2>/dev/null)
+        # the setting permits a ~/ prefix, and a bare ~ never expands inside a
+        # variable, so it is spelled out here rather than passed on to break a path
+        case "$_mk_set" in
+            "~/"*) _mk_md="$HOME/${_mk_set#\~/}" ;;
+            /*)    _mk_md="$_mk_set" ;;
+        esac
+    fi
+    printf '%s' "$_mk_md"
+}
 mk_mounts_dir()   { printf '%s/.claude/memory-mounts' "$HOME"; }
 mk_projects_dir() { printf '%s/.claude/projects' "$HOME"; }
 mk_tracker_dir()  { printf '%s/.local/share/claude-feedback' "$HOME"; }
