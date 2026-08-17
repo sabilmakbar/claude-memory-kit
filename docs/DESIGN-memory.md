@@ -120,6 +120,33 @@ repository at all, all resolved to a single configured path (O8).
 therefore not a broken state, and the old links can be cleaned up afterwards instead of unwound
 first in some correct order.
 
+**Naming the store obliges every consumer to read the name back, and the first version of this
+decision did not.** `install` wrote the key and each script went on recomputing `$HOME/.claude/memory`
+for itself. Where install adopts an existing store rather than creating the default, those two
+answers differ, and nothing says so: the index pass built an empty `MEMORY.md` beside the real
+store, the write guard and the reminders watched the same empty directory, and Claude Code read
+the memories none of them could see. It is invisible on any machine where the default happened to
+be the store chosen, which is every machine the kit was developed on and every fixture the suite
+had.
+
+So `mk_memory_dir` reads the setting, and every consumer goes through it. That is one accessor
+rather than a rule to remember, which is the same reasoning the rest of `core/lib.sh` already
+rests on: a value the kit gets from the harness belongs in exactly one function.
+
+It falls back to the default whenever the key cannot be read, covering a machine with no setting,
+no settings file, and no `jq`. The last case is not hypothetical, because the guardrail runs as a
+git hook in whatever environment the commit came from. A missing tool has to degrade to the
+previous behaviour rather than to an empty string, which every caller would then join a path onto.
+
+A value may carry a `~/` prefix, which the setting permits and which never expands inside a shell
+variable, so the accessor expands it rather than passing on a path that would name a directory
+called `~`.
+
+Known limit: the key is honoured by Claude Code from any settings scope, and the accessor reads
+only the user one. A per-project value would be followed by the harness and missed by the kit.
+Install only ever writes the user scope, so this is a gap for a hand-set value, and it is recorded
+rather than closed because reading the full precedence chain means reproducing it.
+
 **There is no version-gated fallback.** The key is declared in every build available to test, back
 to 2.1.205 (O12), so the gate would never fire. Keeping the symlink as a fallback would mean
 keeping the derivation alive to maintain, and the derivation is the defect.
