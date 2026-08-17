@@ -1053,6 +1053,14 @@ HOME="$UH2" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=mana
   && ok "install: guardrail wired via core.hooksPath" || fail "hooksPath not set"
 git -C "$UH2/.claude/memory" ls-files -v MEMORY.md | grep -q '^S' \
   && ok "install: MEMORY.md marked skip-worktree" || fail "skip-worktree not set"
+# The deployed tree has no .git, so this file is the only thing that can name the
+# release in the smoke output a user pastes. Asserting non-empty rather than a shape:
+# "unknown" is a legitimate answer from an archive install, and pinning the format here
+# would fail the moment a tag is cut.
+[ -s "$UH2/.claude/memory-kit/.kit-version" ] \
+  && ok "install: records the kit version" || fail "no .kit-version written"
+[ "$(tr -d '[:space:]' < "$UH2/.claude/memory-kit/.kit-version" 2>/dev/null)" != "" ] \
+  && ok "install: the recorded version is not blank" || fail ".kit-version is whitespace only"
 mine=$(jq '[.hooks[]?[]?.hooks[]?.command | select(contains("memory-kit/"))] | length' "$UH2/.claude/settings.json")
 [ "$mine" -ge 8 ] && ok "install: our hooks wired ($mine entries)" || fail "hooks not wired ($mine)"
 grep -q "other-tool" "$UH2/.claude/settings.json" \

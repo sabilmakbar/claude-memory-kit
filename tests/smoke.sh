@@ -36,6 +36,20 @@ trap 'rm -rf "$TMP"' EXIT
 QUIET=0; [ "${1:-}" = "--quiet" ] && QUIET=1
 PASS=0; FAIL=0; SKIP=0
 
+# Which release is this? Two homes, because this suite runs from both trees. The
+# deployed copy has no .git, so install.sh writes .kit-version beside it; a checkout
+# has no .kit-version, so ask git directly. This suite has no shareable report file,
+# so the console output is what gets pasted, and it has never named the kit's own
+# version. Answers "unknown" rather than guessing: a wrong version in a bug report
+# sends the reader somewhere that never had the bug.
+mk_kit_version() {
+    if [ -r "$KIT/.kit-version" ]; then
+        tr -d '\n' < "$KIT/.kit-version"
+    else
+        git -C "$KIT" describe --tags --always --dirty 2>/dev/null || printf 'unknown'
+    fi
+}
+
 say()  { [ "$QUIET" = 1 ] || echo "$@"; }
 ok()   { PASS=$((PASS+1)); say "  ✓ $1"; }
 bad()  { FAIL=$((FAIL+1)); say "  ✗ $1"; }
@@ -60,6 +74,8 @@ snap() {
 BEFORE=$(snap)
 
 # ---------- 0. every shell entrypoint parses under THIS machine's bash ----------
+say "memory-kit $(mk_kit_version), bash $(bash --version | head -1 | awk '{print $4}')"
+say ""
 say "syntax (tested on bash $(bash --version | head -1 | awk '{print $4}')):"
 SYNTAX_OK=1
 for f in "$KIT"/scripts/*.sh "$KIT"/guardrail/pre-commit "$KIT"/install.sh "$KIT"/hooks/*.sh; do
