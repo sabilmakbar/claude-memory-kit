@@ -44,6 +44,54 @@ mount's entries under `~/.claude/memory-mounts/` if present).
   graduating those into that project's own repo `CLAUDE.md` and shrinking the memory
   file back to volatile state (current progress, pending decisions) plus a pointer.
 
+## Check which rules are actually followed
+
+Reading the files asks whether each rule is well written. It never asks the question that decides
+a rule's fate: is it obeyed? Some rules leave a machine-checkable trace in the session
+transcripts, and for those the answer is countable rather than a matter of impression.
+
+Do this for a handful of rules per review, not all of them. Pick the ones naming a concrete
+action, since those are the ones a transcript records.
+
+Extract the tool calls once, then count against them:
+
+```bash
+find ~/.claude/projects -name '*.jsonl' ! -name 'agent-*' | while IFS= read -r f; do
+  jq -c 'select(.message.content? != null) | .message.content[]?
+         | select(type=="object" and .type=="tool_use" and .name=="Bash")
+         | .input.command // empty' "$f" 2>/dev/null
+done > /tmp/cmds.txt
+```
+
+Count the compliant and non-compliant shapes separately, so the result is a rate rather than a raw
+number. A rule broken twice out of three times and a rule broken twice out of two hundred call for
+opposite responses.
+
+Three traps make these counts wrong, and all three are easy to hit:
+
+- **The audit counts itself.** A command that searches for a pattern contains that pattern, and it
+  lands in a transcript too. Exclude the scratch files this pass creates, then re-read the
+  surviving matches to confirm each is a real occurrence.
+- **A mention is not a use.** A grep pattern, a commit message, or a document discussing the rule
+  all match a naive search. Require the verb to sit where a command actually runs, or strip quoted
+  spans before matching.
+- **One session is not a trend.** Report per-session rates beside the total. A single session can
+  be dominated by one task and say nothing about the habit.
+
+What to do with a rule that scores badly, in order of preference:
+
+1. **Memory cannot enforce it.** It governs the shape of the work rather than its output, so
+   nothing checks it at the moment it is broken. Propose a hook instead, which is
+   [[feedback_tooling_over_memory]] applied to a rule that has now failed in measurement rather
+   than in principle. This is the most common outcome and the most useful one.
+2. **The rule is unclear.** Sharpen it until what counts as compliance is unambiguous, then
+   re-measure at the next review.
+3. **The rule is wrong.** One that nobody follows and nobody misses is one to retire. Say so
+   plainly rather than leaving it to decay in place.
+
+Never delete a rule quietly because it scored badly. A low rate is evidence about the rule's
+mechanism, not permission to drop the intent behind it.
+
 ## How to proceed
 
 Present findings as a short proposal list first — explain why each change is needed
