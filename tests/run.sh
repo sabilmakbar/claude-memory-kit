@@ -48,6 +48,21 @@ GHOME="$TMP/ghome"; mkdir -p "$GHOME/.claude"
 jq -n --arg d "$G" '{autoMemoryDirectory:$d}' > "$GHOME/.claude/settings.json"
 grun() { HOME="$GHOME" "$GH/pre-commit" >/dev/null 2>&1; }
 
+# Canary, before any real check. Twice the fixture kit was missing a directory the
+# hook needs (core/, then hooks/), so pre-commit announced a skip and every check
+# below passed by NOT RUNNING. Both times a negative test happened to sit nearby
+# and caught it; this asserts it directly instead of relying on that.
+printf -- '---\nname: canary_bad\n---\nno description here\n' > canary_bad.md
+git add canary_bad.md
+gout=$(HOME="$GHOME" "$GH/pre-commit" 2>&1); grc=$?
+[ "$grc" = 1 ] \
+  && ok "the fixture kit is complete enough for the lint to run" \
+  || fail "the lint did not run: every guardrail check below would pass by not running"
+echo "$gout" | grep -q 'lint skipped' \
+  && fail "the fixture kit announces a skip, so the checks below prove nothing" \
+  || ok "and it announces no skip"
+git rm -q --cached canary_bad.md && rm canary_bad.md
+
 printf -- '---\nname: wrong_slug\n---\nmail me at leak@example.com\n' > feedback_bad.md
 git add feedback_bad.md
 grun; check "blocks PII + bad name at repo root" 1 $?
