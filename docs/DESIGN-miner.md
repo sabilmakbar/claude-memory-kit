@@ -70,7 +70,8 @@ reviews, and a missing session id fails open to the old always-notice behaviour.
 **The accept/reject protocol first lived in the tracker's header**, written once at file
 creation. After the third protocol revision, live trackers still carried the first draft.
 
-A skill is versioned with the kit, updated by `install.sh`, and invoked by the natural phrase.
+A skill is versioned with the plugin that carries it, updated by `/plugin update`, and invoked
+by the natural phrase.
 Interactive rituals belong in skills; the miner's headless brief stays a prompt file.
 
 ## What would reopen this

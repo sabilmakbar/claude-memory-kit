@@ -215,7 +215,7 @@ confirmation inside a skill is the consent for anything that changes memory cont
 user authoring through the kit, not the kit editing the user, so it works in both modes. A rule
 that blocked it would break the most-used skill in the most cautious mode.
 
-Every skill is installed in both modes, since a skill is inert until called. What changes is what
+Every skill is available in both modes, since a skill is inert until called. What changes is what
 it may do once called.
 
 `CLAUDE.md` is untouched throughout: it is a different mechanism, user-written and per-project,

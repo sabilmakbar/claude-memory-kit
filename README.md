@@ -274,10 +274,17 @@ with, which tells you where to look.
 
 ## Upgrading
 
-Re-run the installer. That is the whole upgrade path:
+Two halves, matching the two halves of the install. Re-run the installer for the hooks,
+the tree and the config:
 
 ```bash
 git -C ~/claude-memory-kit pull && ~/claude-memory-kit/install.sh
+```
+
+Then update the plugin for the skills:
+
+```
+/plugin update memory-kit@memory-kit
 ```
 
 It runs the test suite first and refuses to deploy a tree the tests reject. Then it replaces
@@ -394,7 +401,8 @@ the commit guardrail checks the same fields, so a malformed file cannot leave th
 ```
 
 It removes its own hooks from `~/.claude/settings.json` and leaves every other hook in
-that file alone, deletes the tree and the kit's skills, and undoes the two settings it
+that file alone, deletes the tree and any bare skill copy an older version left in
+`~/.claude/skills`, and undoes the two settings it
 made in your memory repo: the guardrail wiring and the flag that hid `MEMORY.md` from
 git. That last part matters, because a guardrail still wired to a deleted tree would stop
 checking commits without saying anything.
@@ -405,6 +413,9 @@ memory folder, so there is nothing to sort through. The miner's tracker at
 and rejected, and the rejections are what stop a later reinstall from asking again. Add
 `--purge-cache` to drop the cached message digest and the run logs, or `--purge-tracker`
 to remove all of it. Both say what they are deleting.
+
+The skills themselves come from the plugin, so remove that separately with
+`claude plugin uninstall memory-kit@memory-kit`.
 
 `--dry-run` prints what either direction would do and changes nothing.
 
