@@ -57,6 +57,11 @@ skip() { SKIP=$((SKIP+1)); say "  - skip: $1"; }
 
 command -v jq >/dev/null 2>&1 || { echo "smoke: jq missing — everything would skip; install jq"; exit 1; }
 
+# Sourced once, at top level. It used to be pulled in only inside command
+# substitutions, which is enough for a value but not for a function: the first
+# check to call one got "command not found" from a subshell that had gone.
+. "$KIT/core/lib.sh"
+
 # ---------- snapshot real state we must not disturb ----------
 TRACKER="$HOME/.local/share/claude-feedback/proposals.md"
 snap() {
@@ -162,7 +167,7 @@ gcount=0; grefused=""
 for f in "$(. "$KIT/core/lib.sh"; mk_memory_dir)"/*.md \
          "$(. "$KIT/core/lib.sh"; mk_mounts_dir)"/*/*.md; do
     [ -f "$f" ] || continue
-    case "${f##*/}" in MEMORY.md|README.md|CLAUDE.md) continue ;; esac
+    mk_is_nonmemory "${f##*/}" && continue
     gout=$(jq -n --arg p "$f" --rawfile c "$f" '{tool_input:{file_path:$p, content:$c}}' 2>/dev/null \
            | bash "$KIT/hooks/memory-write-guard.sh" 2>/dev/null)
     gcount=$((gcount + 1))

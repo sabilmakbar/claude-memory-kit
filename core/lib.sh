@@ -35,6 +35,25 @@ mk_memory_dir() {
     printf '%s' "$_mk_md"
 }
 mk_mounts_dir()   { printf '%s/.claude/memory-mounts' "$HOME"; }
+
+# The .md files that live in a memory store without being memories. Four copies of
+# this list had drifted into two lengths, so a CONTRIBUTING.md inside the store was
+# exempt from the commit lint and denied by the write-time hook at the same moment:
+# the kit disagreed with itself, and which answer you got depended on which check
+# ran first. One definition, four callers.
+#
+# CONTRIBUTING, CHANGELOG, DEPENDENCIES and HOW-IT-WORKS are kept although a real
+# store holds none of them today. They were added when the frontmatter lint still
+# ran inside this kit's own checkout; that no longer happens, so they are defensive
+# rather than load-bearing, and dropping them would newly block a store that does
+# keep a changelog.
+mk_is_nonmemory() { # <basename> -> rc 0 when the file is store scaffolding, not a memory
+    case "$1" in
+        MEMORY.md|README.md|CLAUDE.md|CONTRIBUTING.md|CHANGELOG.md|DEPENDENCIES.md|HOW-IT-WORKS.md) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 mk_projects_dir() { printf '%s/.claude/projects' "$HOME"; }
 mk_tracker_dir()  { printf '%s/.local/share/claude-feedback' "$HOME"; }
 

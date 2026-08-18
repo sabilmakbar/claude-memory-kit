@@ -26,26 +26,37 @@ echo "guardrail/pre-commit:"
 # running the repo copy would read whatever private terms this machine happens to
 # have. Every check below runs a copy whose denylist we control, so a pass means the
 # same thing on a developer machine as in CI.
-GH="$TMP/guardrail"; mkdir -p "$GH"
-cp "$KIT/guardrail/pre-commit" "$GH/pre-commit"
+# core/ comes along because the hook now sources ../core/lib.sh to find the store.
+# A bare copy of pre-commit would resolve no store at all and skip the frontmatter
+# lint entirely, so every check below would pass by not running.
+GKIT="$TMP/gkit"; mkdir -p "$GKIT/guardrail" "$GKIT/core"
+cp "$KIT/guardrail/pre-commit" "$GKIT/guardrail/pre-commit"
+cp "$KIT/core/lib.sh" "$GKIT/core/lib.sh"
+GH="$GKIT/guardrail"
 G="$TMP/guard"; mkdir -p "$G"; cd "$G"
 git init -q . && git config core.hooksPath "$GH"
 git config user.email t@t && git config user.name t
+# The frontmatter lint only runs inside the memory store, so the fixture repo has to
+# BE the store. A $HOME of our own naming it keeps that true without touching the
+# real machine's settings.
+GHOME="$TMP/ghome"; mkdir -p "$GHOME/.claude"
+jq -n --arg d "$G" '{autoMemoryDirectory:$d}' > "$GHOME/.claude/settings.json"
+grun() { HOME="$GHOME" "$GH/pre-commit" >/dev/null 2>&1; }
 
 printf -- '---\nname: wrong_slug\n---\nmail me at leak@example.com\n' > feedback_bad.md
 git add feedback_bad.md
-"$GH/pre-commit" >/dev/null 2>&1; check "blocks PII + bad name at repo root" 1 $?
+grun; check "blocks PII + bad name at repo root" 1 $?
 git rm -q --cached feedback_bad.md && rm feedback_bad.md
 
 printf -- '---\nname: feedback_ok\ndescription: a clean rule\n---\nGeneric rule.\n' > feedback_ok.md
 printf '# docs\n' > README.md
 git add feedback_ok.md README.md
-"$GH/pre-commit" >/dev/null 2>&1; check "passes clean memory file + README at root" 0 $?
+grun; check "passes clean memory file + README at root" 0 $?
 git rm -qr --cached . && rm feedback_ok.md README.md
 
 mkdir -p memory && printf -- '---\nname: x\n---\nno desc\n' > memory/notes.md
 git add memory/notes.md
-"$GH/pre-commit" >/dev/null 2>&1; check "blocks bad file under memory/" 1 $?
+grun; check "blocks bad file under memory/" 1 $?
 git rm -q --cached memory/notes.md && rm memory/notes.md
 
 # style rule: em-dashes blocked in reader-facing docs only (same rule and scope as
@@ -53,12 +64,12 @@ git rm -q --cached memory/notes.md && rm memory/notes.md
 mkdir -p docs
 printf 'a clause — set off wrong\n' > docs/style.md
 git add docs/style.md
-"$GH/pre-commit" >/dev/null 2>&1; check "blocks an em-dash staged in docs/*.md" 1 $?
+grun; check "blocks an em-dash staged in docs/*.md" 1 $?
 git rm -q --cached docs/style.md && rm docs/style.md
 
 printf 'intro — dense on purpose\n' > README.md
 git add README.md
-"$GH/pre-commit" >/dev/null 2>&1; check "blocks an em-dash staged in README.md" 1 $?
+grun; check "blocks an em-dash staged in README.md" 1 $?
 git rm -q --cached README.md && rm README.md
 
 # negative controls: memory files keep their em-dashes (exempt prose), and the
@@ -66,7 +77,7 @@ git rm -q --cached README.md && rm README.md
 printf -- '---\nname: feedback_dash\ndescription: legit — memory prose is exempt\n---\nBody — with dashes.\n' > feedback_dash.md
 printf 'plain doc prose, no frontmatter, no dashes\n' > docs/notes.md
 git add feedback_dash.md docs/notes.md
-"$GH/pre-commit" >/dev/null 2>&1; check "memory file with em-dash + frontmatter-less docs file both pass" 0 $?
+grun; check "memory file with em-dash + frontmatter-less docs file both pass" 0 $?
 git rm -qr --cached . && rm feedback_dash.md docs/notes.md && rmdir docs
 
 # private terms: both mechanisms, because breaking either one is silent. The generic
@@ -74,26 +85,68 @@ git rm -qr --cached . && rm feedback_dash.md docs/notes.md && rmdir docs
 # stay green, and only the terms you listed would quietly stop being checked.
 printf -- '---\nname: feedback_terms\ndescription: d\n---\nthe northwind engagement notes\n' > feedback_terms.md
 git add feedback_terms.md
-"$GH/pre-commit" >/dev/null 2>&1
+grun
 check "control: with no denylist and no env var, the term passes" 0 $?
 printf 'northwind\n' > "$GH/denylist.local"
-"$GH/pre-commit" >/dev/null 2>&1
+grun
 check "a term from denylist.local blocks the commit" 1 $?
 rm -f "$GH/denylist.local"
-CLAUDE_CONFIG_DENYLIST=northwind "$GH/pre-commit" >/dev/null 2>&1
+CLAUDE_CONFIG_DENYLIST=northwind HOME="$GHOME" "$GH/pre-commit" >/dev/null 2>&1
 check "a term from CLAUDE_CONFIG_DENYLIST blocks the commit" 1 $?
 # a file of only comments and blanks must not turn into a pattern that matches anything
 printf '# northwind is only mentioned in a comment\n\n' > "$GH/denylist.local"
-"$GH/pre-commit" >/dev/null 2>&1
+grun
 check "comments and blank lines in denylist.local are not terms" 0 $?
 printf '# a comment\n\ntyrell\n' > "$GH/denylist.local"
-"$GH/pre-commit" >/dev/null 2>&1
+grun
 check "control: a real term beside the comment still passes other content" 0 $?
 printf -- '---\nname: feedback_terms\ndescription: d\n---\nthe tyrell account\n' > feedback_terms.md
 git add feedback_terms.md
-"$GH/pre-commit" >/dev/null 2>&1
+grun
 check "a term after a comment line is still read" 1 $?
 rm -f "$GH/denylist.local"
+
+# The frontmatter lint is gated on being IN the store; the PII scan is not. Outside
+# the store the lint used to run anyway, which is why an exemption list existed at
+# all and why it grew a copy per check.
+OUTHOME="$TMP/outhome"; mkdir -p "$OUTHOME/.claude"
+jq -n --arg d "$TMP/some-other-store" '{autoMemoryDirectory:$d}' > "$OUTHOME/.claude/settings.json"
+printf -- '---\nname: x\n---\nno desc and a bad slug\n' > notes.md
+git add notes.md
+HOME="$OUTHOME" "$GH/pre-commit" >/dev/null 2>&1
+check "outside the store the frontmatter lint does not run" 0 $?
+printf -- '---\nname: x\n---\nmail me at leak@example.com\n' > notes.md
+git add notes.md
+HOME="$OUTHOME" "$GH/pre-commit" >/dev/null 2>&1
+check "but the PII scan still does" 1 $?
+grun; check "and inside the store the lint runs again" 1 $?
+git rm -q --cached notes.md && rm notes.md
+
+# A store reached through a symlink still counts as the store. git reports the
+# physical path and the setting holds whatever was written, so comparing them raw
+# skipped the lint on macOS, where /var is a link, and on any linked home.
+LINKHOME="$TMP/linkhome"; mkdir -p "$LINKHOME/.claude"
+ln -sfn "$G" "$TMP/store-link"
+jq -n --arg d "$TMP/store-link" '{autoMemoryDirectory:$d}' > "$LINKHOME/.claude/settings.json"
+printf -- '---\nname: x\n---\nno desc\n' > notes.md
+git add notes.md
+HOME="$LINKHOME" "$GH/pre-commit" >/dev/null 2>&1
+check "a store named through a symlink is still the store" 1 $?
+git rm -q --cached notes.md && rm notes.md
+
+# No lib.sh beside the hook means no store can be resolved. Skipping is right, but
+# it has to say so: this is the last check before content becomes permanent history.
+BAREH="$TMP/bare-guardrail"; mkdir -p "$BAREH"
+cp "$KIT/guardrail/pre-commit" "$BAREH/pre-commit"
+printf -- '---\nname: x\n---\nno desc\n' > notes.md
+git add notes.md
+out=$(HOME="$GHOME" "$BAREH/pre-commit" 2>&1); rc=$?
+check "with no lib.sh beside it the lint is skipped, not failed" 0 "$rc"
+echo "$out" | grep -q "frontmatter lint skipped" \
+  && ok "and it says the lint was skipped" || fail "skipped in silence ($out)"
+echo "$out" | grep -q "PII scan above still ran" \
+  && ok "and says the PII half still ran" || fail "no mention of what did run"
+git rm -q --cached notes.md && rm notes.md
 git rm -qr --cached . && rm feedback_terms.md
 
 # ---------- adoption merge + index engine ----------
