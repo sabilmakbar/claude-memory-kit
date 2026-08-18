@@ -18,7 +18,14 @@ that was tagged, and the tag is what you check out to go back to it. Versions mo
 from claude-session-kit: the two share conventions, neither depends on the other, and a bump in one
 says nothing about the other.
 
-## Unreleased
+## 0.2.0
+
+Released on 2026-08-18.
+
+**Upgrading from 0.1.0.** Re-run `install.sh` from your checkout. Two changes can stop a run that
+used to work: a first install now requires `--mode=managed` or `--mode=advisory`, and the
+installer refuses a Claude Code older than 2.1.205. An install that already recorded its mode
+needs no flag. Memory files are not touched by the upgrade.
 
 ### Added
 
@@ -26,6 +33,13 @@ says nothing about the other.
   derived path and the per-project symlinks. `install.sh` requires `--mode=managed` or
   `--mode=advisory` and records the answer, and `/initialize-memory` is the second half of setup,
   where anything that moves or rewrites a memory file happens with a person present. [#41](https://github.com/sabilmakbar/claude-memory-kit/pull/41)
+- `/review-memories` measures whether a rule is obeyed, rather than only whether it is well
+  written. Compliant and non-compliant cases are counted separately, so the result is a rate: a
+  rule broken twice in three occasions and one broken twice in two hundred call for opposite
+  responses. A rule that scores badly gets a hook proposed before it is reworded or retired. [#44](https://github.com/sabilmakbar/claude-memory-kit/pull/44)
+- The failure report names which release of the kit is installed. The value comes from
+  `git describe` at install time rather than from a tracked version file, so a tree whose
+  provenance cannot be established reports `unknown` instead of a confident wrong answer. [#43](https://github.com/sabilmakbar/claude-memory-kit/pull/43)
 
 ### Fixed
 
@@ -35,6 +49,11 @@ says nothing about the other.
 - The list of non-memory filenames the checks skip is three names rather than seven. The extra four
   were only carried because the frontmatter lint used to run in this kit's own checkout. A store
   keeping its own `CHANGELOG.md` is now told to rename it. [#52](https://github.com/sabilmakbar/claude-memory-kit/pull/52)
+- Four user-facing messages named the default store path rather than the store actually in use,
+  one of them written into `MEMORY.md`. An adopted store therefore carried an unindexed-files
+  warning pointing at a directory holding none of its files, in every session. The pass that
+  retires old seeded files had the same fault and ran before the store was chosen, so on an
+  adopted store it looked in the wrong place and left the old copy behind. [#50](https://github.com/sabilmakbar/claude-memory-kit/pull/50)
 - The commit guardrail enforces the same seven memory-file rules as the write-time hook, from one
   implementation, instead of re-checking three of them by hand. A file arriving without passing
   through Write or Edit, such as a pull from another machine or a hand edit, previously met only
@@ -50,6 +69,24 @@ says nothing about the other.
   absolute path in `autoMemoryDirectory` wherever it pointed, so a suite running in a throwaway
   `$HOME` seeded from the real `settings.json` reverted the real store. `--purge-marker` now
   sweeps rather than reading that setting, so it still works after a plain uninstall. [#42](https://github.com/sabilmakbar/claude-memory-kit/pull/42)
+
+### Documentation
+
+- The install output and the README name the settings scope the kit writes, and say what that
+  excludes. [#51](https://github.com/sabilmakbar/claude-memory-kit/pull/51)
+
+### Known limitations
+
+- **The kit reads `autoMemoryDirectory` from the user settings file only.** Claude Code also reads
+  the key from project and local settings. A per-project store set by hand is therefore honoured
+  by Claude Code and missed by the index, the write guard, the reminders and the commit guardrail,
+  which all go on watching the store named in the user file. The installer never writes the other
+  scopes, so this needs someone to have set the key themselves. Recorded in
+  [docs/DESIGN-memory.md](docs/DESIGN-memory.md) D8.
+- **Verified against Claude Code 2.1.231**, and the installer refuses anything below 2.1.205.
+
+The two guardrail limitations listed under 0.1.0 are closed: the commit hook now runs all seven
+rules, and the frontmatter lint no longer runs in this kit's own checkout.
 
 ## 0.1.0
 
