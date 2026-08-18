@@ -33,7 +33,7 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
 #
 # This pass used to strip them in place and name afterwards what it had touched.
 # Announcing after the fact is the wrong order once managed must announce before, and
-# a hook has nobody to ask, so the hook reports and /review-memories does the strip.
+# a hook has nobody to ask, so the hook reports and /memory-kit:review-memories does the strip.
 STAMPED='^[[:space:]]*(node_type|originSessionId|modified):'
 STAMPED_FILES=""
 find_stamped() { # <dir> — name root-level .md files whose FRONTMATTER carries a stamp
@@ -75,7 +75,7 @@ if [ -n "$STAMPED_FILES" ] && command -v mk_notice_due >/dev/null 2>&1; then
     _SID=$(mk_session_id 2>/dev/null || printf '')
     if mk_notice_due "$_SID" heal 2>/dev/null; then
         mk_notice_stamp "$_SID" heal 2>/dev/null
-        echo "Harness-stamped frontmatter keys (node_type, originSessionId, modified) are in the frontmatter of: $STAMPED_FILES. They carry no value across machines and churn on every save. Run /review-memories to strip them. Nothing has been changed."
+        echo "Harness-stamped frontmatter keys (node_type, originSessionId, modified) are in the frontmatter of: $STAMPED_FILES. They carry no value across machines and churn on every save. Run /memory-kit:review-memories to strip them. Nothing has been changed."
     fi
 fi
 

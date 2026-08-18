@@ -55,7 +55,7 @@ Whenever proposals are waiting, a new session starts with a note like:
 Ignore it as long as you like. Nothing happens without you.
 
 **6. When you're ready, say "review feedback proposals".**
-(Or run `/review-feedback-proposals`.) Claude shows you each proposal in full: the rule,
+(Or run `/memory-kit:review-feedback-proposals`.) Claude shows you each proposal in full: the rule,
 when it fires, and the evidence. You answer one of four ways.
 
 | Your answer | What gets saved | What happens to the proposal |

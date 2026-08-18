@@ -64,6 +64,23 @@ git clone https://github.com/sabilmakbar/claude-memory-kit.git ~/claude-memory-k
 ~/claude-memory-kit/install.sh --mode=managed
 ```
 
+Then add the skills, which ship as a Claude Code plugin:
+
+```bash
+claude plugin marketplace add sabilmakbar/claude-memory-kit
+claude plugin install memory-kit@memory-kit
+```
+
+**Both steps are needed, and neither works alone.** The plugin gives you the skills, namespaced
+`/memory-kit:save-memory` and so on, so they cannot collide with a skill of the same name from
+somewhere else. `install.sh` gives you the hooks, the kit tree and the config that those skills
+read: install only the plugin and the skills appear but fail on their first use, because the
+guidance file and config they open are not there yet. Order does not matter.
+
+If an older version of this kit installed the skills into `~/.claude/skills`, a re-run of
+`install.sh` retires those copies. It only removes a copy it recognises as its own; anything with
+local edits, or written by another tool, is reported and left alone.
+
 `--mode` is required the first time and remembered afterwards. It says who makes changes to your
 memory: `managed` is the kit, `advisory` is you. There is more on it below, and running without
 it prints the choice rather than guessing.
@@ -86,7 +103,7 @@ Below those lines you get one entry per memory file you have. The index is regen
 every prompt, so if the file is missing or empty after a fresh session, the hooks did not
 run and nothing else will work either.
 
-If you had memories before installing, run `/review-memories` once. It finds files the
+If you had memories before installing, run `/memory-kit:review-memories` once. It finds files the
 index cannot see yet and proposes the small renames that fix them.
 
 ### Where your memory lives, and what the installer decides
@@ -257,10 +274,17 @@ with, which tells you where to look.
 
 ## Upgrading
 
-Re-run the installer. That is the whole upgrade path:
+Two halves, matching the two halves of the install. Re-run the installer for the hooks,
+the tree and the config:
 
 ```bash
 git -C ~/claude-memory-kit pull && ~/claude-memory-kit/install.sh
+```
+
+Then update the plugin for the skills:
+
+```
+/plugin update memory-kit@memory-kit
 ```
 
 It runs the test suite first and refuses to deploy a tree the tests reject. Then it replaces
@@ -365,7 +389,7 @@ copy of that proposal instead of asking you twice.
 the index is rebuilt from whatever files are actually on disk rather than from a cached
 list. Two things to keep right: the `name` in the frontmatter has to match the filename, and
 the file needs its `description`. If either is off, the file is invisible to the index;
-`/review-memories` finds those and proposes the rename that fixes them. On a synced folder
+`/memory-kit:review-memories` finds those and proposes the rename that fixes them. On a synced folder
 the commit guardrail checks the same fields, so a malformed file cannot leave the machine.
 
 **Web-only sessions?** No. Everything lives in local hooks and scripts.
@@ -377,7 +401,8 @@ the commit guardrail checks the same fields, so a malformed file cannot leave th
 ```
 
 It removes its own hooks from `~/.claude/settings.json` and leaves every other hook in
-that file alone, deletes the tree and the kit's skills, and undoes the two settings it
+that file alone, deletes the tree and any bare skill copy an older version left in
+`~/.claude/skills`, and undoes the two settings it
 made in your memory repo: the guardrail wiring and the flag that hid `MEMORY.md` from
 git. That last part matters, because a guardrail still wired to a deleted tree would stop
 checking commits without saying anything.
@@ -388,6 +413,9 @@ memory folder, so there is nothing to sort through. The miner's tracker at
 and rejected, and the rejections are what stop a later reinstall from asking again. Add
 `--purge-cache` to drop the cached message digest and the run logs, or `--purge-tracker`
 to remove all of it. Both say what they are deleting.
+
+The skills themselves come from the plugin, so remove that separately with
+`claude plugin uninstall memory-kit@memory-kit`.
 
 `--dry-run` prints what either direction would do and changes nothing.
 

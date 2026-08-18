@@ -30,12 +30,35 @@ files are out of scope and keep theirs.
 | `description:` is required | it is what recall matches against |
 | the filename starts with `user_`, `feedback_`, or `project_` | the prefix carries the memory's type |
 
+## A skill is missing, or fails the moment it runs
+
+**Check.** The skills come from the plugin, everything they read comes from `install.sh`, and
+neither half works alone. Run `claude plugin list` and look for `memory-kit@memory-kit`, then
+check that `~/.claude/memory-kit/` exists.
+
+**Fix.** Whichever half is missing:
+
+```bash
+claude plugin marketplace add sabilmakbar/claude-memory-kit
+claude plugin install memory-kit@memory-kit     # skills
+~/claude-memory-kit/install.sh                  # hooks, tree, config
+```
+
+A skill that appears in the list and then fails on its first step is the second half missing:
+`save-memory` opens `~/.claude/memory-kit/guidance/memory-authoring.md`, and
+`initialize-memory` reads `~/.claude/memory-kit/config`. Neither exists until the installer has
+run. Plugins load at session start, so start a new session after installing.
+
+**If you see each skill twice,** once bare and once as `memory-kit:`, an older version of this
+kit left a copy in `~/.claude/skills`. Re-run `install.sh`: it retires copies it recognises as
+its own, and names any it will not touch.
+
 ## The index does not list a file I can see on disk
 
 **Check.** Open `~/.claude/memory/MEMORY.md` and look for the file. If it is absent while the
 `.md` file exists, its frontmatter is not readable by the index.
 
-**Fix.** Run `/review-memories`. It finds exactly this case and proposes the rename or the
+**Fix.** Run `/memory-kit:review-memories`. It finds exactly this case and proposes the rename or the
 missing field. The rules are the three in the table above, and the FAQ explains them from the
 authoring side.
 

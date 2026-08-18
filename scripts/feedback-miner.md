@@ -93,7 +93,7 @@ and adjust anything inflated or understated; write a one-line judge note per ent
 
 ```markdown
 # Feedback proposals (auto-mined daily)
-> Say **"review feedback proposals"** (or run `/review-feedback-proposals`) to
+> Say **"review feedback proposals"** (or run `/memory-kit:review-feedback-proposals`) to
 > accept/reject pending items — the full review protocol lives in that skill.
 > Accepted → the user's global memory; rejected → filed here (two-strike: may resurface
 > once on fresh evidence, final on second rejection or an explicit "never"). Never

@@ -1,6 +1,6 @@
 ---
 name: review-feedback-proposals
-description: Walk the user through pending auto-mined feedback proposals (accept/reject/rephrase). Use when the user says "review feedback proposals", invokes /review-feedback-proposals, or responds to a session-start ping about pending proposals.
+description: Walk the user through pending auto-mined feedback proposals (accept/reject/rephrase). Use when the user says "review feedback proposals", invokes /memory-kit:review-feedback-proposals, or responds to a session-start ping about pending proposals.
 ---
 
 # Review feedback proposals

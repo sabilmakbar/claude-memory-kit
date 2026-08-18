@@ -163,8 +163,24 @@ mk_notice_stamp() {
 
 # Emit the kit's standard SessionStart payload: systemMessage for the human
 # (a toast not every UI shows) + additionalContext so the model relays it.
+# JSON-escape a string without jq. The health hook calls mk_emit_notice while reporting
+# that jq is missing, so the escaper it depends on cannot need jq either.
+#
+# Callers used to sanitize their own interpolations, which is one sed per caller and one
+# missed caller away from emitting a broken object. Notice text carries paths, health
+# reasons and proposal titles, none of which this kit writes from scratch, so the escaping
+# belongs here where every caller gets it.
+mk_json_escape() {
+    # The newline join is awk, not sed's :a;N;$!ba idiom: BSD sed discards the pattern
+    # space when N runs out of input, so on macOS a single-line message came back empty
+    # and the notice emitted "" instead of failing.
+    printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\t/ /g' \
+      | awk 'BEGIN{ORS=""} NR>1{printf "\\n"} {print}'
+}
+
 mk_emit_notice() {
-    printf '{"systemMessage": "%s", "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "%s Mention this to the user at the start of your next reply."}}\n' "$1" "$1"
+    _mk_msg=$(mk_json_escape "$1")
+    printf '{"systemMessage": "%s", "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "%s Mention this to the user at the start of your next reply."}}\n' "$_mk_msg" "$_mk_msg"
 }
 
 # ---- feature health ----------------------------------------------------------
