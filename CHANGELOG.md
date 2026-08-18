@@ -18,6 +18,17 @@ that was tagged, and the tag is what you check out to go back to it. Versions mo
 from claude-session-kit: the two share conventions, neither depends on the other, and a bump in one
 says nothing about the other.
 
+## Unreleased
+
+### Changed
+
+- Skills now ship as a Claude Code plugin and are invoked with the `memory-kit` namespace
+  (`/memory-kit:save-memory`), so they cannot be shadowed by a skill of the same name from
+  another kit or from your own `~/.claude/skills`. `install.sh` no longer writes that folder;
+  a re-run retires copies an older version left there, and reports rather than deletes anything
+  it does not recognise as its own. Both install steps are now required: the plugin carries the
+  skills, `install.sh` still carries the hooks, tree and config those skills read.
+
 ## 0.2.0
 
 Released on 2026-08-18.

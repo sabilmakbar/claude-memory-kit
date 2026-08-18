@@ -21,6 +21,45 @@ check() { # check <desc> <expected-exit> <actual-exit>
 }
 
 # ---------- guardrail ----------
+echo ".claude-plugin manifests:"
+PJ="$KIT/.claude-plugin/plugin.json"; MJ="$KIT/.claude-plugin/marketplace.json"
+for f in "$PJ" "$MJ"; do
+  jq -e . "$f" >/dev/null 2>&1 \
+    && ok "$(basename "$f") is valid JSON" || fail "$(basename "$f") is not valid JSON"
+done
+for k in name version description author; do
+  [ "$(jq -r --arg k "$k" 'has($k)' "$PJ")" = true ] \
+    && ok "plugin.json has $k" || fail "plugin.json is missing $k"
+done
+# A missing version makes Claude Code key the plugin cache by commit SHA instead of a
+# release, which is how caveman ends up cached as 0d95a81d35a9. Semver or nothing.
+jq -r .version "$PJ" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' \
+  && ok "plugin.json version is semver" || fail "plugin.json version is not semver"
+[ "$(jq -r '.plugins[0].source' "$MJ")" = "./" ] \
+  && ok "marketplace.json points at this repo" || fail "marketplace source is not ./"
+[ "$(jq -r .name "$PJ")" = "$(jq -r '.plugins[0].name' "$MJ")" ] \
+  && ok "both manifests agree on the plugin name" || fail "manifests disagree on the plugin name"
+# The plugin name IS the invocation namespace, so it cannot drift from what the docs and
+# hooks tell people to type.
+[ "$(jq -r .name "$PJ")" = memory-kit ] \
+  && ok "the namespace is memory-kit" || fail "plugin name is not memory-kit"
+
+echo "skills ship plugin-ready:"
+for d in "$KIT"/skills/*/; do
+  n=$(basename "$d")
+  grep -q '^name:' "$d/SKILL.md" && grep -q '^description:' "$d/SKILL.md" \
+    && ok "$n has name and description frontmatter" || fail "$n is missing frontmatter"
+done
+# Every slash-form has to carry the memory-kit namespace. Without it the string names a
+# skill that no longer exists, and nothing fails loudly when the agent tries it. CHANGELOG
+# is exempt: its older entries describe releases where the un-prefixed name was correct,
+# and rewriting them would falsify history. This comment deliberately names no skill in
+# slash form, because the check below reads this file too.
+bare=$(cd "$KIT" && grep -rnE '(^|[^:a-z-])/(save-memory|review-memories|initialize-memory|review-feedback-proposals)\b' \
+  . --exclude-dir=.git --exclude=CHANGELOG.md 2>/dev/null || true)
+[ -z "$bare" ] \
+  && ok "no un-namespaced slash-form survives" || fail "un-namespaced slash-form: $bare"
+
 echo "guardrail/pre-commit:"
 # Hermetic by construction: the hook reads denylist.local from ITS OWN directory, so
 # running the repo copy would read whatever private terms this machine happens to
@@ -296,7 +335,7 @@ printf '%s' "$out" | grep -q 'feedback_clean.md' \
   && fail "a body-only mention was reported" || ok "a body-only 'modified:' is not reported"
 printf '%s' "$out" | grep -q 'Nothing has been changed' \
   && ok "the report says nothing was changed" || fail "report does not say it changed nothing"
-printf '%s' "$out" | grep -q '/review-memories' \
+printf '%s' "$out" | grep -q '/memory-kit:review-memories' \
   && ok "the report names who can strip them" || fail "no pointer to the skill"
 grep -q 'feedback_stamped.md) — keeps this' "$NH/.claude/memory/MEMORY.md" \
   && ok "a stamped file is still indexed" || fail "stamped file dropped from the index"
@@ -721,7 +760,7 @@ printf -- '---\nname: user_y\n---\n' > "$SH2/.claude/memory/.staged/repo-a/user_
 out=$(echo '{"session_id":"staged-1"}' | HOME="$SH2" bash "$SH2/.claude/memory-kit/hooks/memory-kit-health.sh" 2>/dev/null)
 echo "$out" | grep -q '2 memory files are staged' \
   && ok "staged files are counted and reported" || fail "no staged notice ($out)"
-echo "$out" | grep -q '/initialize-memory' \
+echo "$out" | grep -q '/memory-kit:initialize-memory' \
   && ok "and the notice names how to finish" || fail "notice does not name the skill"
 rm -rf "$SH2/.claude/memory/.staged"
 out=$(echo '{"session_id":"staged-2"}' | HOME="$SH2" bash "$SH2/.claude/memory-kit/hooks/memory-kit-health.sh" 2>/dev/null)
@@ -914,13 +953,41 @@ mkdir -p "$SH/.claude/projects/-a/memory" "$SH/.claude/projects/-b/memory"
 printf -- '---\nname: user_x\n---\n' > "$SH/.claude/projects/-a/memory/user_x.md"
 printf -- '---\nname: user_y\n---\n' > "$SH/.claude/projects/-b/memory/user_y.md"
 out=$(HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed 2>&1)
-echo "$out" | grep -q '/initialize-memory' \
+echo "$out" | grep -q '/memory-kit:initialize-memory' \
   && ok "managed with several stores names the skill that brings them in" || fail "no pointer to the skill"
-[ -f "$SH/.claude/skills/initialize-memory/SKILL.md" ] \
-  && ok "the skill it names is actually installed" || fail "skill not deployed"
+# The skill it names ships as a plugin now, so the installer must NOT leave a bare copy
+# in ~/.claude/skills: that copy registers under its un-namespaced name and shadows the
+# plugin's, so every skill would exist twice.
+[ ! -e "$SH/.claude/skills/initialize-memory" ] \
+  && ok "and the installer leaves no bare copy to shadow it" || fail "bare skill copy deployed"
 HOME="$SH" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
-[ -d "$SH/.claude/skills/initialize-memory" ] \
-  && fail "uninstall left the skill behind" || ok "uninstall removes the skill too"
+
+echo "install.sh, retiring bare skill copies left by older installs:"
+# An older installer wrote ~/.claude/skills/<name>. Now that skills ship as a plugin,
+# such a copy shadows the namespaced one, so a re-run has to retire it — but only when it
+# is genuinely the old copy. Ownership is judged against the PREVIOUS install's own copy
+# under the kit tree, not against this release, so a routine upgrade does not warn.
+RH=$(store_home retire-skills)
+HOME="$RH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=advisory >/dev/null 2>&1
+mkdir -p "$RH/.claude/skills/save-memory"
+cp "$RH/.claude/memory-kit/skills/save-memory/SKILL.md" "$RH/.claude/skills/save-memory/SKILL.md"
+out=$(HOME="$RH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" 2>&1)
+[ ! -e "$RH/.claude/skills/save-memory" ] \
+  && ok "a bare copy matching the previous install is retired" || fail "bare copy left behind"
+echo "$out" | grep -q 'retired the bare copy of save-memory' \
+  && ok "and the run says which copy it retired" || fail "retirement not reported ($out)"
+
+# A copy that is not ours, or carries local edits, is never deleted. Losing someone
+# else's file is worse than the shadowing it causes, and the shadowing is reported.
+FH=$(store_home retire-foreign)
+HOME="$FH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=advisory >/dev/null 2>&1
+mkdir -p "$FH/.claude/skills/save-memory"
+printf -- '---\nname: save-memory\n---\nsomeone elses skill\n' > "$FH/.claude/skills/save-memory/SKILL.md"
+out=$(HOME="$FH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" 2>&1)
+grep -q 'someone elses skill' "$FH/.claude/skills/save-memory/SKILL.md" \
+  && ok "a copy we did not write is left alone" || fail "deleted a foreign skill"
+echo "$out" | grep -q 'shadows the plugin' \
+  && ok "and the run says it shadows the plugin" || fail "shadowing not reported ($out)"
 
 echo "install.sh --uninstall, the memory store:"
 # The marker is what tells uninstall the value is its own. Without it the kit would
@@ -1250,8 +1317,6 @@ HOME="$UT" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=manag
 
 [ -f "$IH/.claude/memory-kit/guidance/memory-authoring.md" ] \
   && ok "the guidance the hook points at is deployed" || fail "guidance missing from the tree"
-[ -f "$IH/.claude/skills/save-memory/SKILL.md" ] \
-  && ok "the authoring skill is installed" || fail "save-memory skill missing"
 n=$(jq '[.hooks[][].hooks[].command] | length' "$IH/.claude/settings.json")
 n2=$(jq '[.hooks[][].hooks[].command] | unique | length' "$IH/.claude/settings.json")
 [ "$n" = "$n2" ] && ok "hooks deduped across re-runs ($n entries)" || fail "hook dupes ($n vs $n2)"
@@ -1358,7 +1423,7 @@ grep -q "other-tool" "$UH2/.claude/settings.json" \
 git -C "$UH2/.claude/memory" ls-files -v MEMORY.md | grep -q '^S' \
   && fail "MEMORY.md still hidden from git" || ok "uninstall: skip-worktree cleared"
 [ ! -d "$UH2/.claude/memory-kit" ] && ok "uninstall: the tree is gone" || fail "tree left behind"
-[ ! -d "$UH2/.claude/skills/save-memory" ] && ok "uninstall: the kit's skills are gone" || fail "skills left behind"
+[ ! -d "$UH2/.claude/skills/save-memory" ] && ok "uninstall: any bare skill copy is gone" || fail "skills left behind"
 [ -f "$UH2/.claude/memory/feedback_mine.md" ] \
   && ok "uninstall: memory files are untouched" || fail "user memory deleted"
 [ -f "$UH2/.local/share/claude-feedback/proposals.md" ] \

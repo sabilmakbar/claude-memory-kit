@@ -35,7 +35,7 @@ files are out of scope and keep theirs.
 **Check.** Open `~/.claude/memory/MEMORY.md` and look for the file. If it is absent while the
 `.md` file exists, its frontmatter is not readable by the index.
 
-**Fix.** Run `/review-memories`. It finds exactly this case and proposes the rename or the
+**Fix.** Run `/memory-kit:review-memories`. It finds exactly this case and proposes the rename or the
 missing field. The rules are the three in the table above, and the FAQ explains them from the
 authoring side.
 

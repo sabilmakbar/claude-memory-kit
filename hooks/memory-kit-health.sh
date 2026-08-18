@@ -63,7 +63,7 @@ if [ -d "$_mk_staged" ]; then
     _mk_n=$(find "$_mk_staged" -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
     if [ "${_mk_n:-0}" -gt 0 ]; then
         case "$_mk_n" in 1) _mk_w="1 memory file is" ;; *) _mk_w="$_mk_n memory files are" ;; esac
-        MSG="$MSG${MSG:+; }$_mk_w staged and loaded into no session: run /initialize-memory to finish bringing them in"
+        MSG="$MSG${MSG:+; }$_mk_w staged and loaded into no session: run /memory-kit:initialize-memory to finish bringing them in"
     fi
 fi
 

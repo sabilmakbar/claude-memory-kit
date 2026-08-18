@@ -599,7 +599,7 @@ store_setup() {
     printf '%s\n' "$all" | sed 's/^/      /'
     store_record "$all"
     echo "    managed: starting a central store at $CLAUDE/memory. None of the above is changed."
-    echo "    Run /initialize-memory in a session to bring them in. That step copies rather"
+    echo "    Run /memory-kit:initialize-memory in a session to bring them in. That step copies rather"
     echo "    than moves, asks before each change, and never touches a store it read."
   fi
 
@@ -772,7 +772,7 @@ else
   echo "  ✓ mode: advisory, so the kit reports and you make the change yourself"
 fi
 
-run mkdir -p "$CLAUDE/skills" "$CLAUDE/memory"
+run mkdir -p "$CLAUDE/memory"
 
 echo "→ checking prerequisites (see docs/DEPENDENCIES.md)"
 command -v jq >/dev/null 2>&1 || { echo "  ✗ jq required — install it and re-run"; exit 1; }
@@ -840,6 +840,29 @@ if [ "$DRY" -eq 0 ] && [ -z "${CLAUDE_MEMORY_KIT_INSTALL_GATED:-}" ] && [ -r "$R
   fi
 fi
 
+# --- retire the bare skill copies a previous version of this installer wrote ---------
+#
+# Skills now ship as a Claude Code plugin, invoked /memory-kit:<skill>. A copy left in
+# ~/.claude/skills by an older install would still register under its bare name and
+# shadow the plugin's, so every skill would exist twice.
+#
+# Ownership is decided against the PREVIOUS install's own copy under $DEST/skills, not
+# against this release: comparing to this release would differ on every routine upgrade
+# and warn when there is nothing wrong. This block therefore has to run before the tree
+# deploy below replaces $DEST/skills.
+for s in "$REPO"/skills/*/; do
+  name=$(basename "$s")
+  old="$CLAUDE/skills/$name"
+  [ -f "$old/SKILL.md" ] || continue
+  if [ -f "$DEST/skills/$name/SKILL.md" ] && cmp -s "$DEST/skills/$name/SKILL.md" "$old/SKILL.md"; then
+    run rm -rf "$old"
+    echo "  retired the bare copy of $name — the plugin supersedes it as /memory-kit:$name"
+  else
+    echo "  ! $old/SKILL.md was not written by this kit, or has local edits — left alone" >&2
+    echo "    while it is there it shadows the plugin's /memory-kit:$name" >&2
+  fi
+done
+
 echo "→ deploying the kit tree to ~/.claude/memory-kit"
 run mkdir -p "$DEST"
 # content dirs are stateless: replace them wholesale so renames/removals propagate
@@ -888,8 +911,9 @@ if [ "$DRY" -eq 0 ] && [ -r "$REPO/core/lib.sh" ]; then
 fi
 run chmod -R u+rwX "$DEST"
 
-echo "→ installing skills to ~/.claude/skills"
-run cp -r "$REPO"/skills/. "$CLAUDE/skills/"
+# Skills are not installed here any more; they come from the memory-kit plugin.
+# The copy under $DEST/skills above is what the retirement check compares against on
+# the next run, so it stays.
 
 
 # The commit guardrail can also be used by any other consuming repo via

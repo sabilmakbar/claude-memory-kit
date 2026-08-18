@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "memory-kit",
+  "description": "Persistent memory for Claude Code: what you teach it on Monday is still there on Wednesday, and on your next machine.",
+  "owner": {
+    "name": "sabilmakbar",
+    "url": "https://github.com/sabilmakbar"
+  },
+  "plugins": [
+    {
+      "name": "memory-kit",
+      "description": "Author, review and consolidate persistent memories, and triage mined feedback proposals.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}
