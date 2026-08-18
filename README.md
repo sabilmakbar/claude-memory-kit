@@ -96,6 +96,14 @@ project are invisible in the next. The kit makes them global by setting `autoMem
 in your `settings.json`, which names the folder directly. Every project then reads and writes
 the same store.
 
+It writes the **user** setting, the one in `~/.claude/settings.json`, which is why it covers every
+project at once. Claude Code also reads `autoMemoryDirectory` from project and local settings. The
+installer never writes those, and the kit does not read them back, so a per-project store added by
+hand would be used by Claude Code and missed by everything here: the index, the write guard, the
+reminders and the commit guardrail would all keep watching the global store. If you want a project
+to keep its own memory alongside the global one, that is a feature request rather than a setting to
+add yourself.
+
 The installer prints which of these four situations it found:
 
 | What you have | What it does |
