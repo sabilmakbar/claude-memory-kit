@@ -613,6 +613,11 @@ store_setup() {
     echo "    setting, so nothing has to guess where your memory lives and no symlink is"
     echo "    involved. Deleting the key puts every project back where it was before"
     echo "    this install."
+    echo "    This is your USER setting, so it is one store for every project. Claude Code"
+    echo "    also reads the key from project and local settings, which this installer never"
+    echo "    writes and the kit does not read back, so a per-project store set by hand would"
+    echo "    be used by Claude Code and missed by the kit. Wiring per-project stores into the"
+    echo "    one named here is a feature request, not a setting you can safely add yourself."
     if [ "$count" -eq 1 ]; then store_mark "$chosen" adopted; else store_mark "$chosen" created; fi
   else
     rm -f "$tmp"
