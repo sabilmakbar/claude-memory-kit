@@ -29,6 +29,10 @@ says nothing about the other.
 
 ### Fixed
 
+- The commit guardrail enforces the same seven memory-file rules as the write-time hook, from one
+  implementation, instead of re-checking three of them by hand. A file arriving without passing
+  through Write or Edit, such as a pull from another machine or a hand edit, previously met only
+  those three before becoming permanent history. [#48](https://github.com/sabilmakbar/claude-memory-kit/pull/48)
 - The memory frontmatter lint runs only inside the memory store, and the list of non-memory
   filenames it skips has one definition instead of four. Four copies had drifted into two lengths,
   so a `CONTRIBUTING.md` in the store was exempt from the commit lint and denied by the write-time

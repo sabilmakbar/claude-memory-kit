@@ -95,6 +95,53 @@ install, so each wants its own tests:
    section into the tier that syncs and this hook will not notice. It is the last check before
    content becomes permanent history, and it is the one not looking.
 
+**Both items are done.** Three things about item 1 differ from what was written above, and item 2
+was closed by handing the rules over rather than copying them.
+
+The limitation this record accepted has gone away rather than been accepted. It assumed
+`~/.claude/memory` was the only location the installer wires, so a store cloned elsewhere would
+silently escape the lint. `mk_memory_dir` reads `autoMemoryDirectory` now, so wherever the install
+named the store is where the lint runs. What remains is narrower: a store the kit was never
+pointed at is still outside the gate, which is the correct answer rather than a gap.
+
+The exemption list stayed at seven names instead of shrinking to three. It became one definition
+with four callers in `core/lib.sh`, which is what cures the drift this record was written about.
+Shrinking it is a separate behaviour change that would newly block a store keeping its own
+`CHANGELOG.md`, and no evidence says anyone wants that. The four extra names are defensive now
+rather than load-bearing, and the count is no longer the thing that can go wrong.
+
+Comparing the two paths raw was wrong, and a test caught it. `git rev-parse --show-toplevel`
+reports the physical path while the setting holds whatever was written, so a store reached through
+a symlink compared unequal and skipped the lint in silence. On macOS `/var` is such a link, which
+made every temp-directory fixture hit it before a user could. The store is resolved with `pwd -P`
+before comparing.
+
+**Item 2: the commit hook runs all seven rules, from the write-time hook's implementation.** It
+builds the same input a `PreToolUse` event delivers, pipes each staged file in, and reads the deny
+reason back out. The three hand-written rules are gone rather than joined by four more, so the two
+halves cannot disagree about what a valid memory file is.
+
+Content comes from `git show ":$f"`, never the working tree, or the lint judges something the
+commit does not contain.
+
+The `file_path` is built from the **unresolved** store path, unlike the location gate above, which
+resolves both sides. The write-time hook scopes its synced-tier rule with its own
+`case "$fp" in "$(mk_memory_dir)"/*`, so a path resolved through `pwd -P` would fall through that
+filter and the Evidence rule would never fire. The two comparisons want opposite treatment, which
+is worth stating because it reads like an inconsistency.
+
+The second argument for this check only became visible while making the change. Commit time is the
+backstop for a file that never passed through Write or Edit, such as a pull from another machine,
+a hand edit, or the harness's own memory writer. It is also **the only place a whole file is ever
+seen**: D2's edit-over-write hook turns every change to an existing file into an `Edit`, and three
+of the seven rules run only on a `Write`, because absence cannot be judged from a fragment. Before
+this change `type-required` and `why-required-for-feedback` had no reliable check anywhere once a
+file existed.
+
+A skip is announced in both new branches, naming whether the store could not be identified or the
+write-time hook could not be found, since the rules now live in a file the commit hook has to
+locate.
+
 ## What would reopen this
 
 - **D1's placement, if git gained a reliable pre-push equivalent that ran before the commit was
@@ -114,11 +161,15 @@ install, so each wants its own tests:
 
 Both mechanisms fail closed, which is the opposite of everything else in this kit.
 
-One exception is worth naming rather than leaving implicit: the frontmatter lint currently fails
-**open** in the case D3 describes. A memory file carrying an Evidence section into the tier that
-syncs passes the commit hook, because that hook checks three of the seven rules. So the strict
-posture below is true of the leak checks and of Edit-over-Write, and only partly true of the
-frontmatter lint until D3's second item lands.
+That was once only partly true. The frontmatter lint failed **open** on the case D3 describes: a
+memory file carrying an Evidence section into the tier that syncs passed the commit hook, because
+that hook checked three of the seven rules. It now runs all seven, so the posture is uniform
+again.
+
+The one remaining open case is deliberate and announced: if the store cannot be identified, or the
+write-time hook cannot be found, the frontmatter lint is skipped and says so. Blocking every
+commit in every repo because a path could not be resolved would be worse, and the leak checks,
+which are the ones a missed run makes permanent, still fail closed.
 
 Elsewhere a broken feature goes quiet and records why, because a noisy hook trains you to ignore
 it. Here a check that cannot run must block, because the cost of a missed leak is permanent: once

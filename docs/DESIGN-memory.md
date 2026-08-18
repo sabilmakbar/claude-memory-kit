@@ -62,8 +62,9 @@ with no section header, a `user_` profile has no `**Why:**` because it is not a 
 worse than the drift it replaces, so they stay guidance, each with a test proving it is not
 denied.
 
-Enforced **by the write-time hook**, which is the only one that checks all of them; the commit
-guardrail currently checks the first three (see [DESIGN-guardrail.md](DESIGN-guardrail.md) D3):
+Enforced **by both hooks, from one implementation**. The commit guardrail used to re-check the
+first three by hand; it now hands each staged file to the write-time hook, so neither can drift
+from the other (see [DESIGN-guardrail.md](DESIGN-guardrail.md) D3). The rules are:
 the type-prefixed filename, `name` equal to the filename slug (which the harness's
 kebab-case default breaks, repeatedly, until this became mechanical), a present `description`
 and `metadata.type`, a `**Why:**` on a `feedback_` rule, and no Evidence section in the tier
