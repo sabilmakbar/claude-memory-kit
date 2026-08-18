@@ -187,6 +187,32 @@ operation the kit cannot undo is not performed automatically. Refusing below the
 leaving a value the kit did not write, and reporting several stores rather than merging them are
 all the same rule.
 
+**The guardrail is wired after the store is chosen, and reads the store back rather than assuming
+it.** It used to be wired further up, from a line naming `~/.claude/memory` directly, which ran
+before `store_setup` had chosen anything. On an install that adopts a project store, that pointed
+the commit lint at a directory holding none of the memories, and said nothing. This is the worst
+silent failure in the file by its own reckoning: the lint is the last check before content becomes
+permanent history, and a repository with no `core.hooksPath` looks exactly like one that passes.
+
+**`store_setup` is deliberately not moved up to meet it**, and the reason is a shared piece of
+state that is easy to miss. There is one backup slot for `settings.json` and an EXIT trap that
+restores it when a run fails. `hooks_wire` copies into that slot unconditionally; `store_setup`
+copies only when nobody has yet. Their current order works because of that asymmetry, not by
+design. Reverse them and `hooks_wire` overwrites the backup with a file that already carries
+`autoMemoryDirectory`, so a failed run would restore a state that never existed and report the
+rollback as successful. Moving the guardrail block instead is inert here, because it touches `git
+config` alone.
+
+**Uninstall reads the store before reverting the setting**, for the mirror of the same reason.
+`store_revert` deletes `autoMemoryDirectory`, so a later question about where the store is would
+be answered with the default. The real store would keep a `core.hooksPath` pointing into a tree
+that has just been deleted, which is the silent-disable case again, arrived at from the other side.
+
+Two tests exist only to hold the ordering invariant rather than to catch a present defect: the
+backup must still hold the pre-install contents afterwards, and must carry none of the run's own
+writes. They pass today. They are there so that a future reordering fails loudly instead of
+quietly weakening the rollback.
+
 ## D11. The mode is a required argument on a first install, and remembered after that
 
 `MEMORY_KIT_MODE` decides whether the kit may rewrite a user's memory, so it is the one setting

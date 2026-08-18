@@ -26,26 +26,42 @@ echo "guardrail/pre-commit:"
 # running the repo copy would read whatever private terms this machine happens to
 # have. Every check below runs a copy whose denylist we control, so a pass means the
 # same thing on a developer machine as in CI.
-GH="$TMP/guardrail"; mkdir -p "$GH"
-cp "$KIT/guardrail/pre-commit" "$GH/pre-commit"
+# core/ comes along because the hook now sources ../core/lib.sh to find the store.
+# A bare copy of pre-commit would resolve no store at all and skip the frontmatter
+# lint entirely, so every check below would pass by not running.
+GKIT="$TMP/gkit"; mkdir -p "$GKIT/guardrail" "$GKIT/core" "$GKIT/hooks"
+cp "$KIT/guardrail/pre-commit" "$GKIT/guardrail/pre-commit"
+cp "$KIT/core/lib.sh" "$GKIT/core/lib.sh"
+# hooks/ too: the frontmatter rules live in the write-time hook now, and pre-commit
+# hands each staged file to it. Without this the lint announces a skip and every
+# check below passes by not running.
+cp "$KIT/hooks/memory-write-guard.sh" "$GKIT/hooks/memory-write-guard.sh"
+cp -R "$KIT/guidance" "$GKIT/guidance"
+GH="$GKIT/guardrail"
 G="$TMP/guard"; mkdir -p "$G"; cd "$G"
 git init -q . && git config core.hooksPath "$GH"
 git config user.email t@t && git config user.name t
+# The frontmatter lint only runs inside the memory store, so the fixture repo has to
+# BE the store. A $HOME of our own naming it keeps that true without touching the
+# real machine's settings.
+GHOME="$TMP/ghome"; mkdir -p "$GHOME/.claude"
+jq -n --arg d "$G" '{autoMemoryDirectory:$d}' > "$GHOME/.claude/settings.json"
+grun() { HOME="$GHOME" "$GH/pre-commit" >/dev/null 2>&1; }
 
 printf -- '---\nname: wrong_slug\n---\nmail me at leak@example.com\n' > feedback_bad.md
 git add feedback_bad.md
-"$GH/pre-commit" >/dev/null 2>&1; check "blocks PII + bad name at repo root" 1 $?
+grun; check "blocks PII + bad name at repo root" 1 $?
 git rm -q --cached feedback_bad.md && rm feedback_bad.md
 
-printf -- '---\nname: feedback_ok\ndescription: a clean rule\n---\nGeneric rule.\n' > feedback_ok.md
+printf -- '---\nname: feedback_ok\ndescription: a clean rule\nmetadata:\n  type: feedback\n  source: direct\n---\nGeneric rule.\n\n**Why:** it keeps the history readable.\n' > feedback_ok.md
 printf '# docs\n' > README.md
 git add feedback_ok.md README.md
-"$GH/pre-commit" >/dev/null 2>&1; check "passes clean memory file + README at root" 0 $?
+grun; check "passes clean memory file + README at root" 0 $?
 git rm -qr --cached . && rm feedback_ok.md README.md
 
 mkdir -p memory && printf -- '---\nname: x\n---\nno desc\n' > memory/notes.md
 git add memory/notes.md
-"$GH/pre-commit" >/dev/null 2>&1; check "blocks bad file under memory/" 1 $?
+grun; check "blocks bad file under memory/" 1 $?
 git rm -q --cached memory/notes.md && rm memory/notes.md
 
 # style rule: em-dashes blocked in reader-facing docs only (same rule and scope as
@@ -53,47 +69,149 @@ git rm -q --cached memory/notes.md && rm memory/notes.md
 mkdir -p docs
 printf 'a clause — set off wrong\n' > docs/style.md
 git add docs/style.md
-"$GH/pre-commit" >/dev/null 2>&1; check "blocks an em-dash staged in docs/*.md" 1 $?
+grun; check "blocks an em-dash staged in docs/*.md" 1 $?
 git rm -q --cached docs/style.md && rm docs/style.md
 
 printf 'intro — dense on purpose\n' > README.md
 git add README.md
-"$GH/pre-commit" >/dev/null 2>&1; check "blocks an em-dash staged in README.md" 1 $?
+grun; check "blocks an em-dash staged in README.md" 1 $?
 git rm -q --cached README.md && rm README.md
 
 # negative controls: memory files keep their em-dashes (exempt prose), and the
 # frontmatter lint never reaches docs/ (its path filter is root + memory/ only)
-printf -- '---\nname: feedback_dash\ndescription: legit — memory prose is exempt\n---\nBody — with dashes.\n' > feedback_dash.md
+printf -- '---\nname: feedback_dash\ndescription: legit — memory prose is exempt\nmetadata:\n  type: feedback\n  source: direct\n---\nBody — with dashes.\n\n**Why:** prose in a memory file is not reader-facing docs.\n' > feedback_dash.md
 printf 'plain doc prose, no frontmatter, no dashes\n' > docs/notes.md
 git add feedback_dash.md docs/notes.md
-"$GH/pre-commit" >/dev/null 2>&1; check "memory file with em-dash + frontmatter-less docs file both pass" 0 $?
+grun; check "memory file with em-dash + frontmatter-less docs file both pass" 0 $?
 git rm -qr --cached . && rm feedback_dash.md docs/notes.md && rmdir docs
 
 # private terms: both mechanisms, because breaking either one is silent. The generic
 # patterns would keep blocking emails and home paths, every other check here would
 # stay green, and only the terms you listed would quietly stop being checked.
-printf -- '---\nname: feedback_terms\ndescription: d\n---\nthe northwind engagement notes\n' > feedback_terms.md
+printf -- '---\nname: feedback_terms\ndescription: d\nmetadata:\n  type: feedback\n  source: direct\n---\nthe northwind engagement notes\n\n**Why:** it matters.\n' > feedback_terms.md
 git add feedback_terms.md
-"$GH/pre-commit" >/dev/null 2>&1
+grun
 check "control: with no denylist and no env var, the term passes" 0 $?
 printf 'northwind\n' > "$GH/denylist.local"
-"$GH/pre-commit" >/dev/null 2>&1
+grun
 check "a term from denylist.local blocks the commit" 1 $?
 rm -f "$GH/denylist.local"
-CLAUDE_CONFIG_DENYLIST=northwind "$GH/pre-commit" >/dev/null 2>&1
+CLAUDE_CONFIG_DENYLIST=northwind HOME="$GHOME" "$GH/pre-commit" >/dev/null 2>&1
 check "a term from CLAUDE_CONFIG_DENYLIST blocks the commit" 1 $?
 # a file of only comments and blanks must not turn into a pattern that matches anything
 printf '# northwind is only mentioned in a comment\n\n' > "$GH/denylist.local"
-"$GH/pre-commit" >/dev/null 2>&1
+grun
 check "comments and blank lines in denylist.local are not terms" 0 $?
 printf '# a comment\n\ntyrell\n' > "$GH/denylist.local"
-"$GH/pre-commit" >/dev/null 2>&1
+grun
 check "control: a real term beside the comment still passes other content" 0 $?
-printf -- '---\nname: feedback_terms\ndescription: d\n---\nthe tyrell account\n' > feedback_terms.md
+printf -- '---\nname: feedback_terms\ndescription: d\nmetadata:\n  type: feedback\n  source: direct\n---\nthe tyrell account\n\n**Why:** it matters.\n' > feedback_terms.md
 git add feedback_terms.md
-"$GH/pre-commit" >/dev/null 2>&1
+grun
 check "a term after a comment line is still read" 1 $?
 rm -f "$GH/denylist.local"
+
+# The frontmatter lint is gated on being IN the store; the PII scan is not. Outside
+# the store the lint used to run anyway, which is why an exemption list existed at
+# all and why it grew a copy per check.
+OUTHOME="$TMP/outhome"; mkdir -p "$OUTHOME/.claude"
+jq -n --arg d "$TMP/some-other-store" '{autoMemoryDirectory:$d}' > "$OUTHOME/.claude/settings.json"
+printf -- '---\nname: x\n---\nno desc and a bad slug\n' > notes.md
+git add notes.md
+HOME="$OUTHOME" "$GH/pre-commit" >/dev/null 2>&1
+check "outside the store the frontmatter lint does not run" 0 $?
+printf -- '---\nname: x\n---\nmail me at leak@example.com\n' > notes.md
+git add notes.md
+HOME="$OUTHOME" "$GH/pre-commit" >/dev/null 2>&1
+check "but the PII scan still does" 1 $?
+grun; check "and inside the store the lint runs again" 1 $?
+git rm -q --cached notes.md && rm notes.md
+
+# A store reached through a symlink still counts as the store. git reports the
+# physical path and the setting holds whatever was written, so comparing them raw
+# skipped the lint on macOS, where /var is a link, and on any linked home.
+LINKHOME="$TMP/linkhome"; mkdir -p "$LINKHOME/.claude"
+ln -sfn "$G" "$TMP/store-link"
+jq -n --arg d "$TMP/store-link" '{autoMemoryDirectory:$d}' > "$LINKHOME/.claude/settings.json"
+printf -- '---\nname: x\n---\nno desc\n' > notes.md
+git add notes.md
+HOME="$LINKHOME" "$GH/pre-commit" >/dev/null 2>&1
+check "a store named through a symlink is still the store" 1 $?
+git rm -q --cached notes.md && rm notes.md
+
+# No lib.sh beside the hook means no store can be resolved. Skipping is right, but
+# it has to say so: this is the last check before content becomes permanent history.
+BAREH="$TMP/bare-guardrail"; mkdir -p "$BAREH"
+cp "$KIT/guardrail/pre-commit" "$BAREH/pre-commit"
+printf -- '---\nname: x\n---\nno desc\n' > notes.md
+git add notes.md
+out=$(HOME="$GHOME" "$BAREH/pre-commit" 2>&1); rc=$?
+check "with no lib.sh beside it the lint is skipped, not failed" 0 "$rc"
+echo "$out" | grep -q "frontmatter lint skipped" \
+  && ok "and it says the lint was skipped" || fail "skipped in silence ($out)"
+echo "$out" | grep -q "PII scan above still ran" \
+  && ok "and says the PII half still ran" || fail "no mention of what did run"
+git rm -q --cached notes.md && rm notes.md
+
+# The four rules the commit hook never checked. It re-implemented three of the
+# seven by hand, so a file arriving by any route that skips Write and Edit -- a
+# pull from another machine, a hand edit, the harness's own memory writer -- met
+# only those three before becoming permanent history.
+for cse in "type:missing metadata type" "source:missing origin" "why:feedback rule with no Why"; do
+  key="${cse%%:*}"; label="${cse#*:}"
+  case "$key" in
+    type)   body='---\nname: feedback_x\ndescription: d\nmetadata:\n  source: direct\n---\nrule\n\n**Why:** r.\n' ;;
+    source) body='---\nname: feedback_x\ndescription: d\nmetadata:\n  type: feedback\n---\nrule\n\n**Why:** r.\n' ;;
+    why)    body='---\nname: feedback_x\ndescription: d\nmetadata:\n  type: feedback\n  source: direct\n---\nrule with no why\n' ;;
+  esac
+  printf -- "$body" > feedback_x.md
+  git add feedback_x.md
+  grun; check "commit blocks a $label" 1 $?
+  git rm -q --cached feedback_x.md && rm feedback_x.md
+done
+
+# The rule that matters most: global memory syncs to a personal repo, and an
+# Evidence section is the raw incident material the authoring path stopped
+# producing. A file that never used that path can still carry one in.
+printf -- '---\nname: feedback_x\ndescription: d\nmetadata:\n  type: feedback\n  source: direct\n---\nrule\n\n**Why:** r.\n\n**Evidence:** they said "ship it" in the acme repo\n' > feedback_x.md
+git add feedback_x.md
+grun; check "commit blocks an Evidence section in the synced tier" 1 $?
+out=$(HOME="$GHOME" "$GH/pre-commit" 2>&1)
+echo "$out" | grep -q 'Evidence' && ok "and the message names the rule that fired" || fail "unhelpful message ($out)"
+git rm -q --cached feedback_x.md && rm feedback_x.md
+
+# Staged content, not the worktree copy. Judging the file on disk would lint
+# something this commit does not contain, in both directions.
+printf -- '---\nname: feedback_x\ndescription: d\nmetadata:\n  type: feedback\n  source: direct\n---\nrule\n\n**Why:** r.\n' > feedback_x.md
+git add feedback_x.md
+printf -- '---\nname: feedback_x\n---\nbroken only in the worktree\n' > feedback_x.md
+grun; check "a clean staged file passes though the worktree copy is broken" 0 $?
+git add feedback_x.md
+grun; check "and staging the broken copy then blocks" 1 $?
+git rm -q --cached feedback_x.md && rm feedback_x.md
+
+# One implementation, two entry points: the commit hook must not grow its own copy
+# of any rule again. Binding to the id list is what makes a future divergence fail
+# here rather than in someone's history.
+nrules=$(bash "$KIT/hooks/memory-write-guard.sh" --rules | grep -c .)
+[ "$nrules" = 7 ] && ok "the write-time hook still declares seven rules" || fail "rule count moved to $nrules"
+grep -q 'memory-write-guard.sh' "$KIT/guardrail/pre-commit" \
+  && ok "and the commit hook defers to it" || fail "pre-commit no longer calls the write-time hook"
+grep -qE '!= filename slug|missing description:' "$KIT/guardrail/pre-commit" \
+  && fail "pre-commit has grown its own copy of a rule again" \
+  || ok "and re-implements none of them itself"
+
+# lib.sh present but the write-time hook absent: skip, and say which half is gone.
+HALFH="$TMP/half-guardrail"; mkdir -p "$HALFH/guardrail" "$HALFH/core"
+cp "$KIT/guardrail/pre-commit" "$HALFH/guardrail/pre-commit"
+cp "$KIT/core/lib.sh" "$HALFH/core/lib.sh"
+printf -- '---\nname: x\n---\nno desc\n' > notes.md
+git add notes.md
+out=$(HOME="$GHOME" "$HALFH/guardrail/pre-commit" 2>&1); rc=$?
+check "with the write-time hook missing the lint is skipped, not failed" 0 "$rc"
+echo "$out" | grep -q "write-time hook or jq is not available" \
+  && ok "and says which half is missing" || fail "silent or wrong reason ($out)"
+git rm -q --cached notes.md && rm notes.md
 git rm -qr --cached . && rm feedback_terms.md
 
 # ---------- adoption merge + index engine ----------
@@ -907,6 +1025,113 @@ out=$(HOME="$SH" bash "$KIT/install.sh" --uninstall 2>&1)
   && ok "a value inside \$HOME with no marker is still left alone" || fail "no-marker value stripped"
 echo "$out" | grep -q "no .memory-kit-marker.json beside it" \
   && ok "and the reason given is the missing marker" || fail "wrong reason ($out)"
+
+echo "the kit follows the store it named:"
+# install NAMES the store with autoMemoryDirectory (D8), so every consumer has to
+# read that key back. They recomputed the default instead, which agrees with the
+# setting on any machine where the default was the store chosen, and diverges
+# silently everywhere else: an adopted project store left the index, the guard and
+# the reminders all pointed at an empty directory. No test covered that case.
+lib_dir() { HOME="$1" bash -c ". \"$KIT/core/lib.sh\"; mk_memory_dir"; }
+
+SH=$(store_home follows-setting)
+mkdir -p "$SH/.claude"
+jq -n --arg d "$SH/.claude/projects/-p/memory" '{autoMemoryDirectory:$d}' > "$SH/.claude/settings.json"
+[ "$(lib_dir "$SH")" = "$SH/.claude/projects/-p/memory" ] \
+  && ok "mk_memory_dir returns the named store" || fail "accessor ignored the setting: $(lib_dir "$SH")"
+
+# the setting explicitly permits a ~/ prefix, and a bare ~ never expands inside a
+# shell variable, so an unexpanded value would become a literal directory named ~
+SH=$(store_home follows-tilde); mkdir -p "$SH/.claude"
+printf '{"autoMemoryDirectory":"~/somewhere/mem"}' > "$SH/.claude/settings.json"
+[ "$(lib_dir "$SH")" = "$SH/somewhere/mem" ] \
+  && ok "a ~/ prefix in the setting is expanded" || fail "tilde not expanded: $(lib_dir "$SH")"
+
+SH=$(store_home follows-default); mkdir -p "$SH/.claude"
+printf '{}' > "$SH/.claude/settings.json"
+[ "$(lib_dir "$SH")" = "$SH/.claude/memory" ] \
+  && ok "no setting falls back to the default store" || fail "bad fallback: $(lib_dir "$SH")"
+SH=$(store_home follows-nofile)
+[ "$(lib_dir "$SH")" = "$SH/.claude/memory" ] \
+  && ok "no settings file falls back too" || fail "bad fallback with no file: $(lib_dir "$SH")"
+
+# the guardrail runs as a git hook in whatever environment the commit came from,
+# so jq is not a given; without it the accessor has to degrade to the old
+# behaviour rather than to an empty path that every caller would then join onto
+mkdir -p "$TMP/nojq"
+SH=$(store_home follows-nojq); mkdir -p "$SH/.claude"
+jq -n --arg d "$SH/elsewhere" '{autoMemoryDirectory:$d}' > "$SH/.claude/settings.json"
+# bash by absolute path: the empty PATH is the point of the test, and resolving
+# the shell through it would fail the run for a reason that is not the one asked
+BASH_ABS=$(command -v bash)
+got=$(HOME="$SH" PATH="$TMP/nojq" "$BASH_ABS" -c ". \"$KIT/core/lib.sh\"; mk_memory_dir")
+[ "$got" = "$SH/.claude/memory" ] \
+  && ok "without jq it degrades to the default, not to empty" || fail "bad no-jq fallback: '$got'"
+
+# the bug itself, end to end: install adopts a project store, and the index pass
+# must build in THAT store rather than beside it
+SH=$(store_home follows-index); mkdir -p "$SH/.claude/projects/-r/memory" "$SH/proj"
+printf -- '---\nname: user_real\ndescription: the real one\n---\nbody\n' \
+  > "$SH/.claude/projects/-r/memory/user_real.md"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+[ "$(jq -r .autoMemoryDirectory "$SH/.claude/settings.json")" = "$SH/.claude/projects/-r/memory" ] \
+  && ok "install adopts the project store" || fail "install did not adopt it"
+echo '{"session_id":"follows"}' | HOME="$SH" CLAUDE_PROJECT_DIR="$SH/proj" \
+  bash "$KIT/scripts/refresh-memory-index.sh" >/dev/null 2>&1
+grep -q 'user_real' "$SH/.claude/projects/-r/memory/MEMORY.md" 2>/dev/null \
+  && ok "the index is built in the adopted store" || fail "adopted store left unindexed"
+[ -f "$SH/.claude/memory/MEMORY.md" ] \
+  && fail "a stray index was built in the default location" \
+  || ok "and no stray index appears in the default location"
+
+echo "the guardrail follows the store too:"
+# The guardrail is the last check before content becomes permanent history, and it
+# used to be wired at the default location, from a line that ran BEFORE the store
+# was chosen. On an install that adopts a project store it therefore guarded a
+# directory holding none of the memories, silently. Both stores are git repos here
+# so the wrong target is detectable rather than merely absent.
+SH=$(store_home guard-adopted); mkdir -p "$SH/.claude/memory" "$SH/.claude/projects/-r/memory"
+git init -q "$SH/.claude/memory"                 # a repo, but holds no memory files
+git init -q "$SH/.claude/projects/-r/memory"
+printf -- '---\nname: user_x\n---\n' > "$SH/.claude/projects/-r/memory/user_x.md"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+[ "$(git -C "$SH/.claude/projects/-r/memory" config core.hooksPath)" = "$SH/.claude/memory-kit/guardrail" ] \
+  && ok "the guardrail is wired on the adopted store" || fail "adopted store left unguarded"
+[ -z "$(git -C "$SH/.claude/memory" config core.hooksPath 2>/dev/null)" ] \
+  && ok "and not on the default location it did not choose" || fail "guardrail wired to the wrong store"
+HOME="$SH" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
+[ -z "$(git -C "$SH/.claude/projects/-r/memory" config core.hooksPath 2>/dev/null)" ] \
+  && ok "uninstall unsets it on the adopted store" \
+  || fail "core.hooksPath left pointing into the deleted tree"
+
+# The uninstall reads the store BEFORE store_revert deletes the setting. Asked
+# afterwards it would name the default and leave the real store still pointing at
+# a tree that no longer exists, which is the silent-disable case above.
+SH=$(store_home guard-revert-order); mkdir -p "$SH/.claude/projects/-r/memory"
+git init -q "$SH/.claude/projects/-r/memory"
+printf -- '---\nname: user_x\n---\n' > "$SH/.claude/projects/-r/memory/user_x.md"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+out=$(HOME="$SH" bash "$KIT/install.sh" --uninstall 2>&1)
+echo "$out" | grep -q "unset core.hooksPath in $SH/.claude/projects/-r/memory" \
+  && ok "and names the store it actually unset" || fail "unset reported against the wrong path ($out)"
+
+# The invariant that makes moving store_setup unsafe, locked down: hooks_wire copies
+# settings.json to the single backup slot unconditionally while store_setup only
+# copies when nobody has, so their order decides whether the backup holds the
+# pre-install file. A rollback restoring a state that never existed would otherwise
+# report success.
+SH=$(store_home guard-backup-order); mkdir -p "$SH/.claude"
+printf '{"theirOwnKey":"untouched"}' > "$SH/.claude/settings.json"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+# Compared as JSON, not as bytes: hooks_wire runs hooks_migrate and
+# hooks_drop_legacy before it snapshots, and those jq passes reformat the file even
+# when they change nothing. The invariant under test is the contents, not the layout.
+[ "$(jq -S . "$SH/.claude/settings.json.memory-kit.bak")" = '{
+  "theirOwnKey": "untouched"
+}' ] && ok "the settings backup still holds the pre-install contents" \
+     || fail "the backup was taken after the install had written to settings.json"
+[ "$(jq -r '.autoMemoryDirectory // "ABSENT"' "$SH/.claude/settings.json.memory-kit.bak")" = ABSENT ] \
+  && ok "and carries none of this run's own writes" || fail "backup contains autoMemoryDirectory"
 
 echo "install.sh legacy hook names:"
 # A machine that installed the kit BEFORE the rename. managed_names comes from the

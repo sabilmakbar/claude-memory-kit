@@ -49,7 +49,7 @@ case "$fp" in
     *) exit 0 ;;
 esac
 base="${fp##*/}"
-case "$base" in MEMORY.md|README.md|CLAUDE.md) exit 0 ;; esac
+mk_is_nonmemory "$base" && exit 0
 
 # Write carries the whole file; Edit carries only a fragment, so a rule is checked
 # only when the fragment actually contains the line it governs. Never guess at

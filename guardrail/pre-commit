@@ -59,25 +59,76 @@ if [ "${#docfiles[@]}" -gt 0 ]; then
 fi
 
 # --- memory frontmatter lint: enforce naming convention + required fields ---
-# memory files live at the repo root or under memory/; known non-memory docs are exempt
+#
+# Gated on being IN the memory store. It used to run in every repo this hook is
+# wired into, including this kit's own checkout, where no memory file has ever
+# lived: each new root-level document there had to be added to an exemption list,
+# and that list grew into four copies in two lengths that disagreed with each
+# other. Asking where we are replaces the list with a fact.
+#
+# Only this half is gated. The PII scan above runs everywhere, because a leak is a
+# leak in any repo.
+#
+# lib.sh sits one directory up in every tree this hook runs from: the deployed
+# kit, and this repo's own checkout. If it cannot be read, or the store cannot be
+# resolved, the lint is skipped AND SAID SO. Skipping in silence is how a guard
+# stops guarding without anyone noticing, and this is the last check before
+# content becomes permanent history.
+_gr_lib="$hookdir/../core/lib.sh"
+if [ -r "$_gr_lib" ]; then
+  . "$_gr_lib"
+  # Resolved physically before comparing. git rev-parse always reports the real
+  # path, while the setting holds whatever was written, so a store reached through
+  # any symlink (/var on macOS, a linked home, a mounted volume) would compare
+  # unequal and skip the lint without a word.
+  _gr_store="$(cd "$(mk_memory_dir 2>/dev/null)" 2>/dev/null && pwd -P || printf '')"
+  _gr_top="$(git rev-parse --show-toplevel 2>/dev/null || printf '')"
+  # The LOGICAL path too, separately. The write-time hook scopes its rules with its
+  # own `case "$fp" in "$(mk_memory_dir)"/*`, which is the unresolved value, so a
+  # file_path built from the resolved one would fall straight through that filter
+  # and the rules keyed on the synced tier would never fire.
+  _gr_logical="$(mk_memory_dir 2>/dev/null || printf '')"
+  _gr_guard="$hookdir/../hooks/memory-write-guard.sh"
+else
+  _gr_store=""; _gr_top=""; _gr_logical=""; _gr_guard=""
+fi
+if [ -z "$_gr_store" ] || [ -z "$_gr_top" ]; then
+  echo "note: memory frontmatter lint skipped: could not tell whether this repo is the memory store" >&2
+  echo "      (the PII scan above still ran; re-run install.sh if this repo should be linted)" >&2
+  exit 0
+fi
+if [ ! -r "$_gr_guard" ] || ! command -v jq >/dev/null 2>&1; then
+  echo "note: memory frontmatter lint skipped: the write-time hook or jq is not available here" >&2
+  echo "      (the PII scan above still ran)" >&2
+  exit 0
+fi
+[ "$_gr_top" = "$_gr_store" ] || exit 0
+
 memfiles="$(git diff --cached --name-only --diff-filter=ACM \
-  | grep -E '^(memory/)?[^/]+\.md$' \
-  | grep -vE '(^|/)(MEMORY|README|CLAUDE|CONTRIBUTING|CHANGELOG|DEPENDENCIES|HOW-IT-WORKS)\.md$')"
+  | grep -E '^(memory/)?[^/]+\.md$')"
+# Handed to the write-time hook rather than re-checked here. This used to
+# re-implement three of its seven rules by hand, which is how the two halves of the
+# kit came to disagree about what a valid memory file is, and it left four rules
+# with no check at any point: edit-over-write turns every change to an existing
+# file into an Edit, and three rules only run on a Write because absence cannot be
+# judged from a fragment. Commit time is the only place a whole file is ever seen.
+#
+# Staged content, never the worktree copy, or the lint judges something this commit
+# does not contain.
 bad=""
 for f in $memfiles; do
-  slug="$(basename "$f" .md)"
-  case "$slug" in user_*|feedback_*|project_*) ;; *) bad="$bad|$f: filename must start with user_/feedback_/project_"; continue ;; esac
-  content="$(git show ":$f")"
-  name="$(printf '%s\n' "$content" | sed -n 's/^name:[[:space:]]*//p' | head -1)"
-  desc="$(printf '%s\n' "$content" | sed -n 's/^description:[[:space:]]*//p' | head -1)"
-  [ "$name" = "$slug" ] || bad="$bad|$f: name '$name' != filename slug '$slug'"
-  [ -n "$desc" ] || bad="$bad|$f: missing description:"
+  mk_is_nonmemory "$(basename "$f")" && continue
+  _gr_why="$(git show ":$f" 2>/dev/null \
+    | jq -Rs --arg p "$_gr_logical/$f" '{tool_input:{file_path:$p, content:.}}' 2>/dev/null \
+    | bash "$_gr_guard" 2>/dev/null \
+    | jq -r '.hookSpecificOutput.permissionDecisionReason // empty' 2>/dev/null)"
+  [ -n "$_gr_why" ] && bad="$bad|$f: $_gr_why"
 done
 if [ -n "$bad" ]; then
   { echo "✖ commit blocked — memory frontmatter issues:"
     printf '%s' "$bad" | tr '|' '\n' | sed '/^$/d; s/^/   /'
     echo ""
-    echo "Fix: name: must equal the filename; description: required; prefix user_/feedback_/project_."
+    echo "These are the same rules the write-time hook applies; each message names the fix."
   } >&2
   exit 1
 fi

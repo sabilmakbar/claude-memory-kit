@@ -29,6 +29,17 @@ says nothing about the other.
 
 ### Fixed
 
+- The commit guardrail enforces the same seven memory-file rules as the write-time hook, from one
+  implementation, instead of re-checking three of them by hand. A file arriving without passing
+  through Write or Edit, such as a pull from another machine or a hand edit, previously met only
+  those three before becoming permanent history. [#48](https://github.com/sabilmakbar/claude-memory-kit/pull/48)
+- The memory frontmatter lint runs only inside the memory store, and the list of non-memory
+  filenames it skips has one definition instead of four. Four copies had drifted into two lengths,
+  so a `CONTRIBUTING.md` in the store was exempt from the commit lint and denied by the write-time
+  hook at the same moment. A skipped lint now says so instead of passing silently. [#47](https://github.com/sabilmakbar/claude-memory-kit/pull/47)
+- Every consumer reads the store named by `autoMemoryDirectory` rather than recomputing the
+  default, and the commit guardrail is wired to that store. An install that adopted a project store
+  previously left the index, the write guard and the reminders pointed at an empty directory. [#45](https://github.com/sabilmakbar/claude-memory-kit/pull/45), [#46](https://github.com/sabilmakbar/claude-memory-kit/pull/46)
 - `--uninstall` acts only on a store inside the `$HOME` it was invoked with. It followed the
   absolute path in `autoMemoryDirectory` wherever it pointed, so a suite running in a throwaway
   `$HOME` seeded from the real `settings.json` reverted the real store. `--purge-marker` now

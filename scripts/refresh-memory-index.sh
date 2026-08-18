@@ -10,7 +10,11 @@
 _LIB="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)/core/lib.sh"
 [ -r "$_LIB" ] && . "$_LIB"
 
-CENTRAL="$HOME/.claude/memory"
+# Asked, not recomputed. This line carried its own copy of the default, so an
+# install that adopted a different store had the index built in an empty
+# directory while the real memories sat unindexed elsewhere. lib.sh may be
+# unreadable here (the sourcing above is conditional), hence the same fallback.
+CENTRAL="$(mk_memory_dir 2>/dev/null || printf '%s/.claude/memory' "$HOME")"
 CENTRAL_MD="$CENTRAL/MEMORY.md"
 MOUNTS_BASE="$HOME/.claude/memory-mounts"
 mkdir -p "$CENTRAL" "$MOUNTS_BASE"
@@ -107,7 +111,8 @@ for f in "$CENTRAL"/*.md; do
     [ -f "$f" ] || continue
     b=$(basename "$f")
     # known non-memory docs (same exemptions as the guardrail lint) are not "unindexed"
-    case "$b" in MEMORY.md|README.md|CLAUDE.md|CONTRIBUTING.md|CHANGELOG.md|DEPENDENCIES.md|HOW-IT-WORKS.md|user_*.md|feedback_*.md) ;; *) unindexed="$unindexed${unindexed:+, }$b" ;; esac
+    mk_is_nonmemory "$b" && continue
+    case "$b" in user_*.md|feedback_*.md) ;; *) unindexed="$unindexed${unindexed:+, }$b" ;; esac
 done
 if [ -n "$unindexed" ]; then
     printf '\n> ⚠ Unindexed files in ~/.claude/memory — not loaded into any session. Rename to user_*/feedback_* (project files belong in memory-mounts): %s\n' "$unindexed" >> "$CENTRAL_MD"
