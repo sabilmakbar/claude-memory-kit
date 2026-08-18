@@ -184,6 +184,16 @@ hooks_wire() {
   if [ "$DRY" -eq 1 ]; then printf '  would: merge kit hooks into %s\n' "$SETT"; return 0; fi
   mkdir -p "$(dirname "$SETT")"
   if [ ! -f "$SETT" ]; then echo '{}' > "$SETT"; SETT_CREATED=1; fi
+  # Snapshot BEFORE anything rewrites the file. It used to be taken further down,
+  # after hooks_migrate and hooks_drop_legacy had each run a jq pass, so the "previous
+  # contents" were already rewritten: a legacy hook the sweep had unwired was absent
+  # from the backup, and a failed run restored a file still missing it while reporting
+  # a successful rollback. The same lateness reformatted a hand-edited file even when
+  # nothing changed, and left the two passes above running with no backup at all.
+  if [ "$SETT_TOUCHED" -eq 0 ]; then
+    [ "$SETT_CREATED" -eq 0 ] && cp "$SETT" "$SETT_BAK"
+    SETT_TOUCHED=1
+  fi
   hooks_migrate
   hooks_drop_legacy
 
@@ -246,8 +256,6 @@ hooks_wire() {
     return 1
   fi
   rm -f "$snap"
-  [ "$SETT_CREATED" -eq 0 ] && cp "$SETT" "$SETT_BAK"
-  SETT_TOUCHED=1
   mv "$tmp" "$SETT"
   if [ "$SETT_CREATED" -eq 1 ]
   then echo "  hooks wired into $SETT (created; there was no settings.json before)"
