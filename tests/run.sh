@@ -29,9 +29,14 @@ echo "guardrail/pre-commit:"
 # core/ comes along because the hook now sources ../core/lib.sh to find the store.
 # A bare copy of pre-commit would resolve no store at all and skip the frontmatter
 # lint entirely, so every check below would pass by not running.
-GKIT="$TMP/gkit"; mkdir -p "$GKIT/guardrail" "$GKIT/core"
+GKIT="$TMP/gkit"; mkdir -p "$GKIT/guardrail" "$GKIT/core" "$GKIT/hooks"
 cp "$KIT/guardrail/pre-commit" "$GKIT/guardrail/pre-commit"
 cp "$KIT/core/lib.sh" "$GKIT/core/lib.sh"
+# hooks/ too: the frontmatter rules live in the write-time hook now, and pre-commit
+# hands each staged file to it. Without this the lint announces a skip and every
+# check below passes by not running.
+cp "$KIT/hooks/memory-write-guard.sh" "$GKIT/hooks/memory-write-guard.sh"
+cp -R "$KIT/guidance" "$GKIT/guidance"
 GH="$GKIT/guardrail"
 G="$TMP/guard"; mkdir -p "$G"; cd "$G"
 git init -q . && git config core.hooksPath "$GH"
@@ -48,7 +53,7 @@ git add feedback_bad.md
 grun; check "blocks PII + bad name at repo root" 1 $?
 git rm -q --cached feedback_bad.md && rm feedback_bad.md
 
-printf -- '---\nname: feedback_ok\ndescription: a clean rule\n---\nGeneric rule.\n' > feedback_ok.md
+printf -- '---\nname: feedback_ok\ndescription: a clean rule\nmetadata:\n  type: feedback\n  source: direct\n---\nGeneric rule.\n\n**Why:** it keeps the history readable.\n' > feedback_ok.md
 printf '# docs\n' > README.md
 git add feedback_ok.md README.md
 grun; check "passes clean memory file + README at root" 0 $?
@@ -74,7 +79,7 @@ git rm -q --cached README.md && rm README.md
 
 # negative controls: memory files keep their em-dashes (exempt prose), and the
 # frontmatter lint never reaches docs/ (its path filter is root + memory/ only)
-printf -- '---\nname: feedback_dash\ndescription: legit — memory prose is exempt\n---\nBody — with dashes.\n' > feedback_dash.md
+printf -- '---\nname: feedback_dash\ndescription: legit — memory prose is exempt\nmetadata:\n  type: feedback\n  source: direct\n---\nBody — with dashes.\n\n**Why:** prose in a memory file is not reader-facing docs.\n' > feedback_dash.md
 printf 'plain doc prose, no frontmatter, no dashes\n' > docs/notes.md
 git add feedback_dash.md docs/notes.md
 grun; check "memory file with em-dash + frontmatter-less docs file both pass" 0 $?
@@ -83,7 +88,7 @@ git rm -qr --cached . && rm feedback_dash.md docs/notes.md && rmdir docs
 # private terms: both mechanisms, because breaking either one is silent. The generic
 # patterns would keep blocking emails and home paths, every other check here would
 # stay green, and only the terms you listed would quietly stop being checked.
-printf -- '---\nname: feedback_terms\ndescription: d\n---\nthe northwind engagement notes\n' > feedback_terms.md
+printf -- '---\nname: feedback_terms\ndescription: d\nmetadata:\n  type: feedback\n  source: direct\n---\nthe northwind engagement notes\n\n**Why:** it matters.\n' > feedback_terms.md
 git add feedback_terms.md
 grun
 check "control: with no denylist and no env var, the term passes" 0 $?
@@ -100,7 +105,7 @@ check "comments and blank lines in denylist.local are not terms" 0 $?
 printf '# a comment\n\ntyrell\n' > "$GH/denylist.local"
 grun
 check "control: a real term beside the comment still passes other content" 0 $?
-printf -- '---\nname: feedback_terms\ndescription: d\n---\nthe tyrell account\n' > feedback_terms.md
+printf -- '---\nname: feedback_terms\ndescription: d\nmetadata:\n  type: feedback\n  source: direct\n---\nthe tyrell account\n\n**Why:** it matters.\n' > feedback_terms.md
 git add feedback_terms.md
 grun
 check "a term after a comment line is still read" 1 $?
@@ -146,6 +151,66 @@ echo "$out" | grep -q "frontmatter lint skipped" \
   && ok "and it says the lint was skipped" || fail "skipped in silence ($out)"
 echo "$out" | grep -q "PII scan above still ran" \
   && ok "and says the PII half still ran" || fail "no mention of what did run"
+git rm -q --cached notes.md && rm notes.md
+
+# The four rules the commit hook never checked. It re-implemented three of the
+# seven by hand, so a file arriving by any route that skips Write and Edit -- a
+# pull from another machine, a hand edit, the harness's own memory writer -- met
+# only those three before becoming permanent history.
+for cse in "type:missing metadata type" "source:missing origin" "why:feedback rule with no Why"; do
+  key="${cse%%:*}"; label="${cse#*:}"
+  case "$key" in
+    type)   body='---\nname: feedback_x\ndescription: d\nmetadata:\n  source: direct\n---\nrule\n\n**Why:** r.\n' ;;
+    source) body='---\nname: feedback_x\ndescription: d\nmetadata:\n  type: feedback\n---\nrule\n\n**Why:** r.\n' ;;
+    why)    body='---\nname: feedback_x\ndescription: d\nmetadata:\n  type: feedback\n  source: direct\n---\nrule with no why\n' ;;
+  esac
+  printf -- "$body" > feedback_x.md
+  git add feedback_x.md
+  grun; check "commit blocks a $label" 1 $?
+  git rm -q --cached feedback_x.md && rm feedback_x.md
+done
+
+# The rule that matters most: global memory syncs to a personal repo, and an
+# Evidence section is the raw incident material the authoring path stopped
+# producing. A file that never used that path can still carry one in.
+printf -- '---\nname: feedback_x\ndescription: d\nmetadata:\n  type: feedback\n  source: direct\n---\nrule\n\n**Why:** r.\n\n**Evidence:** they said "ship it" in the acme repo\n' > feedback_x.md
+git add feedback_x.md
+grun; check "commit blocks an Evidence section in the synced tier" 1 $?
+out=$(HOME="$GHOME" "$GH/pre-commit" 2>&1)
+echo "$out" | grep -q 'Evidence' && ok "and the message names the rule that fired" || fail "unhelpful message ($out)"
+git rm -q --cached feedback_x.md && rm feedback_x.md
+
+# Staged content, not the worktree copy. Judging the file on disk would lint
+# something this commit does not contain, in both directions.
+printf -- '---\nname: feedback_x\ndescription: d\nmetadata:\n  type: feedback\n  source: direct\n---\nrule\n\n**Why:** r.\n' > feedback_x.md
+git add feedback_x.md
+printf -- '---\nname: feedback_x\n---\nbroken only in the worktree\n' > feedback_x.md
+grun; check "a clean staged file passes though the worktree copy is broken" 0 $?
+git add feedback_x.md
+grun; check "and staging the broken copy then blocks" 1 $?
+git rm -q --cached feedback_x.md && rm feedback_x.md
+
+# One implementation, two entry points: the commit hook must not grow its own copy
+# of any rule again. Binding to the id list is what makes a future divergence fail
+# here rather than in someone's history.
+nrules=$(bash "$KIT/hooks/memory-write-guard.sh" --rules | grep -c .)
+[ "$nrules" = 7 ] && ok "the write-time hook still declares seven rules" || fail "rule count moved to $nrules"
+grep -q 'memory-write-guard.sh' "$KIT/guardrail/pre-commit" \
+  && ok "and the commit hook defers to it" || fail "pre-commit no longer calls the write-time hook"
+grep -qE '!= filename slug|missing description:' "$KIT/guardrail/pre-commit" \
+  && fail "pre-commit has grown its own copy of a rule again" \
+  || ok "and re-implements none of them itself"
+
+# lib.sh present but the write-time hook absent: skip, and say which half is gone.
+HALFH="$TMP/half-guardrail"; mkdir -p "$HALFH/guardrail" "$HALFH/core"
+cp "$KIT/guardrail/pre-commit" "$HALFH/guardrail/pre-commit"
+cp "$KIT/core/lib.sh" "$HALFH/core/lib.sh"
+printf -- '---\nname: x\n---\nno desc\n' > notes.md
+git add notes.md
+out=$(HOME="$GHOME" "$HALFH/guardrail/pre-commit" 2>&1); rc=$?
+check "with the write-time hook missing the lint is skipped, not failed" 0 "$rc"
+echo "$out" | grep -q "write-time hook or jq is not available" \
+  && ok "and says which half is missing" || fail "silent or wrong reason ($out)"
 git rm -q --cached notes.md && rm notes.md
 git rm -qr --cached . && rm feedback_terms.md
 
