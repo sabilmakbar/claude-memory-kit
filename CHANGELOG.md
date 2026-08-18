@@ -29,6 +29,12 @@ says nothing about the other.
 
 ### Fixed
 
+- The `settings.json` backup is taken before anything rewrites the file. It used to be taken after
+  two `jq` passes had run, so a legacy hook the install had just unwired was missing from the
+  backup and a failed run restored a file still lacking it while reporting success. [#52](https://github.com/sabilmakbar/claude-memory-kit/pull/52)
+- The list of non-memory filenames the checks skip is three names rather than seven. The extra four
+  were only carried because the frontmatter lint used to run in this kit's own checkout. A store
+  keeping its own `CHANGELOG.md` is now told to rename it. [#52](https://github.com/sabilmakbar/claude-memory-kit/pull/52)
 - The commit guardrail enforces the same seven memory-file rules as the write-time hook, from one
   implementation, instead of re-checking three of them by hand. A file arriving without passing
   through Write or Edit, such as a pull from another machine or a hand edit, previously met only

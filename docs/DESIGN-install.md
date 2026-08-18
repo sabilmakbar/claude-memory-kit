@@ -208,10 +208,16 @@ config` alone.
 be answered with the default. The real store would keep a `core.hooksPath` pointing into a tree
 that has just been deleted, which is the silent-disable case again, arrived at from the other side.
 
-Two tests exist only to hold the ordering invariant rather than to catch a present defect: the
-backup must still hold the pre-install contents afterwards, and must carry none of the run's own
-writes. They pass today. They are there so that a future reordering fails loudly instead of
-quietly weakening the rollback.
+Those tests began as invariant guards rather than defect catchers, and one of them then found a
+defect. The snapshot was taken **after** `hooks_migrate` and `hooks_drop_legacy` had each run a
+`jq` pass, so the "previous contents" were already rewritten: a legacy hook the sweep had unwired
+was absent from the backup, and a failed run restored a file still missing it while reporting a
+successful rollback. The same lateness reformatted a hand-edited file even when nothing changed,
+and left both passes running with no backup at all.
+
+The snapshot now happens before anything rewrites the file, which is why the test can assert
+**byte-identical** rather than merely equal as JSON. A second test wires a legacy hook, installs,
+and requires the backup to still contain it.
 
 ## D11. The mode is a required argument on a first install, and remembered after that
 
