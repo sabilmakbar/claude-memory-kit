@@ -1,0 +1,13 @@
+# Blank issues stay on. Most of this repo's own history is design arguments that fit neither
+# form above, and a chooser that refuses them would push that discussion somewhere it is not
+# recorded.
+blank_issues_enabled: true
+
+contact_links:
+  - name: Something is not working
+    url: https://github.com/sabilmakbar/claude-memory-kit/blob/main/docs/TROUBLESHOOTING.md
+    about: Organised by symptom. Check here first, then file a bug report if it is not covered.
+
+  - name: Why does the kit do it that way
+    url: https://github.com/sabilmakbar/claude-memory-kit/tree/main/docs
+    about: The decision records answer this per feature, and say what would reopen each one.

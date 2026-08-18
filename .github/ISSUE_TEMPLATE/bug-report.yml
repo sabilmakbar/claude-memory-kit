@@ -1,0 +1,73 @@
+name: Bug report
+description: Something the kit does wrong on your machine
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, check [docs/TROUBLESHOOTING.md](https://github.com/sabilmakbar/claude-memory-kit/blob/main/docs/TROUBLESHOOTING.md).
+        It is organised by symptom, so look for what you are seeing rather than for a cause.
+
+  - type: textarea
+    id: report
+    attributes:
+      label: Output of `bash tests/smoke.sh`
+      description: >
+        Run it from your checkout and paste the whole thing. The first line names which release
+        of the kit you have and which bash, which is the part a report is usually missing.
+        There is nothing to redact: the output is check names, counts and version strings. No
+        memory file names, no memory contents, no paths, no username.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, and what the kit did instead of what you wanted.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part
+      description: Best guess is fine. Pick "not sure" rather than guessing wrong.
+      options:
+        - not sure
+        - install or uninstall
+        - the memory store and where it lives
+        - the write-time check on memory files
+        - the commit guardrail
+        - the index in MEMORY.md
+        - the daily suggestion loop
+        - a skill
+        - something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce it
+      description: >
+        If you cannot reproduce it, say so and describe what you were doing when it happened.
+        An unreproducible report is still worth having.
+
+  - type: checkboxes
+    id: no-memory-contents
+    attributes:
+      label: Before you submit
+      options:
+        - label: >
+            I have not pasted the contents of any memory file. The suite output is safe to share,
+            but anything I typed by hand above may not be.
+          required: true
