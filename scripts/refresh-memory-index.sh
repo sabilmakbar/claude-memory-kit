@@ -110,12 +110,12 @@ unindexed=""
 for f in "$CENTRAL"/*.md; do
     [ -f "$f" ] || continue
     b=$(basename "$f")
-    # known non-memory docs (same exemptions as the guardrail lint) are not "unindexed"
+    # store scaffolding is not "unindexed"; one definition, shared with the lint
     mk_is_nonmemory "$b" && continue
     case "$b" in user_*.md|feedback_*.md) ;; *) unindexed="$unindexed${unindexed:+, }$b" ;; esac
 done
 if [ -n "$unindexed" ]; then
-    printf '\n> ⚠ Unindexed files in ~/.claude/memory — not loaded into any session. Rename to user_*/feedback_* (project files belong in memory-mounts): %s\n' "$unindexed" >> "$CENTRAL_MD"
+    printf '\n> ⚠ Unindexed files in %s — not loaded into any session. Rename to user_*/feedback_* (project files belong in memory-mounts): %s\n' "$CENTRAL" "$unindexed" >> "$CENTRAL_MD"
 fi
 
 # Collect non-MEMORY.md files in mount memory dir and append section

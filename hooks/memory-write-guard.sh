@@ -8,7 +8,7 @@
 # Why a hook rather than a memory file. These rules used to ship as two seeded
 # memory files, which made kit instructions live inside the user's data: they cost
 # context in every session, could be edited into drift, and nothing verified that a
-# write actually followed them. The commit guardrail checks three of them, but only
+# write actually followed them. The commit guardrail runs the same seven, from this
 # at commit time and only where a git repo exists, so memory-mounts were never
 # checked at all. Here the check runs at write time, everywhere, with no repo.
 #
@@ -44,8 +44,12 @@ fp=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
 
 # scope: markdown inside the memory store or a mount, never the generated index or
 # the repo's own docs
+# Resolved once. mk_memory_dir reads a setting through jq now, and this hook runs on
+# every Write and Edit, so calling it per case statement pays for the lookup twice on
+# a path where it used to be a printf.
+_mk_store="$(mk_memory_dir)"
 case "$fp" in
-    "$(mk_memory_dir)"/*.md|"$(mk_mounts_dir)"/*/*.md) ;;
+    "$_mk_store"/*.md|"$(mk_mounts_dir)"/*/*.md) ;;
     *) exit 0 ;;
 esac
 base="${fp##*/}"
@@ -97,7 +101,7 @@ fi
 
 # 6. no incident evidence inside a synced file, whichever tool is writing
 case "$fp" in
-    "$(mk_memory_dir)"/*)
+    "$_mk_store"/*)
         if has '^\*\*Evidence' || has '^#\{1,6\}[[:space:]]*Evidence'; then
             deny no-evidence-when-synced "Global memory files carry no Evidence section. Quotes, repo names and paths stay in the miner tracker and git history; distil the lesson into Why and How instead. This file syncs to a personal GitHub repo, which is why the leak surface was removed rather than policed."
         fi ;;

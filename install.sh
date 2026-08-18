@@ -686,7 +686,7 @@ if [ "$UNINSTALL" -eq 1 ]; then
     echo "    cached copy of the messages it last read. --purge-cache drops the cache and logs,"
     echo "    --purge-tracker removes all of it."
   fi
-  echo "  kept every memory file in ~/.claude/memory and ~/.claude/memory-mounts"
+  echo "  kept every memory file in $GUARD_STORE and $(mk_mounts_dir)"
   echo "✓ uninstalled"
   exit 0
 fi
@@ -878,30 +878,6 @@ run chmod -R u+rwX "$DEST"
 echo "→ installing skills to ~/.claude/skills"
 run cp -r "$REPO"/skills/. "$CLAUDE/skills/"
 
-# The authoring conventions used to be seeded into ~/.claude/memory as two memory files.
-# They are kit instructions rather than user data: they cost context in every session,
-# could be edited into drift, and nothing verified that a write followed them. They now
-# live in guidance/ and are enforced by hooks/memory-write-guard.sh. Retire an old copy
-# only when it is byte-identical to what the kit shipped; anything edited is the user's.
-# Two guards, because ~/.claude/memory is the USER'S repo and this installer does not own
-# it. Only a file byte-identical to the copy the kit still ships is ever removed, so
-# anything deleted here is reproducible from this tree. And a file git tracks is never
-# removed at all: deleting tracked content would stage a deletion in someone else's
-# history, which is a commit for them to make, not for an installer to make on their behalf.
-for f in "$REPO"/guidance/retired-seeds/*.md; do
-  b="$(basename "$f")"; t="$CLAUDE/memory/$b"
-  [ -f "$t" ] || continue
-  if ! cmp -s "$f" "$t"; then
-    echo "  ! $b differs from the copy the kit shipped, so it is yours and stays"
-    echo "    its rules are enforced at write time now; delete it whenever you like"
-  elif command -v git >/dev/null 2>&1 && git -C "$CLAUDE/memory" ls-files --error-unmatch "$b" >/dev/null 2>&1; then
-    echo "  ! $b is unchanged from the kit's copy but your repo tracks it, so it stays"
-    echo "    removing it is a commit for you to make: git rm $b"
-  else
-    run rm -f "$t"
-    echo "→ retired $b from ~/.claude/memory (its rules are now a write-time check)"
-  fi
-done
 
 # The commit guardrail can also be used by any other consuming repo via
 #   git -C <repo> config core.hooksPath ~/.claude/memory-kit/guardrail
@@ -923,24 +899,47 @@ hooks_wire
 if [ "$(mk_conf MEMORY_KIT_MODE "")" != "$MODE" ]; then conf_set MEMORY_KIT_MODE "$MODE"; fi
 store_setup
 
-# Auto-wire the guardrail when the store is itself a git repo (the README's
-# recommended setup), and hide index churn from its diffs. Points at the DEPLOYED
-# guardrail: a stable, tested path that survives the checkout moving. --uninstall
-# unsets both of these again.
+# Everything below reads the store, so it all runs AFTER store_setup has chosen one.
+# Both blocks used to assume the default: the guardrail wired the commit lint to a
+# directory holding none of the memories, and the retirement pass looked there for
+# seeded copies that live wherever the user has actually been working. Both failures
+# are silent, and the first one disables the last check before content becomes
+# permanent history.
 #
-# AFTER store_setup, and reading the store back through mk_memory_dir rather than
-# assuming the default. It used to run further up, before the store had been
-# chosen, so on an install that adopts a project store it wired the guard to a
-# directory holding none of the memories. That failure is silent and it disables
-# the last check before content becomes permanent history.
-#
-# store_setup is deliberately NOT moved up to meet it. hooks_wire copies
+# store_setup is deliberately NOT moved up to meet them. hooks_wire copies
 # settings.json to the single backup slot unconditionally, while store_setup only
 # copies when nobody has yet, so running store_setup first would have hooks_wire
-# overwrite the backup with a file that already carries autoMemoryDirectory. A
-# failed run would then "roll back" to a state that never existed, and say so.
-# This block touches git config alone, so moving it down cannot affect any of that.
+# overwrite the backup with a file that already carries autoMemoryDirectory. A failed
+# run would then "roll back" to a state that never existed, and say so. Neither block
+# below touches settings.json, so moving them down cannot affect any of that.
 GUARD_STORE="$(mk_memory_dir)"
+# The authoring conventions used to be seeded into the memory store as two memory files.
+# They are kit instructions rather than user data: they cost context in every session,
+# could be edited into drift, and nothing verified that a write followed them. They now
+# live in guidance/ and are enforced by hooks/memory-write-guard.sh. Retire an old copy
+# only when it is byte-identical to what the kit shipped; anything edited is the user's.
+# Two guards, because the store is the USER'S repo and this installer does not own
+# it. Only a file byte-identical to the copy the kit still ships is ever removed, so
+# anything deleted here is reproducible from this tree. And a file git tracks is never
+# removed at all: deleting tracked content would stage a deletion in someone else's
+# history, which is a commit for them to make, not for an installer to make on their behalf.
+for f in "$REPO"/guidance/retired-seeds/*.md; do
+  b="$(basename "$f")"; t="$GUARD_STORE/$b"
+  [ -f "$t" ] || continue
+  if ! cmp -s "$f" "$t"; then
+    echo "  ! $b differs from the copy the kit shipped, so it is yours and stays"
+    echo "    its rules are enforced at write time now; delete it whenever you like"
+  elif command -v git >/dev/null 2>&1 && git -C "$GUARD_STORE" ls-files --error-unmatch "$b" >/dev/null 2>&1; then
+    echo "  ! $b is unchanged from the kit's copy but your repo tracks it, so it stays"
+    echo "    removing it is a commit for you to make: git rm $b"
+  else
+    run rm -f "$t"
+    echo "→ retired $b from $GUARD_STORE (its rules are now a write-time check)"
+  fi
+done
+
+# The guardrail points at the DEPLOYED tree: a stable, tested path that survives the
+# checkout moving. --uninstall unsets this and the skip-worktree flag again.
 if [ -d "$GUARD_STORE/.git" ]; then
   run git -C "$GUARD_STORE" config core.hooksPath "$DEST/guardrail"
   [ "$DRY" -eq 1 ] || git -C "$GUARD_STORE" update-index --skip-worktree MEMORY.md 2>/dev/null || true

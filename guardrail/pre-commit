@@ -81,13 +81,13 @@ if [ -r "$_gr_lib" ]; then
   # path, while the setting holds whatever was written, so a store reached through
   # any symlink (/var on macOS, a linked home, a mounted volume) would compare
   # unequal and skip the lint without a word.
-  _gr_store="$(cd "$(mk_memory_dir 2>/dev/null)" 2>/dev/null && pwd -P || printf '')"
+  _gr_logical="$(mk_memory_dir 2>/dev/null || printf '')"
+  _gr_store="$(cd "$_gr_logical" 2>/dev/null && pwd -P || printf '')"
   _gr_top="$(git rev-parse --show-toplevel 2>/dev/null || printf '')"
   # The LOGICAL path too, separately. The write-time hook scopes its rules with its
   # own `case "$fp" in "$(mk_memory_dir)"/*`, which is the unresolved value, so a
   # file_path built from the resolved one would fall straight through that filter
   # and the rules keyed on the synced tier would never fire.
-  _gr_logical="$(mk_memory_dir 2>/dev/null || printf '')"
   _gr_guard="$hookdir/../hooks/memory-write-guard.sh"
 else
   _gr_store=""; _gr_top=""; _gr_logical=""; _gr_guard=""

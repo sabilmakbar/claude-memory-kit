@@ -48,6 +48,21 @@ GHOME="$TMP/ghome"; mkdir -p "$GHOME/.claude"
 jq -n --arg d "$G" '{autoMemoryDirectory:$d}' > "$GHOME/.claude/settings.json"
 grun() { HOME="$GHOME" "$GH/pre-commit" >/dev/null 2>&1; }
 
+# Canary, before any real check. Twice the fixture kit was missing a directory the
+# hook needs (core/, then hooks/), so pre-commit announced a skip and every check
+# below passed by NOT RUNNING. Both times a negative test happened to sit nearby
+# and caught it; this asserts it directly instead of relying on that.
+printf -- '---\nname: canary_bad\n---\nno description here\n' > canary_bad.md
+git add canary_bad.md
+gout=$(HOME="$GHOME" "$GH/pre-commit" 2>&1); grc=$?
+[ "$grc" = 1 ] \
+  && ok "the fixture kit is complete enough for the lint to run" \
+  || fail "the lint did not run: every guardrail check below would pass by not running"
+echo "$gout" | grep -q 'lint skipped' \
+  && fail "the fixture kit announces a skip, so the checks below prove nothing" \
+  || ok "and it announces no skip"
+git rm -q --cached canary_bad.md && rm canary_bad.md
+
 printf -- '---\nname: wrong_slug\n---\nmail me at leak@example.com\n' > feedback_bad.md
 git add feedback_bad.md
 grun; check "blocks PII + bad name at repo root" 1 $?
@@ -1083,6 +1098,20 @@ grep -q 'user_real' "$SH/.claude/projects/-r/memory/MEMORY.md" 2>/dev/null \
 [ -f "$SH/.claude/memory/MEMORY.md" ] \
   && fail "a stray index was built in the default location" \
   || ok "and no stray index appears in the default location"
+
+# The retirement pass reads the store too, and used to run before store_setup had
+# chosen one, so on an adopted store it looked in the default location and found
+# nothing to retire while the real copy stayed.
+SH=$(store_home retire-adopted); mkdir -p "$SH/.claude/projects/-r/memory"
+cp "$KIT/guidance/retired-seeds/feedback_memory_conventions.md" \
+   "$SH/.claude/projects/-r/memory/feedback_memory_conventions.md"
+printf -- '---\nname: user_real\ndescription: d\n---\nb\n' > "$SH/.claude/projects/-r/memory/user_real.md"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+[ -f "$SH/.claude/projects/-r/memory/feedback_memory_conventions.md" ] \
+  && fail "a seeded copy in the adopted store was not retired" \
+  || ok "a seeded copy is retired from the adopted store"
+[ -f "$SH/.claude/projects/-r/memory/user_real.md" ] \
+  && ok "and the user's own memory file is untouched" || fail "retirement took a real memory file"
 
 echo "the guardrail follows the store too:"
 # The guardrail is the last check before content becomes permanent history, and it
