@@ -1,0 +1,45 @@
+name: Feature request
+description: Something the kit should do and does not
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The decision records in [docs/](https://github.com/sabilmakbar/claude-memory-kit/tree/main/docs) say why each rule exists, and several
+        already name the condition that would change them. If yours is on one of those lists, the
+        argument is half made before you start.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What you want the kit to do
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do today instead
+      description: >
+        The workaround, even if it is "nothing, I live with it". This is the most useful field
+        here. It separates a gap someone is working around from an idea that sounds good.
+    validations:
+      required: true
+
+  - type: textarea
+    id: decision
+    attributes:
+      label: Which recorded decision this touches
+      description: >
+        Cite it as `D<n>` and the file, for example `DESIGN-memory.md D8`. Leave blank if none
+        applies. If a record already says why the kit does not do this, say what has changed
+        since it was written.
+
+  - type: textarea
+    id: unnecessary
+    attributes:
+      label: What would make this unnecessary
+      description: >
+        Every decision here that has been reversed was reversed because someone wrote down the
+        condition that would break it. Doing the same for your own proposal makes it easier to
+        act on, not easier to dismiss.

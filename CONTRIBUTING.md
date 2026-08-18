@@ -71,6 +71,15 @@ That is what these files are for, so it is welcome. What helps:
 
 ## Before you open a pull request
 
+GitHub fills the description with
+[the pull request template](.github/PULL_REQUEST_TEMPLATE.md). Answer every section it asks for.
+It carries the questions only, and this file carries the reasons behind them, so nothing is
+written down twice and the two cannot drift apart.
+
+Keep the sections as they are. Dropping one is fine when it genuinely does not apply, such as
+"what would reopen this" on a typo fix, but say so in the description rather than deleting it
+silently. A section removed without a word reads the same as a question nobody answered.
+
 ```bash
 bash tests/run.sh      # the fixture suite; install.sh refuses to deploy a tree it rejects
 bash tests/smoke.sh    # the real-data suite, against your own ~/.claude
