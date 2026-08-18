@@ -142,6 +142,21 @@ check "but the PII scan still does" 1 $?
 grun; check "and inside the store the lint runs again" 1 $?
 git rm -q --cached notes.md && rm notes.md
 
+# The exemption list is three names, and it is pinned here because it has changed
+# twice. MEMORY, README and CLAUDE are what a store actually holds; CONTRIBUTING,
+# CHANGELOG, DEPENDENCIES and HOW-IT-WORKS were carried only because the lint used
+# to run in this kit's own checkout, and are gone with that.
+for n in MEMORY README CLAUDE; do
+  printf 'scaffolding, not a memory\n' > "$n.md"
+  git add "$n.md"
+  grun; check "$n.md in the store is exempt" 0 $?
+  git rm -q --cached "$n.md" && rm "$n.md"
+done
+printf 'a store keeping its own changelog\n' > CHANGELOG.md
+git add CHANGELOG.md
+grun; check "CHANGELOG.md in the store is treated as a memory file" 1 $?
+git rm -q --cached CHANGELOG.md && rm CHANGELOG.md
+
 # A store reached through a symlink still counts as the store. git reports the
 # physical path and the setting holds whatever was written, so comparing them raw
 # skipped the lint on macOS, where /var is a link, and on any linked home.
@@ -1151,16 +1166,29 @@ echo "$out" | grep -q "unset core.hooksPath in $SH/.claude/projects/-r/memory" \
 # report success.
 SH=$(store_home guard-backup-order); mkdir -p "$SH/.claude"
 printf '{"theirOwnKey":"untouched"}' > "$SH/.claude/settings.json"
+cp "$SH/.claude/settings.json" "$TMP/pre-install-settings.json"
 HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
-# Compared as JSON, not as bytes: hooks_wire runs hooks_migrate and
-# hooks_drop_legacy before it snapshots, and those jq passes reformat the file even
-# when they change nothing. The invariant under test is the contents, not the layout.
-[ "$(jq -S . "$SH/.claude/settings.json.memory-kit.bak")" = '{
-  "theirOwnKey": "untouched"
-}' ] && ok "the settings backup still holds the pre-install contents" \
-     || fail "the backup was taken after the install had written to settings.json"
+# Byte-identical, not merely equal as JSON. The snapshot used to be taken after
+# hooks_migrate and hooks_drop_legacy had each run a jq pass, which reformatted a
+# hand-edited file and dropped anything those passes had already removed.
+cmp -s "$TMP/pre-install-settings.json" "$SH/.claude/settings.json.memory-kit.bak" \
+  && ok "the settings backup is byte-identical to the pre-install file" \
+  || fail "the backup was taken after something had already rewritten settings.json"
 [ "$(jq -r '.autoMemoryDirectory // "ABSENT"' "$SH/.claude/settings.json.memory-kit.bak")" = ABSENT ] \
   && ok "and carries none of this run's own writes" || fail "backup contains autoMemoryDirectory"
+
+# The concrete thing that used to be lost. hooks_drop_legacy unwires a hook the kit
+# no longer ships; taken afterwards, the backup no longer had it, so a failed run
+# restored a file still missing it and called the rollback successful.
+SH=$(store_home backup-keeps-legacy); mkdir -p "$SH/.claude"
+jq -n '{hooks:{UserPromptSubmit:[{hooks:[{type:"command",command:"$HOME/.claude/memory-kit/scripts/ensure-memory-symlink.sh"}]}]}}' \
+  > "$SH/.claude/settings.json"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+[ "$(jq -r '[.hooks|..|strings|select(test("ensure-memory-symlink"))]|length' "$SH/.claude/settings.json")" = 0 ] \
+  && ok "the legacy hook is unwired by the install" || fail "legacy hook survived the install"
+[ "$(jq -r '[.hooks|..|strings|select(test("ensure-memory-symlink"))]|length' "$SH/.claude/settings.json.memory-kit.bak")" = 1 ] \
+  && ok "and the backup still has it, so a failed run could put it back" \
+  || fail "the backup lost the legacy hook the run swept"
 
 echo "install.sh legacy hook names:"
 # A machine that installed the kit BEFORE the rename. managed_names comes from the

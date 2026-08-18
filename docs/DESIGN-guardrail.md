@@ -104,11 +104,17 @@ silently escape the lint. `mk_memory_dir` reads `autoMemoryDirectory` now, so wh
 named the store is where the lint runs. What remains is narrower: a store the kit was never
 pointed at is still outside the gate, which is the correct answer rather than a gap.
 
-The exemption list stayed at seven names instead of shrinking to three. It became one definition
-with four callers in `core/lib.sh`, which is what cures the drift this record was written about.
-Shrinking it is a separate behaviour change that would newly block a store keeping its own
-`CHANGELOG.md`, and no evidence says anyone wants that. The four extra names are defensive now
-rather than load-bearing, and the count is no longer the thing that can go wrong.
+The exemption list first became one definition with four callers in `core/lib.sh`, which is what
+cured the drift this record was written about, and kept seven names while the shrink was weighed
+separately. It is now **three**: `MEMORY.md`, `README.md`, `CLAUDE.md`, which is what a store
+actually holds. `CONTRIBUTING`, `CHANGELOG`, `DEPENDENCIES` and `HOW-IT-WORKS` were only ever
+carried because the lint ran inside this kit's own checkout, and the gate above removed that.
+
+The trade is deliberate and is the one argument against shrinking: a store keeping its own
+`CHANGELOG.md` is now told to rename it to `user_`/`feedback_`/`project_`, which is wrong advice
+for a changelog. No store has one, and a name kept for a hypothetical file is exactly how the list
+grew the first time. The three names are pinned by tests, including one asserting `CHANGELOG.md`
+is treated as a memory file, so restoring a name is a decision someone has to make on purpose.
 
 Comparing the two paths raw was wrong, and a test caught it. `git rev-parse --show-toplevel`
 reports the physical path while the setting holds whatever was written, so a store reached through

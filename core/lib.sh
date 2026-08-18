@@ -42,14 +42,20 @@ mk_mounts_dir()   { printf '%s/.claude/memory-mounts' "$HOME"; }
 # the kit disagreed with itself, and which answer you got depended on which check
 # ran first. One definition, four callers.
 #
-# CONTRIBUTING, CHANGELOG, DEPENDENCIES and HOW-IT-WORKS are kept although a real
-# store holds none of them today. They were added when the frontmatter lint still
-# ran inside this kit's own checkout; that no longer happens, so they are defensive
-# rather than load-bearing, and dropping them would newly block a store that does
-# keep a changelog.
+# Three names, which is what a memory store actually holds. It carried seven for a
+# while: CONTRIBUTING, CHANGELOG, DEPENDENCIES and HOW-IT-WORKS were added when the
+# frontmatter lint still ran inside this kit's own checkout, where every new
+# root-level document tripped a check that had no business running there. Gating the
+# lint on the store removed the cause, and the four names had nothing left to do.
+#
+# The trade is deliberate. A store that keeps its own CHANGELOG.md is now told to
+# rename it to user_/feedback_/project_, which is wrong advice for a changelog. No
+# store has one today, and a name kept for a hypothetical file is how the list grew
+# the first time. Add it back when a real one appears, rather than carrying four
+# guesses against it.
 mk_is_nonmemory() { # <basename> -> rc 0 when the file is store scaffolding, not a memory
     case "$1" in
-        MEMORY.md|README.md|CLAUDE.md|CONTRIBUTING.md|CHANGELOG.md|DEPENDENCIES.md|HOW-IT-WORKS.md) return 0 ;;
+        MEMORY.md|README.md|CLAUDE.md) return 0 ;;
         *) return 1 ;;
     esac
 }
