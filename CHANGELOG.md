@@ -74,6 +74,9 @@ needs no flag. Memory files are not touched by the upgrade.
 
 - The install output and the README name the settings scope the kit writes, and say what that
   excludes. [#51](https://github.com/sabilmakbar/claude-memory-kit/pull/51)
+- Issue forms and a pull request template. The bug form asks for the `tests/smoke.sh` output
+  first, which names the installed release since #43, because the README said the output was safe
+  to share without ever saying where to send it. Nothing about the installed kit changes. [#54](https://github.com/sabilmakbar/claude-memory-kit/pull/54)
 
 ### Known limitations
 
