@@ -47,8 +47,8 @@ else
 fi
 
 if [ -n "$UNREADABLE" ]; then
-    MSG="Memory review status unknown: the review history in ~/.claude/memory could not be read (git is missing or the repo is unreadable)"
-    mk_health_record review "review history in ~/.claude/memory cannot be read, so review reminders are guessing"
+    MSG="Memory review status unknown: the review history in $MEM could not be read (git is missing or the repo is unreadable)"
+    mk_health_record review "review history in $MEM cannot be read, so review reminders are guessing"
     mk_notice_stamp "$SID" review
     mk_emit_notice "$MSG"
     exit 0

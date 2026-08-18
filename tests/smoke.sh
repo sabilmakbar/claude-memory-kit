@@ -306,7 +306,7 @@ AFTER=$(snap)
 # ---------- summary + stamp ----------
 echo "smoke: $PASS passed, $FAIL failed, $SKIP skipped"
 if [ "$FAIL" = 0 ]; then
-    v=$(bash "$KIT/scripts/claude-version.sh" 2>/dev/null)
+    v=$(mk_claude_version 2>/dev/null)
     if [ -n "$v" ]; then
         # Record every version that has passed, never just the latest. A single value
         # moves BACKWARDS on a machine running several versions at once: a run started
