@@ -9,6 +9,11 @@ Read `~/.claude/memory-kit/guidance/memory-authoring.md` first. It carries the t
 the rules a write-time hook enforces, and the judgement calls no hook can make. Do not
 work from memory of the conventions; the file is the current version.
 
+> **If that file does not exist**, this kit's tree is not installed. The plugin ships this
+> skill; `install.sh` ships what the skill reads. Say so plainly and name the fix:
+> `install.sh` from the kit checkout, then a new session. Do not work around it.
+
+
 Then:
 
 1. **Decide whether memory is the right home at all.** If the behaviour is mechanical

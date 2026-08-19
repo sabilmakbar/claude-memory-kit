@@ -18,6 +18,16 @@ that was tagged, and the tag is what you check out to go back to it. Versions mo
 from claude-session-kit: the two share conventions, neither depends on the other, and a bump in one
 says nothing about the other.
 
+## 0.3.1
+
+### Fixed
+
+- A skill now names the fix when the kit half is missing. Installing only the plugin left the
+  skills present and failing on first use with a bare "no such file or directory" that never
+  mentioned `install.sh`. This is the one state the installer cannot report, because it only
+  speaks while it runs, so the skill has to. Each skill that depends on the tree they read from says
+  what a missing path means and which command fixes it.
+
 ## 0.3.0
 
 ### Changed

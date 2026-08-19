@@ -26,7 +26,12 @@ If the file or key is missing, stop and tell the user to re-run
 
 ## Step 1: check whether there is anything to do
 
-```bash
+```
+
+> **If that file does not exist**, this kit's tree is not installed. The plugin ships this
+> skill; `install.sh` ships what the skill reads. Say so plainly and name the fix:
+> `install.sh` from the kit checkout, then a new session. Do not work around it.
+bash
 jq -r '.initialized // "no"' ~/.claude/memory/.memory-kit-marker.json 2>/dev/null
 ls -d ~/.claude/memory/.staged/*/ 2>/dev/null
 ```

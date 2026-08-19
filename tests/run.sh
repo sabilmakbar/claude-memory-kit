@@ -59,6 +59,19 @@ leak=$(cd "$KIT" && git ls-files -z 2>/dev/null | xargs -0 grep -lnE '/Users/[a-
   && ok "no tracked file hardcodes a home directory" \
   || fail "tracked files hardcode a home directory: $leak"
 
+echo "skills name install.sh when the kit half is missing:"
+# Installing only the plugin is the one state install.sh cannot report, because it only
+# speaks while it runs. The skill is the only thing present, so it has to say what a missing
+# path means. Without this the failure is a bare "no such file or directory".
+for d in "$KIT"/skills/*/; do
+  n=$(basename "$d")
+  if grep -qE '~/\.claude/memory-kit/|~/\.local/share/claude-feedback/' "$d/SKILL.md"; then
+    grep -q 'install\.sh' "$d/SKILL.md" \
+      && ok "$n names install.sh for a missing kit file" \
+      || fail "$n uses a kit path but never names install.sh"
+  fi
+done
+
 echo "installer names the right plugin action per state:"
 # Four states need four different actions, so a check that cannot tell them apart sends
 # people to the wrong command. Each is seeded and asserted, including the two that look
