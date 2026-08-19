@@ -28,6 +28,10 @@ says nothing about the other.
   a re-run retires copies an older version left there, and reports rather than deletes anything
   it does not recognise as its own. Both install steps are now required: the plugin carries the
   skills, `install.sh` still carries the hooks, tree and config those skills read.
+- `install.sh` now reports whether the plugin half is present, and no longer says it loads
+  skills, which it has not done since they moved to the plugin. A half-install is the failure
+  mode the split introduced: skills registered with no guidance file or config under them fail
+  on first use, and the run is the cheapest place to name that (#58).
 
 ## 0.2.0
 
