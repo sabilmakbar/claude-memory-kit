@@ -4,8 +4,10 @@
 #
 # Deploys the kit as ONE tree at ~/.claude/memory-kit (scripts + their core lib +
 # hooks + guidance + tests move together, so no partial staleness), gated on the test
-# suite: a tree the tests reject is never deployed. Skills go where Claude Code finds
-# them. Memory files are yours, and neither half of this script writes them.
+# suite: a tree the tests reject is never deployed. Skills are NOT installed here any
+# more: they ship as the memory-kit plugin, so this script is one half of a working
+# install and reports whether the other half is present. Memory files are yours, and
+# neither half of this script writes them.
 #
 # Usage: ./install.sh --mode=managed|advisory [--dry-run]
 #        ./install.sh [--uninstall] [--purge-cache] [--purge-tracker] [--purge-marker]
@@ -983,5 +985,22 @@ if [ -d "$GUARD_STORE/.git" ]; then
   echo "→ guardrail wired into the memory repo at $GUARD_STORE"
 fi
 
-echo "✓ done — start a new Claude Code session to load memory, hooks, and skills."
-echo "  ./install.sh --uninstall removes the hooks, the tree and the skills, and keeps your memory."
+# The skills ship as a plugin now, so this installer is one half of a working install and
+# has to say so. Reporting whether the other half is present turns a half-install from
+# something the user discovers when a skill fails on first use into something this run names.
+echo "✓ done — hooks, the kit tree and the config are in place."
+if [ "$DRY" -eq 0 ] && [ -f "$SETT" ] \
+   && jq -e '.enabledPlugins["memory-kit@memory-kit"] // false' "$SETT" >/dev/null 2>&1; then
+  echo "  the memory-kit plugin is installed, so the skills are there too"
+else
+  echo "  the skills are NOT installed yet — they come from the plugin:"
+  echo "      claude plugin marketplace add sabilmakbar/claude-memory-kit"
+  echo "      claude plugin install memory-kit@memory-kit"
+  echo "  without it the skills are missing; installed without this script they fail on first"
+  echo "  use, because the guidance file and config they read are not there."
+fi
+echo "  they appear as /memory-kit:save-memory, /memory-kit:review-memories,"
+echo "      /memory-kit:initialize-memory, /memory-kit:review-feedback-proposals"
+echo "  start a new Claude Code session either way: hooks and plugins load at session start."
+echo "  ./install.sh --uninstall removes the hooks and the tree and keeps your memory;"
+echo "      the plugin comes out with claude plugin uninstall memory-kit@memory-kit."
