@@ -59,6 +59,36 @@ leak=$(cd "$KIT" && git ls-files -z 2>/dev/null | xargs -0 grep -lnE '/Users/[a-
   && ok "no tracked file hardcodes a home directory" \
   || fail "tracked files hardcode a home directory: $leak"
 
+echo "installer names the right plugin action per state:"
+# Four states need four different actions, so a check that cannot tell them apart sends
+# people to the wrong command. Each is seeded and asserted, including the two that look
+# alike from outside: not installed at all, and installed but behind.
+PWANT=$(jq -r .version "$KIT/.claude-plugin/plugin.json")
+plug_case() {   # <label> <expected substring> [seed]
+  local lbl="$1" want="$2" seed="${3:-true}" h out
+  h=$(mktemp -d); P="$h/.claude"; mkdir -p "$P"
+  eval "$seed"
+  out=$(HOME="$h" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=advisory 2>&1)
+  printf '%s' "$out" | grep -q "$want" \
+    && ok "installer, $lbl" || fail "installer, $lbl (wanted '$want', got: $(printf '%s' "$out" | tail -3 | tr '\n' ' '))"
+  rm -rf "$h"
+}
+plug_case "no plugin and no marketplace: both commands" "claude plugin marketplace add"
+plug_case "marketplace known, plugin missing: one command left" "One command left" \
+  'printf "{\"extraKnownMarketplaces\":{\"memory-kit\":{\"source\":{\"source\":\"github\",\"repo\":\"x/y\"}}}}" > "$P/settings.json"'
+plug_case "installed but behind: offers /plugin update" "/plugin update memory-kit@memory-kit" \
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/0.0.1"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
+plug_case "installed and current: nothing to do" "nothing to do" \
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/'"$PWANT"'"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
+# Reading the state is read-only, so --dry-run must still report it: a preview that omits
+# the half you are missing omits it at the least useful moment.
+h=$(mktemp -d); mkdir -p "$h/.claude"
+out=$(HOME="$h" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=advisory --dry-run 2>&1)
+printf '%s' "$out" | grep -q "claude plugin install memory-kit@memory-kit" \
+  && ok "installer, --dry-run still reports the plugin state" \
+  || fail "installer, --dry-run reports plugin state"
+rm -rf "$h"
+
 echo ".claude-plugin manifests:"
 PJ="$KIT/.claude-plugin/plugin.json"; MJ="$KIT/.claude-plugin/marketplace.json"
 for f in "$PJ" "$MJ"; do

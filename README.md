@@ -287,6 +287,11 @@ Then update the plugin for the skills:
 /plugin update memory-kit@memory-kit
 ```
 
+You do not have to remember which half is behind. The installer reads the plugin's
+installed version and says which of the four cases you are in: not installed at all,
+marketplace added but plugin missing, installed and matching this checkout, or installed
+at an older version with the update command to run. `--dry-run` reports it too.
+
 It runs the test suite first and refuses to deploy a tree the tests reject. Then it replaces
 kit code only, and carries the rest forward:
 
