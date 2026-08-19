@@ -1026,6 +1026,23 @@ case "$PLUG_STATE" in
     echo "  a version behind means the skills are the older copy, even though the hooks, tree"
     echo "  and config this run just deployed are current." ;;
 esac
+# Whether this checkout is itself behind, from refs already fetched — no network call, so an
+# offline install is unaffected. The plugin lives in its own clone under plugins/marketplaces,
+# independent of this one, so a stale checkout and a stale plugin are two separate facts.
+kit_behind() {
+  local up n
+  up=$(git -C "$REPO" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)
+  [ -n "$up" ] || up=$(git -C "$REPO" rev-parse --verify --quiet origin/main >/dev/null 2>&1 && echo origin/main)
+  [ -n "$up" ] || return 1
+  n=$(git -C "$REPO" rev-list --count "HEAD..$up" 2>/dev/null) || return 1
+  [ "${n:-0}" -gt 0 ] || return 1
+  printf '%s %s' "$n" "$up"
+}
+if BEHIND=$(kit_behind); then
+  echo "  this checkout is ${BEHIND%% *} commit(s) behind ${BEHIND##* } as of your last fetch:"
+  echo "      git -C \"$REPO\" pull   then re-run this script"
+  echo "  the plugin is a separate clone, so update it as well once the checkout is current."
+fi
 echo "  they appear as /memory-kit:save-memory, /memory-kit:review-memories,"
 echo "      /memory-kit:initialize-memory, /memory-kit:review-feedback-proposals"
 echo "  start a new Claude Code session either way: hooks and plugins load at session start."
