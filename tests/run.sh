@@ -125,6 +125,56 @@ printf '%s' "$out" | grep -q "claude plugin install memory-kit@memory-kit" \
   || fail "installer, --dry-run reports plugin state"
 rm -rf "$h"
 
+echo "integration: install.sh against a git checkout and a full uninstall:"
+# These drive the real installer end to end. Filesystem and git only, no `claude` CLI, so
+# they run on a CI runner. The plugin-side behaviours that need the real CLI live in
+# tests/integration-plugin.sh, which skips itself when the binary is absent.
+
+# A checkout behind its tracking branch. Built by advancing a temp branch and pointing
+# origin/main at it, never by `reset HEAD~1`: actions/checkout clones at depth 1 and there is
+# no parent to reset to. The clone carries COMMITTED install.sh, so the one under test is
+# copied over it, or a working-tree change would not be exercised.
+CB=$(mktemp -d)/c
+git clone -q "$KIT" "$CB" 2>/dev/null
+git -C "$CB" checkout -q -B main 2>/dev/null
+git -C "$CB" checkout -q -b upstream-probe 2>/dev/null
+git -C "$CB" -c user.email=t@e -c user.name=t commit -q --allow-empty -m "upstream moved" 2>/dev/null
+git -C "$CB" update-ref refs/remotes/origin/main upstream-probe
+git -C "$CB" checkout -q main 2>/dev/null
+git -C "$CB" branch -q --set-upstream-to=origin/main main 2>/dev/null
+cp "$KIT/install.sh" "$CB/install.sh"
+h=$(mktemp -d)
+out=$( cd "$CB" && HOME="$h" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash install.sh --mode=advisory 2>&1 </dev/null )
+printf '%s' "$out" | grep -q 'commit(s) behind' \
+  && ok "integration: a behind checkout is reported" || fail "behind checkout not reported"
+printf '%s' "$out" | grep -q 'git -C' && ok "…naming git pull for the checkout" || fail "no git pull hint"
+rm -rf "$h"
+# Control: level with upstream, it must say nothing.
+git -C "$CB" update-ref refs/remotes/origin/main main
+cp "$KIT/install.sh" "$CB/install.sh"
+h=$(mktemp -d)
+out=$( cd "$CB" && HOME="$h" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash install.sh --mode=advisory 2>&1 </dev/null )
+printf '%s' "$out" | grep -q 'commit(s) behind' \
+  && fail "a current checkout claimed to be behind" || ok "integration: a current checkout says nothing"
+rm -rf "$h" "$(dirname "$CB")"
+
+# Uninstall states the plugin order. Removing the marketplace before the plugin leaves
+# `plugin uninstall` unable to resolve it, so the order is the instruction, not the list.
+h=$(mktemp -d)
+HOME="$h" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=advisory >/dev/null 2>&1
+out=$(HOME="$h" bash "$KIT/install.sh" --uninstall 2>&1)
+printf '%s' "$out" | grep -q 'claude plugin uninstall' \
+  && ok "integration: uninstall names the plugin command" || fail "uninstall does not name the plugin command"
+printf '%s' "$out" | awk '/plugin uninstall/{u=NR} /marketplace remove/{m=NR} END{exit !(u&&m&&u<m)}' \
+  && ok "…with uninstall before marketplace remove" || fail "uninstall order wrong or incomplete"
+# The installer must not delete the plugin cache: it does not own it, and a wrong-order
+# removal already leaves it unreachable. Deleting another tool's directory is worse.
+mkdir -p "$h/.claude/plugins/cache/memory-kit/memory-kit/9.9.9"
+HOME="$h" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
+[ -d "$h/.claude/plugins/cache/memory-kit/memory-kit/9.9.9" ] \
+  && ok "integration: uninstall leaves the plugin cache alone" || fail "uninstall deleted the plugin cache"
+rm -rf "$h"
+
 echo ".claude-plugin manifests:"
 PJ="$KIT/.claude-plugin/plugin.json"; MJ="$KIT/.claude-plugin/marketplace.json"
 for f in "$PJ" "$MJ"; do

@@ -30,6 +30,19 @@ says nothing about the other.
   fetched, so no network call is added. The plugin lives in its own clone, so a stale checkout
   and a stale plugin are separate facts and get separate lines.
 
+### Tested
+
+- Integration coverage for the installer end to end: a checkout behind its tracking branch is
+  reported, a current one says nothing, uninstall prints the plugin removal order with the
+  plugin before the marketplace, and uninstall leaves the plugin cache alone because the kit
+  does not own it. Filesystem and git only, so it runs on CI.
+- `tests/integration-plugin.sh` covers the rest, which needs the real `claude` CLI: that
+  `marketplace add` and `plugin install` do not run each other, that a path source is not
+  cloned, that the cache is keyed by the manifest version, that add and update are no-ops when
+  satisfied, that nothing removes the cache, and that removing the marketplace first leaves
+  the plugin unresolvable. It skips itself with exit 0 when the binary is absent, and is wired
+  into CI so it starts running if a runner ever ships the CLI.
+
 ### Documented
 
 - `docs/INTERNALS.md` records the plugin surface: a marketplace is a git clone independent of

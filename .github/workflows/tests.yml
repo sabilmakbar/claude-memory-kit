@@ -13,3 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: tests/run.sh
+      # Needs the real claude CLI, which a runner does not have, so it skips itself with exit
+      # 0. Wired in anyway: the day a runner image ships the CLI, this starts covering the
+      # platform assumptions in INTERNALS O13-O19 without anyone remembering to add it.
+      - run: bash tests/integration-plugin.sh
