@@ -431,15 +431,25 @@ commands in either order.
                         The bundle registers a URI handler whose `/install-plugin` path reads
                         `plugin` and `marketplace` query parameters and defaults the marketplace to
                         `anthropics/claude-plugins-official`. Typing `/plugin` in a session here
-                        answers "isn't available in this environment", and that string is not in
-                        the extension bundle, so it comes from the CLI layer
-    Needs:              jq
+                        answers "isn't available in this environment". That string is absent from
+                        the extension bundle and present in the native binary, as is the literal
+                        `"/plugin"`, so the gate is in the CLI layer and not in the extension
+    Needs:              jq, grep over a 302MB binary
     Checkable:          automated
 
-So `/plugin` is not a safe instruction to publish: this host does not have it, and which hosts do
+So `/plugin` is not a safe instruction to publish. This host does not offer it, and which hosts do
 was not established. The CLI form works wherever the binary does, which is why the docs lead with
-it. `/install-plugin` is a deep-link path, not a chat command, and the two are easy to conflate
-from a grep alone.
+it.
+
+**The distinction worth keeping:** the command is not missing from the product, it is unavailable
+in this environment. Both the `"/plugin"` literal and the refusal message live in the same binary.
+Finding a string is not proof that it is a registered command, so "implemented and gated" is the
+reading, not the finding: settling it takes typing `/plugin` in a terminal session, where the host
+is the CLI rather than the extension. Until then the docs say unconfirmed rather than naming a
+host.
+
+`/install-plugin` is a deep-link path, not a chat command, and the two are easy to conflate from a
+grep alone.
 
 ## The binary
 
