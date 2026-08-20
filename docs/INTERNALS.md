@@ -5,9 +5,9 @@
 > `DESIGN-*.md` records, which cite these by number. For how the kit behaves, read
 > [FLOWS.md](FLOWS.md).
 
-    Observed against:   Claude Code 2.1.222 (O1–O7) · 2.1.228 (O8–O12) · 2.1.234 (O13–O17)
+    Observed against:   Claude Code 2.1.222 (O1–O7) · 2.1.228 (O8–O12) · 2.1.234 (O13–O18)
     Platform:           macOS, VS Code extension
-    Last re-verified:   2026-08-12 (O1–O7) · 2026-08-13 (O8–O12) · 2026-08-19 (O13–O17)
+    Last re-verified:   2026-08-12 (O1–O7) · 2026-08-13 (O8–O12) · 2026-08-19 (O13–O17) · 2026-08-20 (O18)
     Needs to re-run:    jq, find, a machine with an installed Claude Code
 
 Nothing here is promised by Claude Code. Every entry carries the date and version it was seen
@@ -372,6 +372,30 @@ of an installed plugin.
 The marketplace clone tracks the repo's default branch, so a release tag cannot change what the
 plugin path delivers. `plugin tag` creates a `<name>--v<version>` tag and validates that
 plugin.json agrees with the marketplace entry, but nothing on the install side consumes that tag.
+
+### O18. `marketplace add` and `plugin install` are a lookup, not a chain
+
+    First observed:     2026-08-20 · 2.1.234
+    Surface:            plugin marketplace add, plugin install
+    How:                in a sandbox HOME, `marketplace add <path>` alone left
+                        `extraKnownMarketplaces` at 1 with `enabledPlugins` at 0 and no cache
+                        directory; `plugin install memory-kit@memory-kit` with no marketplace
+                        added failed with "not found in marketplace"; `plugin install <path>`
+                        failed with "not found in any configured marketplace"
+    Needs:              jq
+    Checkable:          automated
+
+Neither command runs the other. `add` writes the registry and installs nothing; `install` only
+resolves names inside registries already configured, and will not take a repo or path to
+bootstrap itself. `plugin@marketplace` is a lookup key, not a source. That is why both commands
+appear in every install instruction, and why the installer distinguishes "nothing installed" from
+"one command left".
+
+Refreshing has two rungs, and they are separate commands: `marketplace update [name]` re-fetches
+the registry clone, so a newly published plugin becomes visible, while `plugin update
+<plugin>@<marketplace>` moves an installed plugin to what that clone now offers. For a
+single-plugin marketplace the first rarely matters, because the plugin list never changes. The
+failure message for a missing plugin points at `marketplace update`, not at `add`.
 
 ## The binary
 

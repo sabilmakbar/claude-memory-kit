@@ -35,7 +35,9 @@ says nothing about the other.
 - `docs/INTERNALS.md` records the plugin surface: a marketplace is a git clone independent of
   your checkout, the cache is keyed by the version in plugin.json, nothing runs at install and
   hooks are the only execution surface, removing a marketplace disables its plugin and orphans
-  the cache, and `plugin install` cannot pin a version or ref.
+  the cache, `plugin install` cannot pin a version or ref, and `marketplace add` and
+  `plugin install` are a lookup rather than a chain: neither runs the other, and refreshing
+  has two separate rungs in `marketplace update` and `plugin update`.
 
 ### Fixed
 
