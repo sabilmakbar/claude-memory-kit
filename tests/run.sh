@@ -59,6 +59,29 @@ leak=$(cd "$KIT" && git ls-files -z 2>/dev/null | xargs -0 grep -lnE '/Users/[a-
   && ok "no tracked file hardcodes a home directory" \
   || fail "tracked files hardcode a home directory: $leak"
 
+echo "the plugin's own SessionStart hook reports a missing kit:"
+# The one state install.sh cannot report, so the plugin reports it. Both directions asserted:
+# silent when the kit is there, a valid object naming install.sh when it is not. A hook that
+# cannot stay quiet is as bad as one that cannot speak.
+H="$KIT/plugin-hooks/kit-present.sh"
+[ -x "$H" ] && ok "the plugin ships an executable kit-presence hook" || fail "hook missing or not +x"
+h=$(mktemp -d); mkdir -p "$h/.claude/memory-kit/guidance"; : >"$h/.claude/memory-kit/guidance/memory-authoring.md"
+out=$(HOME="$h" bash "$H" 2>&1)
+[ -z "$out" ] && ok "kit present: the hook says nothing" || fail "kit present but hook spoke: $out"
+rm -rf "$h"
+h=$(mktemp -d); out=$(HOME="$h" bash "$H" 2>&1)
+printf '%s' "$out" | jq -e . >/dev/null 2>&1 && ok "kit absent: valid JSON" || fail "kit absent: not JSON ($out)"
+printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null | grep -q 'install\.sh' \
+  && ok "…and it names install.sh" || fail "hook does not name install.sh"
+rm -rf "$h"
+# It reports that kit files are missing, so it must not need one to say so, and must not need
+# jq either. Testing a path with [ -r ] is the point, so only invocation counts: comments and
+# the existence check are fine, sourcing a kit library or piping through jq is not.
+BODY=$(sed 's/#.*//' "$H")
+if printf '%s' "$BODY" | grep -qwE 'jq|node' || printf '%s' "$BODY" | grep -qE '^[[:space:]]*\.[[:space:]]|source[[:space:]]'; then
+  fail "the hook invokes something it reports on"
+else ok "the hook invokes nothing it reports on"; fi
+
 echo "skills name install.sh when the kit half is missing:"
 # Installing only the plugin is the one state install.sh cannot report, because it only
 # speaks while it runs. The skill is the only thing present, so it has to say what a missing

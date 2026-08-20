@@ -5,9 +5,9 @@
 > `DESIGN-*.md` records, which cite these by number. For how the kit behaves, read
 > [FLOWS.md](FLOWS.md).
 
-    Observed against:   Claude Code 2.1.222 (O1–O7) · 2.1.228 (O8–O13)
+    Observed against:   Claude Code 2.1.222 (O1–O7) · 2.1.228 (O8–O12) · 2.1.234 (O13–O17)
     Platform:           macOS, VS Code extension
-    Last re-verified:   2026-08-12 (O1–O7) · 2026-08-13 (O8–O13)
+    Last re-verified:   2026-08-12 (O1–O7) · 2026-08-13 (O8–O12) · 2026-08-19 (O13–O17)
     Needs to re-run:    jq, find, a machine with an installed Claude Code
 
 Nothing here is promised by Claude Code. Every entry carries the date and version it was seen
@@ -292,6 +292,86 @@ memory from another.
 Anything that computes one of these and uses it as the other is wrong for every session started
 below a repository root. That is the second fault in issue 40, and it is why fixing the dot
 sanitizing alone would not have been enough.
+
+## The plugin surface
+
+### O13. A marketplace is a git clone, independent of your working checkout
+
+    First observed:     2026-08-19 · 2.1.234
+    Surface:            ~/.claude/plugins/marketplaces/<name>/
+    How:                `git -C ~/.claude/plugins/marketplaces/memory-kit remote get-url origin`
+                        returns this repo; the directory holds `.claude-plugin/marketplace.json`
+    Needs:              git
+    Checkable:          automated
+
+`plugin marketplace add <owner>/<repo>` clones the repo and reads which plugins it offers from
+that clone. It is a registry pointing at git sources, not a store and not an updater. The clone
+is a second copy of the same repo, so `/plugin update` refreshes it and never touches your
+checkout, and `git pull` in your checkout never touches the plugin. Two stale states, unrelated,
+which is why the installer reports them on separate lines.
+
+### O14. The plugin cache is keyed by the version in plugin.json
+
+    First observed:     2026-08-18 · 2.1.234
+    Surface:            ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/
+    How:                ponytail cached as `4.8.4` and dev-pipeline as `0.1.0`, both declaring a
+                        version; caveman cached as `0d95a81d35a9`, and its plugin.json has no
+                        version field
+    Needs:              nothing
+    Checkable:          automated
+
+Omit `version` and the cache is keyed by commit SHA instead, which makes "which version is
+installed" unanswerable and gives `/plugin update` no version change to react to. It is also why
+this kit's changelog test pins plugin.json to the newest released heading: the field has to be
+tracked by hand, so it lies the first time a release ships without a bump.
+
+### O15. Nothing runs at plugin install; hooks are the only execution surface
+
+    First observed:     2026-08-18 · 2.1.234
+    Surface:            plugin install, and plugin-declared hooks
+    How:                installing a plugin clones and reads the manifest, with no shell step;
+                        a plugin that declares `hooks` has its commands run on session events,
+                        which is how caveman and ponytail activate
+    Needs:              nothing
+    Checkable:          needs a live session
+
+A plugin can execute arbitrary commands, but only on a hook event, never during install. So the
+plugin cannot run install.sh for the half it does not ship, and the two-step install is a
+property of the platform rather than a choice. It is also what this kit's own plugin-declared
+SessionStart hook relies on: the only way to report a missing kit tree is to run at session
+start. `plugin install --help` refers to "a plugin installed by running a marketplace-declared
+command", so some install-command path exists; the `$schema` URL in marketplace.json returns a
+404 page, none of the marketplaces installed here declare such a field, and its shape is
+unverified.
+
+### O16. Removing a marketplace disables its plugin and orphans the cache
+
+    First observed:     2026-08-19 · 2.1.234
+    Surface:            settings.json and the plugin cache
+    How:                in a sandbox HOME: after install, one marketplace and one enabled plugin;
+                        `plugin uninstall` left the marketplace (mkt=1 plugin=0); `plugin
+                        marketplace remove` left neither (mkt=0 plugin=0) with the cache directory
+                        still on disk
+    Needs:              jq
+    Checkable:          automated
+
+So "plugin installed without its marketplace" is not a reachable state, which is why the
+installer's state check treats `enabledPlugins` as authoritative and reads the marketplace only
+to tell "nothing installed" from "one command left". An orphaned cache directory is not evidence
+of an installed plugin.
+
+### O17. `plugin install` cannot pin a version or ref
+
+    First observed:     2026-08-18 · 2.1.234
+    Surface:            plugin install, plugin marketplace add
+    How:                `--help` on both: install takes `--config`, `--scope`, `--yes`; marketplace
+                        add takes `--scope`, `--sparse`. Neither accepts a ref, tag or version
+    Needs:              nothing
+    Checkable:          automated
+
+The marketplace clone tracks the repo's default branch, so a release tag cannot change what the
+plugin path delivers. `plugin tag` creates a `<name>--v<version>` tag and validates that
+plugin.json agrees with the marketplace entry, but nothing on the install side consumes that tag.
 
 ## The binary
 

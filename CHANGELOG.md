@@ -20,6 +20,23 @@ says nothing about the other.
 
 ## 0.3.1
 
+### Added
+
+- The plugin declares a SessionStart hook that reports a missing kit tree. Installing only the
+  plugin is the one state `install.sh` cannot report, because it only speaks while it runs, and
+  the hook fires from the plugin cache exactly when the plugin is present. It depends on nothing
+  it reports on: no `jq`, no kit file.
+- `install.sh` reports when this checkout is behind its tracking branch, from refs already
+  fetched, so no network call is added. The plugin lives in its own clone, so a stale checkout
+  and a stale plugin are separate facts and get separate lines.
+
+### Documented
+
+- `docs/INTERNALS.md` records the plugin surface: a marketplace is a git clone independent of
+  your checkout, the cache is keyed by the version in plugin.json, nothing runs at install and
+  hooks are the only execution surface, removing a marketplace disables its plugin and orphans
+  the cache, and `plugin install` cannot pin a version or ref.
+
 ### Fixed
 
 - A skill now names the fix when the kit half is missing. Installing only the plugin left the
