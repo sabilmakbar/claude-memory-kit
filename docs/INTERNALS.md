@@ -5,9 +5,9 @@
 > `DESIGN-*.md` records, which cite these by number. For how the kit behaves, read
 > [FLOWS.md](FLOWS.md).
 
-    Observed against:   Claude Code 2.1.222 (O1–O7) · 2.1.228 (O8–O12) · 2.1.234 (O13–O19)
+    Observed against:   Claude Code 2.1.222 (O1–O7) · 2.1.228 (O8–O12) · 2.1.234 (O13–O19) · 2.1.237 (O20)
     Platform:           macOS, VS Code extension
-    Last re-verified:   2026-08-12 (O1–O7) · 2026-08-13 (O8–O12) · 2026-08-19 (O13–O17) · 2026-08-20 (O18–O19)
+    Last re-verified:   2026-08-12 (O1–O7) · 2026-08-13 (O8–O12) · 2026-08-19 (O13–O17) · 2026-08-20 (O18–O20)
     Needs to re-run:    jq, find, a machine with an installed Claude Code
 
 Nothing here is promised by Claude Code. Every entry carries the date and version it was seen
@@ -421,6 +421,25 @@ out before the marketplace, because `uninstall` resolves the plugin through the 
 cannot find it once the registry entry is gone. Reversing the order is not recoverable through
 the CLI, which is why this kit's uninstall documentation states the order rather than listing the
 commands in either order.
+
+### O20. The VS Code extension installs plugins by command and URI, not by a slash command
+
+    First observed:     2026-08-20 · extension 2.1.237
+    Surface:            the extension manifest and bundle
+    How:                `claude-vscode.installPlugin` is one of the 23 declared commands, titled
+                        "Claude Code: Install Plugin" and gated on `claude-vscode.updateSupported`.
+                        The bundle registers a URI handler whose `/install-plugin` path reads
+                        `plugin` and `marketplace` query parameters and defaults the marketplace to
+                        `anthropics/claude-plugins-official`. Typing `/plugin` in a session here
+                        answers "isn't available in this environment", and that string is not in
+                        the extension bundle, so it comes from the CLI layer
+    Needs:              jq
+    Checkable:          automated
+
+So `/plugin` is not a safe instruction to publish: this host does not have it, and which hosts do
+was not established. The CLI form works wherever the binary does, which is why the docs lead with
+it. `/install-plugin` is a deep-link path, not a chat command, and the two are easy to conflate
+from a grep alone.
 
 ## The binary
 

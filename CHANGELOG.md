@@ -70,6 +70,10 @@ says nothing about the other.
   is not available in every host — the VS Code extension does not provide it — so an
   instruction offering only that form named a command the reader could not run. The slash form
   stays as a parenthetical, and the docs say where the binary lives when it is not on `PATH`.
+  Which hosts do provide the slash command was not established, and the docs say that rather
+  than implying otherwise. VS Code offers two other routes, both read from the extension
+  manifest: the command palette entry "Claude Code: Install Plugin", and a URI handler at
+  `vscode://anthropic.claude-code/install-plugin?plugin=&marketplace=`. Recorded in INTERNALS.
 
 ### Fixed
 

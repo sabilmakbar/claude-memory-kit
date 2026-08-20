@@ -287,16 +287,20 @@ Then update the plugin for the skills:
 claude plugin update memory-kit@memory-kit      # restart to apply
 ```
 
-`/plugin update memory-kit@memory-kit` does the same thing, but only in hosts that provide the
-slash command. It is **not available in the VS Code extension**, which is why the CLI form is
-given first. If `claude` is not on your `PATH` it ships inside the extension:
+`/plugin update memory-kit@memory-kit` may do the same thing where your host provides that
+slash command. It is **not available in the VS Code extension**, and we have not confirmed
+which hosts do provide it, so the CLI form is the one to rely on. If `claude` is not on your `PATH` it ships inside the extension:
 
 ```bash
 ~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude plugin update memory-kit@memory-kit
 ```
 
-Use `~/.vscode-server/extensions/...` on a remote or WSL host. If your host has a plugins UI,
-that works too; the point is that the slash command alone is not a safe instruction.
+Use `~/.vscode-server/extensions/...` on a remote or WSL host.
+
+In VS Code there are two other routes, both verified in the extension manifest rather than
+guessed: the command palette entry **Claude Code: Install Plugin**, and a URI handler, which
+accepts `vscode://anthropic.claude-code/install-plugin?plugin=<name>&marketplace=<owner/repo>`.
+Neither is a chat slash command.
 
 You do not have to remember which half is behind. The installer reads the plugin's
 installed version and says which of the four cases you are in: not installed at all,

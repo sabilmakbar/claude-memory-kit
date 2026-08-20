@@ -39,7 +39,7 @@ installed and current, or installed behind this checkout with the update command
 
 **On updating.** The installer prints `claude plugin update` rather than `/plugin update`,
 because the slash command is not available in every host. The VS Code extension does not have
-it. If `claude` is not on your `PATH`, the binary ships inside the extension at
+it, and which hosts do is unconfirmed. If `claude` is not on your `PATH`, the binary ships inside the extension at
 `~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude`, or
 `~/.vscode-server/...` on a remote host.
 
