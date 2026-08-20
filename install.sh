@@ -685,7 +685,12 @@ if [ "$UNINSTALL" -eq 1 ]; then
 
   for s in "$REPO"/skills/*/; do run rm -rf "$CLAUDE/skills/$(basename "$s")"; done
   run rm -rf "$DEST"
-  echo "  removed $DEST and the kit's skills"
+  echo "  removed $DEST and any bare skill copy an older version left behind"
+  echo "  the skills themselves come from the plugin. Remove it in this order:"
+  echo "      claude plugin uninstall memory-kit@memory-kit"
+  echo "      claude plugin marketplace remove memory-kit"
+  echo "  reversed, the uninstall cannot resolve the plugin and fails. Neither command"
+  echo "  removes ~/.claude/plugins/cache/memory-kit/ — delete that by hand if you want it gone."
 
   # User data is never removed by default. The tracker holds the proposals you accepted
   # and rejected, and the miner reads the rejections so it never re-proposes them.

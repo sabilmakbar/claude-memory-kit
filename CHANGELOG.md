@@ -39,6 +39,11 @@ says nothing about the other.
   `plugin install` are a lookup rather than a chain: neither runs the other, and refreshing
   has two separate rungs in `marketplace update` and `plugin update`.
 
+- Uninstall documents its required order. Taking the marketplace out before the plugin makes
+  `plugin uninstall` fail, because it resolves the plugin through the registry, and the cache is
+  then unremovable through the CLI. `install.sh --uninstall` prints the order, and the README
+  states that neither command removes the plugin's cache directory.
+
 ### Fixed
 
 - A skill now names the fix when the kit half is missing. Installing only the plugin left the

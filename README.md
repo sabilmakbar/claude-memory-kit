@@ -420,7 +420,17 @@ and rejected, and the rejections are what stop a later reinstall from asking aga
 to remove all of it. Both say what they are deleting.
 
 The skills themselves come from the plugin, so remove that separately with
-`claude plugin uninstall memory-kit@memory-kit`.
+separately, and **order matters**:
+
+```bash
+claude plugin uninstall memory-kit@memory-kit    # first
+claude plugin marketplace remove memory-kit      # only after
+```
+
+Reversed, the uninstall fails: it resolves the plugin through the marketplace and cannot find it
+once that entry is gone. Neither command removes the plugin's cache directory under
+`~/.claude/plugins/cache/memory-kit/`, and `claude plugin prune` does not either, since it only
+handles auto-installed dependencies. Delete it by hand if you want the disk space back.
 
 `--dry-run` prints what either direction would do and changes nothing.
 

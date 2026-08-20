@@ -5,9 +5,9 @@
 > `DESIGN-*.md` records, which cite these by number. For how the kit behaves, read
 > [FLOWS.md](FLOWS.md).
 
-    Observed against:   Claude Code 2.1.222 (O1–O7) · 2.1.228 (O8–O12) · 2.1.234 (O13–O18)
+    Observed against:   Claude Code 2.1.222 (O1–O7) · 2.1.228 (O8–O12) · 2.1.234 (O13–O19)
     Platform:           macOS, VS Code extension
-    Last re-verified:   2026-08-12 (O1–O7) · 2026-08-13 (O8–O12) · 2026-08-19 (O13–O17) · 2026-08-20 (O18)
+    Last re-verified:   2026-08-12 (O1–O7) · 2026-08-13 (O8–O12) · 2026-08-19 (O13–O17) · 2026-08-20 (O18–O19)
     Needs to re-run:    jq, find, a machine with an installed Claude Code
 
 Nothing here is promised by Claude Code. Every entry carries the date and version it was seen
@@ -295,7 +295,7 @@ sanitizing alone would not have been enough.
 
 ## The plugin surface
 
-### O13. A marketplace is a git clone, independent of your working checkout
+### O13. A marketplace is a registry entry; a remote source is cloned, a path is not
 
     First observed:     2026-08-19 · 2.1.234
     Surface:            ~/.claude/plugins/marketplaces/<name>/
@@ -304,11 +304,17 @@ sanitizing alone would not have been enough.
     Needs:              git
     Checkable:          automated
 
-`plugin marketplace add <owner>/<repo>` clones the repo and reads which plugins it offers from
-that clone. It is a registry pointing at git sources, not a store and not an updater. The clone
-is a second copy of the same repo, so `/plugin update` refreshes it and never touches your
-checkout, and `git pull` in your checkout never touches the plugin. Two stale states, unrelated,
-which is why the installer reports them on separate lines.
+`plugin marketplace add` records the source in `extraKnownMarketplaces` and reads which plugins
+it offers. It is a registry pointing at sources, not a store and not an updater.
+
+**How it is stored depends on the source.** `add <owner>/<repo>` clones into
+`~/.claude/plugins/marketplaces/<name>/`, which is a second copy of the repo: `/plugin update`
+refreshes that clone and never touches your checkout, and `git pull` in your checkout never
+touches the plugin. Two stale states, unrelated, which is why the installer reports them on
+separate lines. `add <path>` creates no clone and references the directory in place, so there the
+marketplace tracks whatever that working tree holds, including an unmerged branch. An earlier
+version of this entry claimed the clone unconditionally; it was written from a GitHub-sourced
+install and only checked against one.
 
 ### O14. The plugin cache is keyed by the version in plugin.json
 
@@ -396,6 +402,25 @@ the registry clone, so a newly published plugin becomes visible, while `plugin u
 <plugin>@<marketplace>` moves an installed plugin to what that clone now offers. For a
 single-plugin marketplace the first rarely matters, because the plugin list never changes. The
 failure message for a missing plugin points at `marketplace update`, not at `add`.
+
+### O19. Nothing removes a plugin's cache, and removal order decides whether you can
+
+    First observed:     2026-08-20 · 2.1.234
+    Surface:            plugins/cache, plugin uninstall, marketplace remove, plugin prune
+    How:                in a sandbox HOME: after install, cache=1. `plugin uninstall` left
+                        cache=1. `plugin marketplace remove` left cache=1. `plugin prune`
+                        answered "Nothing to prune (no auto-installed plugins at user scope)".
+                        Removing the marketplace first made `plugin uninstall` fail with
+                        "Plugin not found", leaving the cache with no command able to remove it
+    Needs:              jq
+    Checkable:          automated
+
+Two consequences. Cache directories accumulate and are only ever cleaned by hand; `prune` is for
+auto-installed dependencies, not for orphans. And uninstall has a required order: take the plugin
+out before the marketplace, because `uninstall` resolves the plugin through the registry and
+cannot find it once the registry entry is gone. Reversing the order is not recoverable through
+the CLI, which is why this kit's uninstall documentation states the order rather than listing the
+commands in either order.
 
 ## The binary
 
