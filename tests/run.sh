@@ -125,6 +125,15 @@ printf '%s' "$out" | grep -q "claude plugin install memory-kit@memory-kit" \
   || fail "installer, --dry-run reports plugin state"
 rm -rf "$h"
 
+echo "the documented update command works in every host:"
+# `/plugin update` is not available in the VS Code extension, so an instruction that offers only
+# the slash form sends people to a command they cannot run. The CLI form works wherever the
+# binary does, so it has to be named first.
+grep -q 'claude plugin update' "$KIT/install.sh" \
+  && ok "the installer names the CLI update command" || fail "installer omits claude plugin update"
+grep -q 'claude plugin update' "$KIT/README.md" \
+  && ok "the README names the CLI update command" || fail "README omits claude plugin update"
+
 echo "integration: install.sh against a git checkout and a full uninstall:"
 # These drive the real installer end to end. Filesystem and git only, no `claude` CLI, so
 # they run on a CI runner. The plugin-side behaviours that need the real CLI live in

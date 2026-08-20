@@ -1027,7 +1027,8 @@ case "$PLUG_STATE" in
     echo "  the plugin is installed at $PLUG_WANT, matching this checkout — nothing to do" ;;
   stale:*)
     echo "  the plugin is installed at ${PLUG_STATE#stale:} but this checkout is $PLUG_WANT:"
-    echo "      /plugin update $PLUG_NAME@$PLUG_MKT      (restart to apply)"
+    echo "      claude plugin update $PLUG_NAME@$PLUG_MKT      (restart to apply)"
+    echo "      /plugin update $PLUG_NAME@$PLUG_MKT          (same thing, only where the host offers it)"
     echo "  a version behind means the skills are the older copy, even though the hooks, tree"
     echo "  and config this run just deployed are current." ;;
 esac
