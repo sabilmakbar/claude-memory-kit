@@ -8,6 +8,11 @@ description: Walk the user through pending auto-mined feedback proposals (accept
 The tracker is `~/.local/share/claude-feedback/proposals.md`. Read it first.
 If `## Pending` is empty, tell the user there is nothing to review and stop.
 
+> **If that file does not exist**, this kit's tree is not installed. The plugin ships this
+> skill; `install.sh` ships what the skill reads. Say so plainly and name the fix:
+> `install.sh` from the kit checkout, then a new session. Do not work around it.
+
+
 ## Walk Pending top-down (it is sorted by score)
 
 For each entry, present it **in full** — the complete proposed rule, the "in practice"

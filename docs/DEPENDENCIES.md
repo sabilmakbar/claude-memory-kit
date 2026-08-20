@@ -11,6 +11,17 @@ without them. The report tells you which features will sit idle.
   captures); nothing here needs 1.6 or later, so any `jq` you are likely to already have
   will do. Developed against 1.7.
 
+## Required for the other half of the install
+
+- **the `claude` CLI**, to install the plugin that carries the skills. `install.sh` gives you
+  the hooks, the kit tree and the config; the skills come from `claude plugin marketplace add`
+  and `claude plugin install`, and neither half works alone. This is separate from the runtime
+  use below: the miner spawns the CLI headless, while this is an install-time requirement, and
+  `install.sh` reports which half is missing rather than assuming.
+
+  If the CLI is not on `PATH` it ships inside the VS Code extension, at
+  `~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude`.
+
 ## Used when you use the feature
 - **claude** CLI, runnable headless (`claude -p`). The daily miner spawns it. If it is
   not on `PATH`, the miner falls back to the newest VS Code extension's bundled binary

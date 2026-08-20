@@ -32,6 +32,11 @@ files are out of scope and keep theirs.
 
 ## A skill is missing, or fails the moment it runs
 
+**Quickest check.** Re-run `install.sh`. It reads the plugin's installed version and says
+which of four cases you are in: not installed, marketplace added but plugin missing,
+installed and current, or installed behind this checkout with the update command to run.
+`--dry-run` reports the same without touching anything.
+
 **Check.** The skills come from the plugin, everything they read comes from `install.sh`, and
 neither half works alone. Run `claude plugin list` and look for `memory-kit@memory-kit`, then
 check that `~/.claude/memory-kit/` exists.

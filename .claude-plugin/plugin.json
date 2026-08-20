@@ -1,8 +1,21 @@
 {
   "name": "memory-kit",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Memory skills for Claude Code: author and amend persistent memories, run periodic health reviews, bring pre-existing memory stores in, and triage auto-mined feedback proposals. Hooks, libraries and config install separately via the kit's install.sh.",
   "author": {
     "name": "sabilmakbar"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/plugin-hooks/kit-present.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
   }
 }

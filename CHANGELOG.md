@@ -18,6 +18,62 @@ that was tagged, and the tag is what you check out to go back to it. Versions mo
 from claude-session-kit: the two share conventions, neither depends on the other, and a bump in one
 says nothing about the other.
 
+## 0.3.1
+
+### Added
+
+- `install.sh` names the action for the state the machine is in, rather than reporting a
+  single "installed or not". Four states need four different commands: nothing installed,
+  marketplace added but plugin missing, installed and matching this checkout, or installed at
+  an older version, which is offered `/plugin update` with the version it is on. That last one
+  was silent before: the hooks and libraries came up to date while the skills stayed behind.
+  `--dry-run` reports the state too, since reading it changes nothing.
+- The plugin declares a SessionStart hook that reports a missing kit tree. Installing only the
+  plugin is the one state `install.sh` cannot report, because it only speaks while it runs, and
+  the hook fires from the plugin cache exactly when the plugin is present. It depends on nothing
+  it reports on: no `jq`, no kit file.
+- `install.sh` reports when this checkout is behind its tracking branch, from refs already
+  fetched, so no network call is added. The plugin lives in its own clone, so a stale checkout
+  and a stale plugin are separate facts and get separate lines.
+
+### Tested
+
+- Integration coverage for the installer end to end: a checkout behind its tracking branch is
+  reported, a current one says nothing, uninstall prints the plugin removal order with the
+  plugin before the marketplace, and uninstall leaves the plugin cache alone because the kit
+  does not own it. Filesystem and git only, so it runs on CI.
+- `tests/integration-plugin.sh` covers the rest, which needs the real `claude` CLI: that
+  `marketplace add` and `plugin install` do not run each other, that a path source is not
+  cloned, that the cache is keyed by the manifest version, that add and update are no-ops when
+  satisfied, that nothing removes the cache, and that removing the marketplace first leaves
+  the plugin unresolvable. It skips itself with exit 0 when the binary is absent, and is wired
+  into CI so it starts running if a runner ever ships the CLI.
+
+### Documented
+
+- `docs/INTERNALS.md` records the plugin surface: how a marketplace is stored depends on its
+  source, a remote one cloned into `plugins/marketplaces` and independent of your checkout
+  while a path is referenced in place, the cache is keyed by the version in plugin.json, nothing runs at install and
+  hooks are the only execution surface, removing a marketplace disables its plugin and orphans
+  the cache, `plugin install` cannot pin a version or ref, and `marketplace add` and
+  `plugin install` are a lookup rather than a chain: neither runs the other, and refreshing
+  has two separate rungs in `marketplace update` and `plugin update`.
+
+- Uninstall documents its required order. Taking the marketplace out before the plugin makes
+  `plugin uninstall` fail, because it resolves the plugin through the registry, and the cache is
+  then unremovable through the CLI. `install.sh --uninstall` prints the order, and the README
+  states that neither command removes the plugin's cache directory.
+
+- `docs/DEPENDENCIES.md` names the `claude` CLI as an install-time requirement for the half
+  that carries the skills. It was listed only as a runtime dependency, or not at all.
+### Fixed
+
+- A skill now names the fix when the kit half is missing. Installing only the plugin left the
+  skills present and failing on first use with a bare "no such file or directory" that never
+  mentioned `install.sh`. This is the one state the installer cannot report, because it only
+  speaks while it runs, so the skill has to. Each skill that depends on the tree they read from says
+  what a missing path means and which command fixes it.
+
 ## 0.3.0
 
 ### Changed
@@ -28,6 +84,10 @@ says nothing about the other.
   a re-run retires copies an older version left there, and reports rather than deletes anything
   it does not recognise as its own. Both install steps are now required: the plugin carries the
   skills, `install.sh` still carries the hooks, tree and config those skills read.
+- `install.sh` now reports whether the plugin half is present, and no longer says it loads
+  skills, which it has not done since they moved to the plugin. A half-install is the failure
+  mode the split introduced: skills registered with no guidance file or config under them fail
+  on first use, and the run is the cheapest place to name that (#58).
 
 ## 0.2.0
 

@@ -59,6 +59,122 @@ leak=$(cd "$KIT" && git ls-files -z 2>/dev/null | xargs -0 grep -lnE '/Users/[a-
   && ok "no tracked file hardcodes a home directory" \
   || fail "tracked files hardcode a home directory: $leak"
 
+echo "the plugin's own SessionStart hook reports a missing kit:"
+# The one state install.sh cannot report, so the plugin reports it. Both directions asserted:
+# silent when the kit is there, a valid object naming install.sh when it is not. A hook that
+# cannot stay quiet is as bad as one that cannot speak.
+H="$KIT/plugin-hooks/kit-present.sh"
+[ -x "$H" ] && ok "the plugin ships an executable kit-presence hook" || fail "hook missing or not +x"
+h=$(mktemp -d); mkdir -p "$h/.claude/memory-kit/guidance"; : >"$h/.claude/memory-kit/guidance/memory-authoring.md"
+out=$(HOME="$h" bash "$H" 2>&1)
+[ -z "$out" ] && ok "kit present: the hook says nothing" || fail "kit present but hook spoke: $out"
+rm -rf "$h"
+h=$(mktemp -d); out=$(HOME="$h" bash "$H" 2>&1)
+printf '%s' "$out" | jq -e . >/dev/null 2>&1 && ok "kit absent: valid JSON" || fail "kit absent: not JSON ($out)"
+printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null | grep -q 'install\.sh' \
+  && ok "…and it names install.sh" || fail "hook does not name install.sh"
+rm -rf "$h"
+# It reports that kit files are missing, so it must not need one to say so, and must not need
+# jq either. Testing a path with [ -r ] is the point, so only invocation counts: comments and
+# the existence check are fine, sourcing a kit library or piping through jq is not.
+BODY=$(sed 's/#.*//' "$H")
+if printf '%s' "$BODY" | grep -qwE 'jq|node' || printf '%s' "$BODY" | grep -qE '^[[:space:]]*\.[[:space:]]|source[[:space:]]'; then
+  fail "the hook invokes something it reports on"
+else ok "the hook invokes nothing it reports on"; fi
+
+echo "skills name install.sh when the kit half is missing:"
+# Installing only the plugin is the one state install.sh cannot report, because it only
+# speaks while it runs. The skill is the only thing present, so it has to say what a missing
+# path means. Without this the failure is a bare "no such file or directory".
+for d in "$KIT"/skills/*/; do
+  n=$(basename "$d")
+  if grep -qE '~/\.claude/memory-kit/|~/\.local/share/claude-feedback/' "$d/SKILL.md"; then
+    grep -q 'install\.sh' "$d/SKILL.md" \
+      && ok "$n names install.sh for a missing kit file" \
+      || fail "$n uses a kit path but never names install.sh"
+  fi
+done
+
+echo "installer names the right plugin action per state:"
+# Four states need four different actions, so a check that cannot tell them apart sends
+# people to the wrong command. Each is seeded and asserted, including the two that look
+# alike from outside: not installed at all, and installed but behind.
+PWANT=$(jq -r .version "$KIT/.claude-plugin/plugin.json")
+plug_case() {   # <label> <expected substring> [seed]
+  local lbl="$1" want="$2" seed="${3:-true}" h out
+  h=$(mktemp -d); P="$h/.claude"; mkdir -p "$P"
+  eval "$seed"
+  out=$(HOME="$h" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=advisory 2>&1)
+  printf '%s' "$out" | grep -q "$want" \
+    && ok "installer, $lbl" || fail "installer, $lbl (wanted '$want', got: $(printf '%s' "$out" | tail -3 | tr '\n' ' '))"
+  rm -rf "$h"
+}
+plug_case "no plugin and no marketplace: both commands" "claude plugin marketplace add"
+plug_case "marketplace known, plugin missing: one command left" "One command left" \
+  'printf "{\"extraKnownMarketplaces\":{\"memory-kit\":{\"source\":{\"source\":\"github\",\"repo\":\"x/y\"}}}}" > "$P/settings.json"'
+plug_case "installed but behind: offers /plugin update" "/plugin update memory-kit@memory-kit" \
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/0.0.1"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
+plug_case "installed and current: nothing to do" "nothing to do" \
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/'"$PWANT"'"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
+# Reading the state is read-only, so --dry-run must still report it: a preview that omits
+# the half you are missing omits it at the least useful moment.
+h=$(mktemp -d); mkdir -p "$h/.claude"
+out=$(HOME="$h" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=advisory --dry-run 2>&1)
+printf '%s' "$out" | grep -q "claude plugin install memory-kit@memory-kit" \
+  && ok "installer, --dry-run still reports the plugin state" \
+  || fail "installer, --dry-run reports plugin state"
+rm -rf "$h"
+
+echo "integration: install.sh against a git checkout and a full uninstall:"
+# These drive the real installer end to end. Filesystem and git only, no `claude` CLI, so
+# they run on a CI runner. The plugin-side behaviours that need the real CLI live in
+# tests/integration-plugin.sh, which skips itself when the binary is absent.
+
+# A checkout behind its tracking branch. Built by advancing a temp branch and pointing
+# origin/main at it, never by `reset HEAD~1`: actions/checkout clones at depth 1 and there is
+# no parent to reset to. The clone carries COMMITTED install.sh, so the one under test is
+# copied over it, or a working-tree change would not be exercised.
+CB=$(mktemp -d)/c
+git clone -q "$KIT" "$CB" 2>/dev/null
+git -C "$CB" checkout -q -B main 2>/dev/null
+git -C "$CB" checkout -q -b upstream-probe 2>/dev/null
+git -C "$CB" -c user.email=t@e -c user.name=t commit -q --allow-empty -m "upstream moved" 2>/dev/null
+git -C "$CB" update-ref refs/remotes/origin/main upstream-probe
+git -C "$CB" checkout -q main 2>/dev/null
+git -C "$CB" branch -q --set-upstream-to=origin/main main 2>/dev/null
+cp "$KIT/install.sh" "$CB/install.sh"
+h=$(mktemp -d)
+out=$( cd "$CB" && HOME="$h" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash install.sh --mode=advisory 2>&1 </dev/null )
+printf '%s' "$out" | grep -q 'commit(s) behind' \
+  && ok "integration: a behind checkout is reported" || fail "behind checkout not reported"
+printf '%s' "$out" | grep -q 'git -C' && ok "…naming git pull for the checkout" || fail "no git pull hint"
+rm -rf "$h"
+# Control: level with upstream, it must say nothing.
+git -C "$CB" update-ref refs/remotes/origin/main main
+cp "$KIT/install.sh" "$CB/install.sh"
+h=$(mktemp -d)
+out=$( cd "$CB" && HOME="$h" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash install.sh --mode=advisory 2>&1 </dev/null )
+printf '%s' "$out" | grep -q 'commit(s) behind' \
+  && fail "a current checkout claimed to be behind" || ok "integration: a current checkout says nothing"
+rm -rf "$h" "$(dirname "$CB")"
+
+# Uninstall states the plugin order. Removing the marketplace before the plugin leaves
+# `plugin uninstall` unable to resolve it, so the order is the instruction, not the list.
+h=$(mktemp -d)
+HOME="$h" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=advisory >/dev/null 2>&1
+out=$(HOME="$h" bash "$KIT/install.sh" --uninstall 2>&1)
+printf '%s' "$out" | grep -q 'claude plugin uninstall' \
+  && ok "integration: uninstall names the plugin command" || fail "uninstall does not name the plugin command"
+printf '%s' "$out" | awk '/plugin uninstall/{u=NR} /marketplace remove/{m=NR} END{exit !(u&&m&&u<m)}' \
+  && ok "…with uninstall before marketplace remove" || fail "uninstall order wrong or incomplete"
+# The installer must not delete the plugin cache: it does not own it, and a wrong-order
+# removal already leaves it unreachable. Deleting another tool's directory is worse.
+mkdir -p "$h/.claude/plugins/cache/memory-kit/memory-kit/9.9.9"
+HOME="$h" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
+[ -d "$h/.claude/plugins/cache/memory-kit/memory-kit/9.9.9" ] \
+  && ok "integration: uninstall leaves the plugin cache alone" || fail "uninstall deleted the plugin cache"
+rm -rf "$h"
+
 echo ".claude-plugin manifests:"
 PJ="$KIT/.claude-plugin/plugin.json"; MJ="$KIT/.claude-plugin/marketplace.json"
 for f in "$PJ" "$MJ"; do

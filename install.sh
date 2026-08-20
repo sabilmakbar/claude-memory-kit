@@ -685,7 +685,12 @@ if [ "$UNINSTALL" -eq 1 ]; then
 
   for s in "$REPO"/skills/*/; do run rm -rf "$CLAUDE/skills/$(basename "$s")"; done
   run rm -rf "$DEST"
-  echo "  removed $DEST and the kit's skills"
+  echo "  removed $DEST and any bare skill copy an older version left behind"
+  echo "  the skills themselves come from the plugin. Remove it in this order:"
+  echo "      claude plugin uninstall memory-kit@memory-kit"
+  echo "      claude plugin marketplace remove memory-kit"
+  echo "  reversed, the uninstall cannot resolve the plugin and fails. Neither command"
+  echo "  removes ~/.claude/plugins/cache/memory-kit/ — delete that by hand if you want it gone."
 
   # User data is never removed by default. The tracker holds the proposals you accepted
   # and rejected, and the miner reads the rejections so it never re-proposes them.
@@ -985,19 +990,63 @@ if [ -d "$GUARD_STORE/.git" ]; then
   echo "→ guardrail wired into the memory repo at $GUARD_STORE"
 fi
 
-# The skills ship as a plugin now, so this installer is one half of a working install and
-# has to say so. Reporting whether the other half is present turns a half-install from
-# something the user discovers when a skill fails on first use into something this run names.
+# This installer is one half of a working install, so it has to say which half is missing
+# and which command fixes it. Four states are distinguishable and they need different
+# actions, so a bare "installed / not installed" would send people to the wrong one.
+# Read-only, so it runs under --dry-run too: previewing an install is exactly when knowing
+# the plugin state is useful.
+PLUG_MKT=memory-kit; PLUG_NAME=memory-kit
+PLUG_WANT=$(jq -r .version "$REPO/.claude-plugin/plugin.json" 2>/dev/null)
+PLUG_CACHE="$CLAUDE/plugins/cache/$PLUG_MKT/$PLUG_NAME"
+plugin_state() {
+  [ -f "$SETT" ] || { printf 'absent'; return; }
+  if ! jq -e --arg k "$PLUG_NAME@$PLUG_MKT" '.enabledPlugins[$k] // false' "$SETT" >/dev/null 2>&1; then
+    if jq -e --arg m "$PLUG_MKT" '.extraKnownMarketplaces[$m] // false' "$SETT" >/dev/null 2>&1
+    then printf 'marketplace-only'; else printf 'absent'; fi
+    return
+  fi
+  local have
+  have=$(ls -d "$PLUG_CACHE"/*/ 2>/dev/null | while read -r d; do basename "$d"; done | sort -V | tail -1)
+  if [ -z "$have" ]; then printf 'absent'
+  elif [ "$have" = "$PLUG_WANT" ]; then printf 'current'
+  else printf 'stale:%s' "$have"; fi
+}
 echo "✓ done — hooks, the kit tree and the config are in place."
-if [ "$DRY" -eq 0 ] && [ -f "$SETT" ] \
-   && jq -e '.enabledPlugins["memory-kit@memory-kit"] // false' "$SETT" >/dev/null 2>&1; then
-  echo "  the memory-kit plugin is installed, so the skills are there too"
-else
-  echo "  the skills are NOT installed yet — they come from the plugin:"
-  echo "      claude plugin marketplace add sabilmakbar/claude-memory-kit"
-  echo "      claude plugin install memory-kit@memory-kit"
-  echo "  without it the skills are missing; installed without this script they fail on first"
-  echo "  use, because the guidance file and config they read are not there."
+PLUG_STATE=$(plugin_state)
+case "$PLUG_STATE" in
+  absent)
+    echo "  the skills are NOT installed — they come from the plugin:"
+    echo "      claude plugin marketplace add sabilmakbar/claude-memory-kit"
+    echo "      claude plugin install $PLUG_NAME@$PLUG_MKT"
+    echo "  without it the skills are missing; installed without this script they fail on first"
+    echo "  use, because the guidance file and config they read are not there." ;;
+  marketplace-only)
+    echo "  the marketplace is known but the plugin is not installed. One command left:"
+    echo "      claude plugin install $PLUG_NAME@$PLUG_MKT" ;;
+  current)
+    echo "  the plugin is installed at $PLUG_WANT, matching this checkout — nothing to do" ;;
+  stale:*)
+    echo "  the plugin is installed at ${PLUG_STATE#stale:} but this checkout is $PLUG_WANT:"
+    echo "      /plugin update $PLUG_NAME@$PLUG_MKT      (restart to apply)"
+    echo "  a version behind means the skills are the older copy, even though the hooks, tree"
+    echo "  and config this run just deployed are current." ;;
+esac
+# Whether this checkout is itself behind, from refs already fetched — no network call, so an
+# offline install is unaffected. The plugin lives in its own clone under plugins/marketplaces,
+# independent of this one, so a stale checkout and a stale plugin are two separate facts.
+kit_behind() {
+  local up n
+  up=$(git -C "$REPO" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)
+  [ -n "$up" ] || up=$(git -C "$REPO" rev-parse --verify --quiet origin/main >/dev/null 2>&1 && echo origin/main)
+  [ -n "$up" ] || return 1
+  n=$(git -C "$REPO" rev-list --count "HEAD..$up" 2>/dev/null) || return 1
+  [ "${n:-0}" -gt 0 ] || return 1
+  printf '%s %s' "$n" "$up"
+}
+if BEHIND=$(kit_behind); then
+  echo "  this checkout is ${BEHIND%% *} commit(s) behind ${BEHIND##* } as of your last fetch:"
+  echo "      git -C \"$REPO\" pull   then re-run this script"
+  echo "  the plugin is a separate clone, so update it as well once the checkout is current."
 fi
 echo "  they appear as /memory-kit:save-memory, /memory-kit:review-memories,"
 echo "      /memory-kit:initialize-memory, /memory-kit:review-feedback-proposals"
