@@ -22,6 +22,12 @@ says nothing about the other.
 
 ### Added
 
+- `install.sh` names the action for the state the machine is in, rather than reporting a
+  single "installed or not". Four states need four different commands: nothing installed,
+  marketplace added but plugin missing, installed and matching this checkout, or installed at
+  an older version, which is offered `/plugin update` with the version it is on. That last one
+  was silent before: the hooks and libraries came up to date while the skills stayed behind.
+  `--dry-run` reports the state too, since reading it changes nothing.
 - The plugin declares a SessionStart hook that reports a missing kit tree. Installing only the
   plugin is the one state `install.sh` cannot report, because it only speaks while it runs, and
   the hook fires from the plugin cache exactly when the plugin is present. It depends on nothing
@@ -45,8 +51,9 @@ says nothing about the other.
 
 ### Documented
 
-- `docs/INTERNALS.md` records the plugin surface: a marketplace is a git clone independent of
-  your checkout, the cache is keyed by the version in plugin.json, nothing runs at install and
+- `docs/INTERNALS.md` records the plugin surface: how a marketplace is stored depends on its
+  source, a remote one cloned into `plugins/marketplaces` and independent of your checkout
+  while a path is referenced in place, the cache is keyed by the version in plugin.json, nothing runs at install and
   hooks are the only execution surface, removing a marketplace disables its plugin and orphans
   the cache, `plugin install` cannot pin a version or ref, and `marketplace add` and
   `plugin install` are a lookup rather than a chain: neither runs the other, and refreshing
@@ -57,6 +64,8 @@ says nothing about the other.
   then unremovable through the CLI. `install.sh --uninstall` prints the order, and the README
   states that neither command removes the plugin's cache directory.
 
+- `docs/DEPENDENCIES.md` names the `claude` CLI as an install-time requirement for the half
+  that carries the skills. It was listed only as a runtime dependency, or not at all.
 ### Fixed
 
 - A skill now names the fix when the kit half is missing. Installing only the plugin left the
