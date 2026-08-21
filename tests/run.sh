@@ -184,6 +184,127 @@ HOME="$h" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
   && ok "integration: uninstall leaves the plugin cache alone" || fail "uninstall deleted the plugin cache"
 rm -rf "$h"
 
+echo "the deploy-drift hooks:"
+# guardrail/kit-drift.sh reports that the deployed tree and the checkout have parted company,
+# and the three wrappers are how git delivers it: install.sh points this checkout's
+# core.hooksPath at guardrail/, so post-merge, post-checkout and post-rewrite arrive with a
+# pull. Both halves are covered here: the script's decision, and that git really runs it.
+#
+# The fixture clone gets the WORKING-TREE copy of the hooks copied in. A clone carries the
+# committed ones, so without that these cases would test the last commit, not the edit under
+# review. Every fixture git call also carries the sandbox HOME, or the hooks git fires would
+# read the developer's own installed tree and the fixture would not be hermetic.
+DR="$TMP/drift"; DRC="$DR/c"; DRH="$DR/home"
+mkdir -p "$DRH/.claude/memory-kit"
+git clone -q "$KIT" "$DRC" 2>/dev/null
+cp "$KIT"/guardrail/kit-drift.sh "$KIT"/guardrail/post-merge \
+   "$KIT"/guardrail/post-checkout "$KIT"/guardrail/post-rewrite "$DRC/guardrail/"
+drg(){ HOME="$DRH" git -C "$DRC" -c user.email=t@e -c user.name=t "$@"; }
+drg add -A >/dev/null 2>&1; drg commit -q --no-verify -m "hooks under test" >/dev/null 2>&1
+drg config core.hooksPath guardrail
+stamp(){ drg describe --tags --always "$1" >"$DRH/.claude/memory-kit/.kit-version"; }
+drift(){ ( cd "$DRC" && HOME="$DRH" bash guardrail/kit-drift.sh 2>&1 ); }
+
+stamp HEAD
+[ -z "$(drift)" ] && ok "deploy matches the checkout: silent" || fail "spoke when the deploy matched"
+
+# A README commit and a library commit, so the pair below differs only in WHAT changed.
+printf '\n' >>"$DRC/README.md"; drg add -A; drg commit -q --no-verify -m docs
+[ -z "$(drift)" ] && ok "only non-deployed paths changed: silent" \
+  || fail "reported a change to a path the installer does not deploy"
+
+printf '\n' >>"$DRC/core/lib.sh"; drg add -A; drg commit -q --no-verify -m lib
+out=$(drift)
+printf '%s' "$out" | grep -q 'does not match this checkout' \
+  && ok "a deployed file changed since the deploy: reported" || fail "missed a deployed-file change"
+printf '%s' "$out" | grep -q 'core/lib.sh' \
+  && ok "…naming the file that differs" || fail "does not name the differing file"
+printf '%s' "$out" | grep -q 'bash install.sh' \
+  && ok "…and the command that fixes it" || fail "does not name install.sh"
+
+# Unknowable state is silence, never a guess: a git hook must not break a pull over an
+# advisory. Each of these shares every other input with the reporting case above, so a
+# script that had simply stopped working could not pass both.
+rm -f "$DRH/.claude/memory-kit/.kit-version"
+[ -z "$(drift)" ] && ok "no .kit-version (kit not installed): silent" || fail "spoke with no version record"
+printf 'unknown\n' >"$DRH/.claude/memory-kit/.kit-version"
+[ -z "$(drift)" ] && ok "an archive install records unknown: silent" || fail "spoke on an unknown version"
+printf 'v9.9.9-1-gdeadbee\n' >"$DRH/.claude/memory-kit/.kit-version"
+[ -z "$(drift)" ] && ok "a version from some other clone: silent" || fail "spoke on an unresolvable version"
+printf '%s-dirty\n' "$(drg describe --tags --always HEAD~2)" >"$DRH/.claude/memory-kit/.kit-version"
+printf '%s' "$(drift)" | grep -q 'does not match' \
+  && ok "a -dirty deploy label still resolves to its commit" || fail "-dirty label was not resolved"
+
+# git actually runs them. Without these the wrappers could be dead files and every case
+# above would still pass.
+stamp HEAD
+drg checkout -q -b drift-feature
+printf '\n' >>"$DRC/core/lib.sh"; drg add -A; drg commit -q --no-verify -m featlib
+drg checkout -q main 2>/dev/null || drg checkout -q master 2>/dev/null
+out=$( cd "$DRC" && HOME="$DRH" git checkout -q drift-feature 2>&1 )
+printf '%s' "$out" | grep -q 'does not match this checkout' \
+  && ok "post-checkout: a branch switch runs the check" || fail "post-checkout did not run: ${out:-silence}"
+out=$( cd "$DRC" && HOME="$DRH" git checkout -q -- README.md 2>&1 )
+[ -z "$out" ] && ok "post-checkout: a file checkout does not (arg 3 is 0)" || fail "file checkout spoke: $out"
+drg checkout -q main 2>/dev/null || drg checkout -q master 2>/dev/null
+
+# post-merge, driven by a real pull between two local clones. No network: the upstream is
+# another clone on disk, which is also why this runs on a CI runner.
+DRU="$DR/up"
+git clone -q "$DRC" "$DRU" 2>/dev/null
+git -C "$DRU" checkout -q main 2>/dev/null || git -C "$DRU" checkout -q master 2>/dev/null
+drg remote add up "$DRU" 2>/dev/null
+printf '\n' >>"$DRU/core/lib.sh"
+git -C "$DRU" -c user.email=t@e -c user.name=t commit -q --no-verify -am uplib
+stamp HEAD
+out=$( cd "$DRC" && HOME="$DRH" git -c user.email=t@e -c user.name=t pull -q --no-rebase up HEAD 2>&1 )
+printf '%s' "$out" | grep -q 'does not match this checkout' \
+  && ok "post-merge: a pull that changes a deployed file runs the check" \
+  || fail "post-merge did not run: ${out:-silence}"
+stamp HEAD
+out=$( cd "$DRC" && HOME="$DRH" git -c user.email=t@e -c user.name=t pull -q --no-rebase up HEAD 2>&1 )
+[ -z "$out" ] && ok "post-merge: an up-to-date pull says nothing" || fail "up-to-date pull spoke: $out"
+
+# post-rewrite takes the rewrite kind as arg 1. Exercised directly rather than through a
+# rebase: the gate is the whole logic, and a real rebase also fires post-checkout, which
+# would make the result ambiguous about which hook spoke.
+stamp HEAD~1
+out=$( cd "$DRC" && HOME="$DRH" bash guardrail/post-rewrite amend 2>&1 )
+[ -z "$out" ] && ok "post-rewrite: amend is ignored" || fail "amend was reported: $out"
+out=$( cd "$DRC" && HOME="$DRH" bash guardrail/post-rewrite rebase 2>&1 )
+printf '%s' "$out" | grep -q 'does not match this checkout' \
+  && ok "post-rewrite: rebase runs the check (git pull --rebase)" || fail "rebase was not reported"
+
+for f in kit-drift.sh post-merge post-checkout post-rewrite; do
+  [ -x "$KIT/guardrail/$f" ] && ok "guardrail/$f is executable" || fail "guardrail/$f is not executable"
+done
+
+# The watched list is hard-coded, and a file added to the installer but not to the list would
+# go unwatched in silence. Rather than parse install.sh, compare the list against what the
+# installer actually deploys.
+h="$TMP/home-driftcov"; mkdir -p "$h"
+HOME="$h" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=advisory >/dev/null 2>&1
+watched(){ # watched <repo-relative-path>
+  local rel=$1 p
+  for p in $(sed -n 's/^PATHS=(\(.*\))$/\1/p' "$KIT/guardrail/kit-drift.sh"); do
+    case "$rel" in "$p"|"$p"/*) return 0;; esac
+  done
+  return 1
+}
+unwatched=""
+while IFS= read -r rel; do
+  # config is seeded from config.example and never overwritten, .kit-version is written by the
+  # installer, denylist.local holds private terms. None comes from a tracked file to diff.
+  case "$rel" in config|.kit-version|guardrail/denylist.local) continue;; esac
+  watched "$rel" || unwatched="$unwatched $rel"
+done < <(cd "$h/.claude/memory-kit" && find . -type f | sed 's|^\./||')
+[ -z "$unwatched" ] && ok "kit-drift.sh watches every file the installer deploys" \
+  || fail "deployed but unwatched:$unwatched"
+# Control: the matcher must be able to answer unwatched, or the assertion above is vacuous.
+watched docs/INTERNALS.md && fail "the matcher watches a path the installer skips" \
+  || ok "…and does not watch paths the installer skips"
+rm -rf "$h" "$DR"
+
 echo ".claude-plugin manifests:"
 PJ="$KIT/.claude-plugin/plugin.json"; MJ="$KIT/.claude-plugin/marketplace.json"
 for f in "$PJ" "$MJ"; do

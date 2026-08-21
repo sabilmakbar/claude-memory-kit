@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Fires after a merge or a fast-forward pull, the usual way the deploy falls behind.
+exec bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/kit-drift.sh"

@@ -990,6 +990,18 @@ if [ -d "$GUARD_STORE/.git" ]; then
   echo "→ guardrail wired into the memory repo at $GUARD_STORE"
 fi
 
+# A development checkout gets its own hooksPath, pointed at the TRACKED guardrail/ here
+# rather than at the deployed tree: that is what makes new hooks arrive with git pull, with
+# no install step. Two hooks live in it. pre-commit blocks staged home paths, emails and
+# private terms in this repo's own commits, the same protection the memory store gets above.
+# kit-drift.sh, via post-merge/post-checkout/post-rewrite, says when a pull has left the
+# deployed tree behind, which nothing could detect before: the deployed copy has no .git and
+# records no path back here, so only the checkout can compare the two.
+if [ -d "$REPO/.git" ] && [ -f "$REPO/guardrail/pre-commit" ]; then
+  run git -C "$REPO" config core.hooksPath guardrail
+  echo "→ guardrail and the deploy-drift check wired into this checkout"
+fi
+
 # This installer is one half of a working install, so it has to say which half is missing
 # and which command fixes it. Four states are distinguishable and they need different
 # actions, so a bare "installed / not installed" would send people to the wrong one.
