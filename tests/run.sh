@@ -202,6 +202,10 @@ cp "$KIT"/guardrail/kit-drift.sh "$KIT"/guardrail/post-merge \
 drg(){ HOME="$DRH" git -C "$DRC" -c user.email=t@e -c user.name=t "$@"; }
 drg add -A >/dev/null 2>&1; drg commit -q --no-verify -m "hooks under test" >/dev/null 2>&1
 drg config core.hooksPath guardrail
+# The starting point is recorded as a SHA, never as a branch name. CI clones at depth 1 with
+# a detached HEAD, so this fixture's clone may have no `main` at all, and a "go back to main"
+# here would quietly not happen there while the local run stayed green.
+DRBASE=$(drg rev-parse HEAD)
 stamp(){ drg describe --tags --always "$1" >"$DRH/.claude/memory-kit/.kit-version"; }
 drift(){ ( cd "$DRC" && HOME="$DRH" bash guardrail/kit-drift.sh 2>&1 ); }
 
@@ -240,19 +244,18 @@ printf '%s' "$(drift)" | grep -q 'does not match' \
 stamp HEAD
 drg checkout -q -b drift-feature
 printf '\n' >>"$DRC/core/lib.sh"; drg add -A; drg commit -q --no-verify -m featlib
-drg checkout -q main 2>/dev/null || drg checkout -q master 2>/dev/null
+drg checkout -q "$DRBASE" 2>/dev/null
 out=$( cd "$DRC" && HOME="$DRH" git checkout -q drift-feature 2>&1 )
 printf '%s' "$out" | grep -q 'does not match this checkout' \
   && ok "post-checkout: a branch switch runs the check" || fail "post-checkout did not run: ${out:-silence}"
 out=$( cd "$DRC" && HOME="$DRH" git checkout -q -- README.md 2>&1 )
 [ -z "$out" ] && ok "post-checkout: a file checkout does not (arg 3 is 0)" || fail "file checkout spoke: $out"
-drg checkout -q main 2>/dev/null || drg checkout -q master 2>/dev/null
+drg checkout -q "$DRBASE" 2>/dev/null
 
 # post-merge, driven by a real pull between two local clones. No network: the upstream is
 # another clone on disk, which is also why this runs on a CI runner.
 DRU="$DR/up"
 git clone -q "$DRC" "$DRU" 2>/dev/null
-git -C "$DRU" checkout -q main 2>/dev/null || git -C "$DRU" checkout -q master 2>/dev/null
 drg remote add up "$DRU" 2>/dev/null
 printf '\n' >>"$DRU/core/lib.sh"
 git -C "$DRU" -c user.email=t@e -c user.name=t commit -q --no-verify -am uplib
