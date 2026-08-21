@@ -1,6 +1,6 @@
 {
   "name": "memory-kit",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Memory skills for Claude Code: author and amend persistent memories, run periodic health reviews, bring pre-existing memory stores in, and triage auto-mined feedback proposals. Hooks, libraries and config install separately via the kit's install.sh.",
   "author": {
     "name": "sabilmakbar"

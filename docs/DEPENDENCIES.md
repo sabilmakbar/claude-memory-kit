@@ -32,10 +32,12 @@ without them. The report tells you which features will sit idle.
   dependency go unmet: uncomment `MEMORY_KIT_NO_MINER=1` in
   `~/.claude/memory-kit/config`. A missing `claude` CLI and a deliberate opt-out look
   identical to the kit otherwise, and it reports the first as a fault after three days.
-- **git**. Two features need it: the commit guardrail, which runs as a git hook and blocks
+- **git**. Three features need it: the commit guardrail, which runs as a git hook and blocks
   emails, home paths, your private terms and malformed memory files before they can be
-  committed, and syncing your memory folder as a repo. Without git both simply never run;
-  memory, the index and the miner carry on.
+  committed, syncing your memory folder as a repo, and the deploy-drift check, which runs in a
+  development checkout as a post-merge, post-checkout and post-rewrite hook and says when a
+  pull has left the deployed tree behind. Without git none of them run; memory, the index and
+  the miner carry on.
 
 ## Platform
 - **bash, including 3.2**, the version macOS still ships. The scripts target it rather
