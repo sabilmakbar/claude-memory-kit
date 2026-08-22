@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# $1 is the command that rewrote history. `rebase` covers git pull --rebase, where
+# post-merge never runs. `amend` is local editing, too noisy to report on.
+[ "${1:-}" = rebase ] || exit 0
+exec bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/kit-drift.sh"

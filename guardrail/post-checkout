@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# $3 is 1 for a branch checkout and 0 for a file checkout. Only the branch case can move
+# the deployed files out from under the installed tree.
+[ "${3:-0}" = 1 ] || exit 0
+exec bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/kit-drift.sh"
