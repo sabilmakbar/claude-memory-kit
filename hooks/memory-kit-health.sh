@@ -42,6 +42,12 @@ done <<EOF
 $(mk_legacy_env)
 EOF
 
+# The two halves on different releases. Reported at once rather than after the grace
+# period, for the same reason a legacy knob is: nothing is broken and one command fixes
+# it, so waiting three days only delays the fix. It is last of the immediate clauses
+# because it is the mildest: both halves work, they are just not the same version.
+_mk_halves=$(mk_halves_mismatch) && MSG="$MSG${MSG:+; }$_mk_halves"
+
 for f in "$(mk_health_dir)"/*; do
     [ -f "$f" ] || continue                      # unexpanded glob when nothing is recorded
     blocked=$(mk_health_blocked "$(basename "$f")") || continue
