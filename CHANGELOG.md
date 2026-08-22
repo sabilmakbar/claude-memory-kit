@@ -35,8 +35,23 @@ says nothing about the other.
   gives this repo's commits the same leak guardrail the memory store already had. The memory
   store keeps its existing wiring, which points at the deployed tree.
 
+- The two halves sitting on different releases is now reported once a day, by the health hook
+  that already reports a blocked feature. `install.sh` deploys the hooks, scripts and kit tree
+  while the plugin cache holds the skills, and either could move without the other with nothing
+  saying so. Both version numbers were already on disk, so the check records no new state, and
+  it uses no `jq`, because this is the one hook that has to speak when `jq` is gone. It names
+  the half that is behind and the one command that fixes it, and stays silent on a development
+  checkout, where a tree between releases has no number for the plugin to match. The reasoning
+  is D4 in `docs/DESIGN-health.md`.
+
 ### Tested
 
+- The two halves check, every reporting case paired with a control that must stay silent:
+  matching releases, a development label, a `-dirty` label, `unknown` from an archive install,
+  no version record at all, and no plugin cache at all. Also that the newest cache directory is
+  the one compared, since nothing removes the old ones, that the notice reaches a session as
+  valid JSON and is throttled to once per session per day, and that it still reports with no
+  `jq` on `PATH`.
 - The drift check across both halves: the reporting cases each paired with a control that
   must stay silent, and the three wrappers driven by real git operations, including a pull
   between two local clones, so a dead wrapper file cannot pass. The watched path list is
