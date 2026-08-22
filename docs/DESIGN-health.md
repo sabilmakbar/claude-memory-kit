@@ -68,6 +68,29 @@ flowchart LR
     F --> C
 ```
 
+## D4. The two halves report their own version difference, and name the fix
+
+The kit installs in two halves that version independently: `install.sh` deploys the hooks,
+scripts and kit tree, and `claude plugin install` caches the skills. Updating one and not the
+other leaves them on different releases. Nothing was broken in that state and nothing said so.
+
+Reported through this hook rather than a new one, because both numbers are already on disk and
+the channel for "something about this install is not right" already exists. `.kit-version` in
+the deployed tree carries what `install.sh` recorded, and the plugin cache directory is named
+by the version in `plugin.json`. No new state is written to compare them.
+
+Three details are deliberate. It is reported immediately rather than after D1's grace period,
+for the same reason a renamed knob is: nothing is failing, and one command fixes it, so waiting
+three days only delays the fix. It names the direction and the single command, unlike the
+deploy-drift git hook, whose diff is symmetric and which therefore describes the state instead;
+here the newer half is knowable, so telling the reader which command to run costs nothing and
+saves a wrong guess. And it stays silent whenever the deployed label is not an exact release,
+because a development checkout has no release number for the plugin to match and comparing
+there would report every day.
+
+It ranks below the dependency faults in this hook's message order. Both halves work in this
+state, so it must never be what a user sees instead of `jq` being gone.
+
 ## What would reopen this
 
 - **D1's three-day grace, if it turns out to hide a fault that matters sooner.** It was chosen
@@ -76,6 +99,9 @@ flowchart LR
 - **D2, if the fixture suite ever gained real data.** The two suites exist because one cannot do
   both jobs. A fixture generated from live output rather than from belief would blur that line, and
   is worth being suspicious of for the same reason.
+- **D4, if the two halves ever stop versioning independently.** The comparison exists because a
+  plugin release and a kit release are separate acts. A single release step covering both would
+  make it dead weight.
 - **D3, if `.verified` needed to be shared between machines.** It is machine-local because a pass
   on one machine says nothing about another's harness. Syncing it would be the mistake this
   decision avoids.

@@ -183,6 +183,53 @@ mk_emit_notice() {
     printf '{"systemMessage": "%s", "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "%s Mention this to the user at the start of your next reply."}}\n' "$_mk_msg" "$_mk_msg"
 }
 
+# ---- the two halves ----------------------------------------------------------
+
+# The kit installs in two halves that version independently: install.sh deploys the
+# hooks, scripts and kit tree, `claude plugin install` caches the skills. Either can
+# move without the other, and nothing used to say so. Both numbers are already on
+# disk, so nothing new is recorded to compare them. No jq: the health hook that
+# reports this is the one hook that must work when jq is gone.
+
+# The deployed release as X.Y.Z, rc 1 when there is nothing comparable. install.sh
+# records `git describe`, which writes v0.3.1 on a tag and v0.3.1-4-gabc1234,
+# optionally -dirty, anywhere else. Only the exact-tag form names a release; anything
+# else is a development tree, where the plugin has no matching number and a mismatch
+# would be reported every day. `unknown` from an archive install is the same answer.
+mk_kit_release() {
+    _mk_kv=$(cat "$HOME/.claude/memory-kit/.kit-version" 2>/dev/null) || return 1
+    _mk_kv=${_mk_kv#v}
+    case "$_mk_kv" in ""|*[!0-9.]*) return 1 ;; esac
+    printf '%s' "$_mk_kv"
+}
+
+# The cached plugin version, rc 1 when the plugin is not installed. Newest rather than
+# the only one: nothing removes an old cache directory, so a machine that has updated
+# keeps both, and the newest is the one the harness loads.
+mk_plugin_version() {
+    _mk_pd="$HOME/.claude/plugins/cache/memory-kit/memory-kit"
+    [ -d "$_mk_pd" ] || return 1
+    _mk_pv=$(ls "$_mk_pd" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+    [ -n "$_mk_pv" ] || return 1
+    printf '%s' "$_mk_pv"
+}
+
+# The sentence for the health hook, rc 1 when the halves agree or cannot be compared.
+# Direction is knowable here, unlike the deploy-drift hook's symmetric diff, so this
+# names the one command that fixes it instead of describing the state.
+mk_halves_mismatch() {
+    _mk_hk=$(mk_kit_release) || return 1
+    _mk_hp=$(mk_plugin_version) || return 1
+    [ "$_mk_hk" != "$_mk_hp" ] || return 1
+    if [ "$(printf '%s\n%s\n' "$_mk_hk" "$_mk_hp" | sort -V | tail -1)" = "$_mk_hk" ]; then
+        printf 'the skills are at %s while the hooks and the kit tree are at %s: run claude plugin update memory-kit@memory-kit' \
+            "$_mk_hp" "$_mk_hk"
+    else
+        printf 'the hooks and the kit tree are at %s while the skills are at %s: re-run install.sh from your checkout' \
+            "$_mk_hk" "$_mk_hp"
+    fi
+}
+
 # ---- feature health ----------------------------------------------------------
 
 # A feature that cannot run must leave a trace. Without one, "nothing happened"

@@ -307,6 +307,9 @@ installed version and says which of the four cases you are in: not installed at 
 marketplace added but plugin missing, installed and matching this checkout, or installed
 at an older version with the update command to run. `--dry-run` reports it too.
 
+If the two halves do end up on different releases, a session start says so once a day, naming
+the half that is behind and the one command that brings it up.
+
 You do not have to remember to re-run it either. A pull only updates the checkout, and the
 deployed tree at `~/.claude/memory-kit` stays on whatever the last install put there, which
 used to go unnoticed until something behaved like the old version. From a development
