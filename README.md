@@ -146,6 +146,20 @@ The installer replaces kit code only. Your memory files, your `denylist.local`, 
 edited `config`, and other tools' hooks in `settings.json` all survive, and renamed knobs
 are rewritten with their values kept.
 
+## How it stays safe
+
+- The installer only ever adds to `settings.json`, and everything it deploys lives in
+  `~/.claude/memory-kit`, never inside your memory folder. Your memory files are never
+  moved, copied or deleted by install, upgrade or uninstall.
+- The daily miner reads only what you typed. Claude's replies, tool output and your
+  editor selection are stripped out before it sees anything, and it is never pointed at
+  your repository.
+- Nothing leaves the machine on its own. Syncing is plain git under your control, and
+  the commit guardrail vets every commit for PII before it can enter history.
+- If any part of the kit stops running, you are told once a day rather than met with
+  silence. The suite runs on macOS and Linux in CI, and the smoke suite re-checks the
+  kit against your machine's real data after every Claude Code update.
+
 ## What it does day to day
 
 Session starts may greet you with a short note: a reminder that a memory review is due,
