@@ -18,7 +18,7 @@ that was tagged, and the tag is what you check out to go back to it. Versions mo
 from claude-session-kit: the two share conventions, neither depends on the other, and a bump in one
 says nothing about the other.
 
-## Unreleased
+## 0.4.0
 
 ### Added
 
