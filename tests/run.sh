@@ -1138,8 +1138,14 @@ VF="$TMP/vfloor"; mkdir -p "$VF/.claude/sessions"
 printf '{"version":"2.1.74"}' > "$VF/.claude/sessions/a.json"
 printf '{"model":"opus"}\n' > "$VF/.claude/settings.json"
 cp "$VF/.claude/settings.json" "$TMP/vfloor.before"
-HOME="$VF" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
-check "refuses a build below the floor" 1 $?
+vout=$(HOME="$VF" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed 2>&1); vrc=$?
+check "refuses a build below the floor" 1 $vrc
+# Which refusal, not merely that one happened. install.sh has six exits and they all
+# return 1, so an exit-code-only assertion passes on any of them. The gate's own test
+# did exactly that for months: it refused on a missing --mode and never reached what
+# it claimed to check.
+echo "$vout" | grep -q "is older than" \
+  && ok "and it is the floor that refused, not another check" || fail "a different refusal fired ($vout)"
 cmp -s "$VF/.claude/settings.json" "$TMP/vfloor.before" \
   && ok "the refusal leaves settings.json byte-identical" || fail "settings.json changed on refusal"
 [ -d "$VF/.claude/memory-kit" ] && fail "the refusal deployed the tree" || ok "the refusal deploys nothing"
@@ -1889,8 +1895,12 @@ HOME="$DH" bash "$KIT/install.sh" --mode=managed --dry-run >/dev/null 2>&1
 # a settings.json that is already broken stops the run before anything is installed
 BH="$TMP/home-broken"; mkdir -p "$BH/.claude"
 printf 'not json at all\n' > "$BH/.claude/settings.json"
-HOME="$BH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
-check "a broken settings.json refuses the install" 1 $?
+bout=$(HOME="$BH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed 2>&1); brc=$?
+check "a broken settings.json refuses the install" 1 $brc
+# This fixture has no sessions directory, so the version check is the one most likely
+# to fire first and pass this test for the wrong reason.
+echo "$bout" | grep -q "is not a valid JSON object" \
+  && ok "and it is the settings parse that refused" || fail "a different refusal fired ($bout)"
 [ ! -d "$BH/.claude/memory-kit" ] && ok "and nothing was deployed first" || fail "deployed despite bad settings"
 [ "$(cat "$BH/.claude/settings.json")" = "not json at all" ] \
   && ok "and the file was left exactly as it was" || fail "touched a file it could not parse"
