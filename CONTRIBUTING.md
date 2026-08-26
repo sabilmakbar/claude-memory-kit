@@ -88,6 +88,11 @@ bash tests/smoke.sh    # the real-data suite, against your own ~/.claude
 `run.sh` is the gate. `smoke.sh` passes or skips depending on the machine it runs on, which is the
 point, so it is never a required check.
 
+Both suites isolate themselves by pointing `HOME` at a temporary directory. Every path this kit
+writes is derived from `$HOME`, so that one variable redirects all of them at once, and there is
+no separate prefix setting to reach for. Adding one would be a second way to do what `HOME`
+already does.
+
 Point the commit guardrail at your checkout too. It adds one house rule on top of the leak
 checks: no em-dashes on lines added to `README.md` or `docs/*.md`.
 
