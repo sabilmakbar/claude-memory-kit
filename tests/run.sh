@@ -197,6 +197,10 @@ rm -rf "$h" "$(dirname "$CB")"
 # quiet when they disagree is the silent divergence this exists to catch.
 PC=$(mktemp -d)/c
 git clone -q "$KIT" "$PC" 2>/dev/null
+# The clone inherits the checkout's tags. On a tag-push CI run HEAD carries a real
+# release tag, so without shedding them describe finds two tags where the fixtures
+# below plant one, and every tag-shaped assertion here stops testing what it says.
+for _t in $(git -C "$PC" tag); do git -C "$PC" tag -d "$_t" >/dev/null; done
 cp "$KIT/install.sh" "$PC/install.sh"
 pin_home() {   # <ref> -> a HOME whose settings.json pins the marketplace to <ref>
   local h; h=$(mktemp -d); mkdir -p "$h/.claude"
@@ -545,6 +549,10 @@ out=$(tag_pairing "$KIT")
 # must pass. Without the second half, a tag_pairing that always complains would also pass.
 TPC=$(mktemp -d)/c
 git clone -q "$KIT" "$TPC" 2>/dev/null
+# The clone inherits the checkout's tags. On a tag-push CI run HEAD carries a real
+# release tag, so without shedding them describe finds two tags where the fixtures
+# below plant one, and every tag-shaped assertion here stops testing what it says.
+for _t in $(git -C "$TPC" tag); do git -C "$TPC" tag -d "$_t" >/dev/null; done
 git -C "$TPC" -c user.email=t@e -c user.name=t tag -f v9.9.9 >/dev/null 2>&1
 out=$(tag_pairing "$TPC")
 [ "$(printf '%s\n' "$out" | grep -c 'on tag v9.9.9')" -eq 3 ] \
