@@ -74,6 +74,13 @@ says nothing about the other.
   checked against what the installer actually deploys into a sandbox, so a file added to the
   installer and not to the list fails the suite instead of going unwatched.
 
+### Changed
+
+- The `/plugin` slash command is settled rather than unconfirmed. An interactive CLI session
+  provides it, the VS Code extension does not, and `claude -p` does not resolve it either, so the
+  gate turns on mode as well as host. The docs still lead with `claude plugin update`, which works
+  in every host. Recorded in `docs/INTERNALS.md` O20.
+
 ## 0.3.1
 
 ### Added
