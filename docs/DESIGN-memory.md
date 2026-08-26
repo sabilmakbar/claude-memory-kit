@@ -148,8 +148,8 @@ only the user one. A per-project value would be followed by the harness and miss
 Install only ever writes the user scope, so this is a gap for a hand-set value, and it is recorded
 rather than closed because reading the full precedence chain means reproducing it.
 
-**There is no version-gated fallback.** The key is declared in every build available to test, back
-to 2.1.205 (O12), so the gate would never fire. Keeping the symlink as a fallback would mean
+**There is no version-gated fallback.** The key arrived in 2.1.74 (O22), and `install.sh` refuses
+below its floor rather than falling back, so nothing installed can be missing the key. Keeping the symlink as a fallback would mean
 keeping the derivation alive to maintain, and the derivation is the defect.
 
 **The derivation was wrong two independent ways, and both are deleted rather than fixed.** Claude

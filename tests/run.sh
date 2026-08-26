@@ -1133,7 +1133,7 @@ echo "install.sh version floor:"
 # every side effect, not just the exit code: a floor check that refuses AFTER
 # deploying the tree would pass an exit-code-only test.
 VF="$TMP/vfloor"; mkdir -p "$VF/.claude/sessions"
-printf '{"version":"2.1.100"}' > "$VF/.claude/sessions/a.json"
+printf '{"version":"2.1.74"}' > "$VF/.claude/sessions/a.json"
 printf '{"model":"opus"}\n' > "$VF/.claude/settings.json"
 cp "$VF/.claude/settings.json" "$TMP/vfloor.before"
 HOME="$VF" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
@@ -1142,12 +1142,13 @@ cmp -s "$VF/.claude/settings.json" "$TMP/vfloor.before" \
   && ok "the refusal leaves settings.json byte-identical" || fail "settings.json changed on refusal"
 [ -d "$VF/.claude/memory-kit" ] && fail "the refusal deployed the tree" || ok "the refusal deploys nothing"
 [ -d "$VF/.claude/skills" ] && fail "the refusal created skills/" || ok "the refusal creates no directories"
-# the floor version itself must install: an off-by-one here locks out the oldest
-# build the key was ever seen in, which is the one this floor was derived from
+# The pair above and below are the measured boundary, one version apart: 2.1.74 has
+# autoMemoryDirectory (O22) but not the plugin mechanism (O24), and 2.1.75 has both.
+# An off-by-one either way is visible here rather than on somebody's machine.
 VG="$TMP/vfloor-ok"; mkdir -p "$VG/.claude/sessions"
-printf '{"version":"2.1.205"}' > "$VG/.claude/sessions/a.json"
+printf '{"version":"2.1.75"}' > "$VG/.claude/sessions/a.json"
 out=$(HOME="$VG" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed 2>&1)
-echo "$out" | grep -q "Claude Code 2.1.205" && echo "$out" | grep -qv "older than" \
+echo "$out" | grep -q "Claude Code 2.1.75" && echo "$out" | grep -qv "older than" \
   && ok "the floor version itself installs" || fail "floor version refused ($out)"
 # an unreadable version is not a refusal. The stub keeps this hermetic: without it the
 # result depends on whether the machine running the tests has claude on PATH.

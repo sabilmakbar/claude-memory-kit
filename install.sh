@@ -30,10 +30,12 @@ SETT_BAK="$SETT.memory-kit.bak"
 SNIPPET="$REPO/settings.snippet.json"
 [ -f "$SNIPPET" ] || SNIPPET="$DEST/settings.snippet.json"
 TRACKER="$HOME/.local/share/claude-feedback"
-# Oldest Claude Code build the autoMemoryDirectory key was seen declared in
-# (docs/INTERNALS.md O12). DESIGN-install.md D10 refuses below it rather than
-# falling back, because DESIGN-memory.md D8 leaves nothing to fall back to.
-FLOOR=2.1.205
+# The oldest build that can run this kit at all, and it is measured rather than
+# inherited: autoMemoryDirectory first appears in 2.1.74 (O22) and the plugin
+# mechanism the skills ship in first appears in 2.1.75 (O24), so the higher of the
+# two is the floor. DESIGN-install.md D10 refuses below it rather than falling
+# back, because DESIGN-memory.md D8 leaves nothing to fall back to.
+FLOOR=2.1.75
 # Sourced this early only for the accessors the version floor needs. lib.sh
 # defines functions and does nothing else at source time, and the later source
 # at the deploy step is unaffected by this one.
@@ -732,7 +734,8 @@ if [ -z "$CC_VERSION" ]; then
 elif version_lt "$CC_VERSION" "$FLOOR"; then
   echo "  ✗ Claude Code $CC_VERSION is older than $FLOOR" >&2
   echo "    The kit points auto memory at one store with the autoMemoryDirectory setting," >&2
-  echo "    and this build does not read that key. There is no fallback to install instead." >&2
+  echo "    which arrived in 2.1.74, and ships its skills as a plugin, which arrived in" >&2
+  echo "    2.1.75. This build predates one or both. There is no fallback to install instead." >&2
   echo "    Upgrade Claude Code and re-run. Nothing has been installed or changed." >&2
   exit 1
 else
