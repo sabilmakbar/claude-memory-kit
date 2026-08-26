@@ -1091,6 +1091,10 @@ PLUG_CACHE="$CLAUDE/plugins/cache/$PLUG_MKT/$PLUG_NAME"
 # values are needed later and a $(...) call could not export them.
 PLUG_PIN=$(jq -r --arg m "$PLUG_MKT" '.extraKnownMarketplaces[$m].source.ref // empty' \
   "$SETT" 2>/dev/null || true)
+# `directory` is the development install: the marketplace points at a working tree and is read
+# in place, with no clone and nothing to pin. Only a remote source has a ref to set.
+PLUG_SRC=$(jq -r --arg m "$PLUG_MKT" '.extraKnownMarketplaces[$m].source.source // empty' \
+  "$SETT" 2>/dev/null || true)
 case "$PLUG_PIN" in
   v[0-9]*.[0-9]*.[0-9]*|[0-9]*.[0-9]*.[0-9]*)
     PLUG_WANT="${PLUG_PIN#v}"; PLUG_WANT_SRC="the marketplace pin" ;;
@@ -1135,11 +1139,23 @@ case "$PLUG_STATE" in
   current)
     echo "  the plugin is installed at $PLUG_WANT, matching $PLUG_WANT_SRC — nothing to do" ;;
   ahead:*)
-    echo "  the plugin is installed at ${PLUG_STATE#ahead:}, ahead of $PLUG_WANT:"
-    echo "  the skills came from an unpinned marketplace, which serves the default branch"
-    echo "  rather than a release, so that number names a build that was never released."
-    echo "  Nothing is broken. Pinning the marketplace to a tag is what keeps the number"
-    echo "  meaningful — the README install shows the form." ;;
+    if [ "$PLUG_WANT_SRC" = "the marketplace pin" ]; then
+      # A pin below an existing cache directory: the newest directory is the one that loads,
+      # so the pin is not in effect and nothing else will ever say so. Nothing is deleted
+      # here, because the cache belongs to Claude Code and a session may be holding it.
+      echo "  the marketplace is pinned to $PLUG_PIN but the plugin cache holds ${PLUG_STATE#ahead:},"
+      echo "  and the newest cached version is the one that loads. The pin has no effect while"
+      echo "  that directory exists:"
+      echo "      $PLUG_CACHE/${PLUG_STATE#ahead:}"
+      echo "  removing it and running claude plugin install $PLUG_NAME@$PLUG_MKT is the remedy,"
+      echo "  or pin forward to a release at or above ${PLUG_STATE#ahead:} instead."
+    else
+      echo "  the plugin is installed at ${PLUG_STATE#ahead:}, ahead of $PLUG_WANT:"
+      echo "  the skills came from a source that is not a release: an unpinned marketplace"
+      echo "  serves the default branch, and a local path serves your working tree. Either way"
+      echo "  that number names a build nobody can install by version. Nothing is broken, and"
+      echo "  on a development checkout this is the expected state."
+    fi ;;
   stale:*)
     echo "  the plugin is installed at ${PLUG_STATE#stale:} but $PLUG_WANT_SRC is $PLUG_WANT:"
     echo "      claude plugin update $PLUG_NAME@$PLUG_MKT      (restart to apply)"
@@ -1169,6 +1185,19 @@ case "$PLUG_PIN" in
       echo "  the marketplace is pinned to $PLUG_PIN but this checkout is $KIT_TAG:"
       echo "      claude plugin marketplace add sabilmakbar/claude-memory-kit@$KIT_TAG"
       echo "  puts both halves on one release. Without it they sit on different ones."
+    fi ;;
+  *)
+    # No pin, or one naming a branch. Only worth a word when there is a tag to offer and a
+    # marketplace to pin: an untagged checkout has no correct command to give, and with no
+    # marketplace at all the block above already prints the two commands to run. The
+    # installer cannot write the pin itself, because the ref in settings.json is inert
+    # unless the reconciler's own file carries it too (O25).
+    if [ -n "$KIT_TAG" ] && [ "$PLUG_STATE" != absent ] \
+       && { [ "$PLUG_SRC" = github ] || [ "$PLUG_SRC" = git ]; }; then
+      echo "  the marketplace is not pinned, so the skills follow the default branch:"
+      echo "      claude plugin marketplace add sabilmakbar/claude-memory-kit@$KIT_TAG"
+      echo "  which is the tag this checkout is on. Unpinned, the version recorded against the"
+      echo "  skills names the next release rather than the one you installed."
     fi ;;
 esac
 # Whether this checkout is itself behind, from refs already fetched — no network call, so an

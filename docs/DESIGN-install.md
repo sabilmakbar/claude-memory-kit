@@ -259,13 +259,14 @@ label still lies; it would just name an already-published version instead of an 
 and two machines could then hold different content under one released number. Any static label
 inside a moving branch is wrong somewhere. Moving the source is the fix, not moving the bump.
 
-**Having `install.sh` write the pin itself was considered and rejected for now.** It was the plan
-while the CLI appeared unable to express a ref. Once `marketplace add <owner>/<repo>@<tag>` was
-shown to work, the feature reduced to saving one tag the user already types on the clone line
-above, in exchange for writing a key in `settings.json` that is shared with every other plugin,
-and for creating the stale-pin case below rather than only reporting it. It is deferred, not
-refused: deriving both halves from one `git describe` is the only shape that makes a typo in one
-of the two tags impossible.
+**Having `install.sh` write the pin itself was considered, then measured closed.** It was the
+plan while the CLI appeared unable to express a ref. Once `marketplace add <owner>/<repo>@<tag>`
+was shown to work, the feature reduced to saving one tag the user already types on the clone
+line above. Then the mechanism itself failed: a `ref` written into `settings.json` on an
+already-materialised entry is ignored, because `plugins/known_marketplaces.json` keeps the old
+source and every update follows that file (O25). The only writer of that file is `marketplace
+add`, so there is nothing for the installer to write that would take effect. What would reopen
+this is a CLI surface that scripts a pin, not a cheaper way to edit JSON.
 
 **What the installer does instead is report.** A pin that disagrees with the checkout's tag is
 named along with the `marketplace add` command that agrees them, and a pin on a checkout that is
@@ -275,7 +276,10 @@ development version has no number the health hook can compare, so its daily noti
 installer refuses to pick a value that is the user's to pick.
 
 **Failure posture.** An unpinned install still works and still mislabels; nothing here forces
-anyone to pin. The residual is deliberate: `marketplace add <owner>/<repo>` with no tag will
+anyone to pin. A pin below a version already in the cache has no effect, because the newest
+cached directory is the one that loads (O14) and nothing ever removes one (O19): the installer
+names the blocking directory and the two remedies rather than deleting another tool's state, and
+the README's rule is pin forward, not back. The residual is deliberate: `marketplace add <owner>/<repo>` with no tag will
 always serve the branch, and documentation can only offer the better form, not impose it. A
 README tag left behind by a release would send every new reader to an old version, so a test
 holds it to the newest released changelog heading and fails both on a drifted tag and on a README
@@ -296,6 +300,9 @@ with no pin at all.
   installer reports that today rather than preventing it, on the grounds that one user typing two
   tags is a small target. One real occurrence is the evidence that would move the pin write from
   deferred to done.
+- **D12, if Claude Code ever clears or refreshes the plugin cache on install.** The backward-pin
+  dead end and the reinstall-to-refresh development loop both exist because nothing upstream
+  removes or rewrites a cache directory unasked; either behaviour appearing dissolves them.
 - **D12, if the marketplace source ever stops accepting a ref.** The whole pinned install rests
   on O25, which is a platform behaviour with no promise behind it. If it goes, the fallback is
   bumping `plugin.json` at release and accepting the weaker label, because there would be nothing

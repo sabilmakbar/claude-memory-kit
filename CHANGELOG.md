@@ -22,6 +22,20 @@ says nothing about the other.
 
 ### Added
 
+- The suite runs on tag pushes, and a tag-pairing check arms itself when HEAD sits exactly on
+  a tag: plugin.json, the README's pinned tag and the newest changelog heading must all equal
+  the tag being pushed. A release tagged with any of the three left behind goes red minutes
+  after the push instead of shipping mismatched. Between tags the check does not apply, so a
+  release pull request carrying the next number trips nothing before its tag exists.
+
+- `install.sh` names the cache directory that defeats a backward pin. A pin below a version
+  already in the plugin cache silently has no effect, because the newest cached directory is
+  the one that loads and nothing ever removes one; the installer now prints that directory and
+  the two remedies instead of leaving the pin looking live. An unpinned remote marketplace on
+  a tagged checkout is offered the exact pin command, and a `directory` marketplace is never
+  nudged, because that is the development install and pinning it would end the edit loop.
+
+
 - `install.sh` reports a marketplace pin that disagrees with the checkout it is run from.
   Two cases: the pin names a different tag, where it names the `marketplace add` command that
   puts both halves on one release, and the pin sits on a checkout that is not on a tag, where

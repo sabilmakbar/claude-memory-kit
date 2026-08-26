@@ -230,6 +230,48 @@ printf '%s' "$(pin_run "$h")" | grep -q 'not on a tag' \
   && ok "a pin on an untagged checkout is reported" \
   || fail "a stale pin on an untagged checkout went unreported"
 rm -rf "$h"
+# A pin below an existing cache directory is silently out of effect, because the newest
+# directory is the one that loads. The report must name the blocking directory; and without
+# the pin, the same cache shape must get the development-shaped message instead, or the
+# check cannot tell a dead pin from an ordinary dev tree.
+git -C "$PC" tag -f v0.3.1 >/dev/null 2>&1
+h=$(mktemp -d)
+mkdir -p "$h/.claude/plugins/cache/memory-kit/memory-kit/0.3.1" \
+         "$h/.claude/plugins/cache/memory-kit/memory-kit/0.3.2"
+printf '{"enabledPlugins":{"memory-kit@memory-kit":true},"extraKnownMarketplaces":{"memory-kit":{"source":{"source":"github","repo":"sabilmakbar/claude-memory-kit","ref":"v0.3.1"}}}}' \
+  > "$h/.claude/settings.json"
+out=$(pin_run "$h")
+printf '%s' "$out" | grep -q 'pin has no effect' \
+  && ok "a pin below the cache names the blocking directory" \
+  || fail "backward pin went unreported: $(printf '%s' "$out" | grep -i ahead | head -1)"
+printf '%s' "$out" | grep -q "cache/memory-kit/memory-kit/0.3.2" \
+  && ok "…and the directory it names is the newer one" \
+  || fail "the blocking directory is not named"
+rm -rf "$h"
+# The same cache, unpinned: the development-shaped message, no dead-pin talk, and the nudge
+# to pin, because the checkout is on a tag and the marketplace source is remote.
+h=$(mktemp -d); mkdir -p "$h/.claude/plugins/cache/memory-kit/memory-kit/0.3.2"
+printf '{"enabledPlugins":{"memory-kit@memory-kit":true},"extraKnownMarketplaces":{"memory-kit":{"source":{"source":"github","repo":"sabilmakbar/claude-memory-kit"}}}}' \
+  > "$h/.claude/settings.json"
+out=$(pin_run "$h")
+printf '%s' "$out" | grep -q 'pin has no effect' \
+  && fail "an unpinned cache was reported as a dead pin" \
+  || ok "unpinned, the same cache is not called a dead pin"
+printf '%s' "$out" | grep -q 'the marketplace is not pinned' \
+  && ok "a remote unpinned marketplace gets the pin command" \
+  || fail "no pin nudge for a remote unpinned marketplace"
+rm -rf "$h"
+# A directory marketplace is the development install: nudging it to pin would end the edit
+# loop, so the nudge must stay quiet there while everything else still speaks.
+h=$(mktemp -d); mkdir -p "$h/.claude/plugins/cache/memory-kit/memory-kit/0.3.2"
+printf '{"enabledPlugins":{"memory-kit@memory-kit":true},"extraKnownMarketplaces":{"memory-kit":{"source":{"source":"directory","path":"/tmp/x"}}}}' \
+  > "$h/.claude/settings.json"
+out=$(pin_run "$h")
+printf '%s' "$out" | grep -q 'the marketplace is not pinned' \
+  && fail "a directory marketplace was nudged to pin" \
+  || ok "a directory marketplace is never nudged to pin"
+rm -rf "$h"
+
 # No pin: nothing to say, on the same untagged checkout that just spoke.
 h=$(mktemp -d); mkdir -p "$h/.claude"; printf '{}' > "$h/.claude/settings.json"
 printf '%s' "$(pin_run "$h")" | grep -q 'not on a tag\|pinned to' \
@@ -472,6 +514,49 @@ rel=$(grep -E '^## ' "$KIT/CHANGELOG.md" | grep -viE 'unreleased' | head -1 \
 [ "$rt" = "v$rel" ] \
   && ok "the README tag v$rel matches the newest release" \
   || fail "the README pins $(printf '%s' "$rt" | tr '\n' ' ')but the newest release is v$rel"
+
+# The shipping moment is the tag, so that is where the pairing must hold: plugin.json, the
+# README pin and the newest changelog heading all equal to the tag itself. Checked only when
+# HEAD sits exactly on a tag, because mid-cycle those values legitimately differ from any tag
+# and a release PR carrying the next number must not trip anything before its tag exists.
+# tests.yml runs the suite on tag pushes with fetch-tags, which is what arms this on the one
+# run that matters. Returns the mismatches, empty when paired or when HEAD is untagged.
+tag_pairing() {  # <root> -> mismatch lines on stdout
+  local root="$1" t tv pv rel rt
+  t=$(git -C "$root" describe --tags --exact-match HEAD 2>/dev/null) || return 0
+  tv=${t#v}
+  pv=$(jq -r .version "$root/.claude-plugin/plugin.json" 2>/dev/null)
+  rel=$(grep -E '^## ' "$root/CHANGELOG.md" 2>/dev/null | grep -viE 'unreleased' | head -1 \
+    | sed 's/^## *//;s/[^0-9.].*//')
+  rt=$(grep -oE '(--branch |claude-memory-kit(\.git#|@))v[0-9]+\.[0-9]+\.[0-9]+' "$root/README.md" 2>/dev/null \
+    | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sort -u | tr '\n' ' ' | sed 's/ $//')
+  [ "$pv" = "$tv" ]  || echo "plugin.json says $pv on tag $t"
+  [ "$rel" = "$tv" ] || echo "newest changelog heading is $rel on tag $t"
+  [ "$rt" = "$t" ]   || echo "README pins '$rt' on tag $t"
+}
+out=$(tag_pairing "$KIT")
+[ -z "$out" ] \
+  && ok "tag pairing holds (or HEAD is between tags, where it does not apply)" \
+  || fail "tag pairing broken: $out"
+# The fixture pair, in a clone so the real checkout is never tagged by a test. A tag that
+# nothing else agrees with must be named three times; align all three files and the same tag
+# must pass. Without the second half, a tag_pairing that always complains would also pass.
+TPC=$(mktemp -d)/c
+git clone -q "$KIT" "$TPC" 2>/dev/null
+git -C "$TPC" -c user.email=t@e -c user.name=t tag -f v9.9.9 >/dev/null 2>&1
+out=$(tag_pairing "$TPC")
+[ "$(printf '%s\n' "$out" | grep -c 'on tag v9.9.9')" -eq 3 ] \
+  && ok "a mismatched tag is named by all three checks" \
+  || fail "mismatched tag v9.9.9 produced: $out"
+( cd "$TPC" \
+  && jq '.version="9.9.9"' .claude-plugin/plugin.json > pj.tmp && mv pj.tmp .claude-plugin/plugin.json \
+  && perl -pi -e 's/^## Unreleased$/## 9.9.9/' CHANGELOG.md \
+  && perl -pi -e 's/v0\.[0-9]+\.[0-9]+/v9.9.9/g if /--branch |claude-memory-kit(\.git#|@)/' README.md )
+out=$(tag_pairing "$TPC")
+[ -z "$out" ] \
+  && ok "an aligned tag passes the pairing" \
+  || fail "aligned tag still complained: $out"
+rm -rf "$(dirname "$TPC")"
 
 bare=$(cd "$KIT" && grep -rnE '(^|[^:a-z-])/(save-memory|review-memories|initialize-memory|review-feedback-proposals)\b' \
   . --exclude-dir=.git --exclude=CHANGELOG.md 2>/dev/null || true)

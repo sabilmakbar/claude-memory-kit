@@ -7,13 +7,13 @@
 
     Observed against:   Claude Code 2.1.222 (O1–O7) · 2.1.228 (O8–O12) · 2.1.234 (O13–O19, O21)
                         2.1.237 (O20) · 2.0.0 through 2.1.246, every published build (O22–O23)
-                        2.1.74 through 2.1.246, seven probes by hand (O24) · 2.1.246 (O25–O26)
+                        2.1.74 through 2.1.246, seven probes by hand (O24) · 2.1.246 (O25–O27)
     Platform:           macOS, VS Code extension
     Last re-verified:   2026-08-12 (O1–O7) · 2026-08-13 (O8–O12) · 2026-08-19 (O13–O17, O21)
-                        2026-08-20 (O18–O20) · 2026-08-26 (O18, O22–O26)
+                        2026-08-20 (O18–O20) · 2026-08-26 (O18, O22–O27)
     Needs to re-run:    jq, find, a machine with an installed Claude Code; O22 through O24
-                        need only npm and grep, and run on any machine; O25 needs the claude
-                        CLI and a throwaway HOME, O26 only git
+                        need only npm and grep, and run on any machine; O25 and O27 need the
+                        claude CLI and a throwaway HOME, O26 only git
 
 Nothing here is promised by Claude Code. Every entry carries the date and version it was seen
 on, the surface it was read from, how it was checked, and what you need to re-run the check, so
@@ -482,6 +482,35 @@ The pin persists into `extraKnownMarketplaces` in `settings.json` and into
 Moving it is a re-add: `marketplace add ...@v0.3.1` rewrote the ref, after which `plugin update`
 reported "updated from 0.3.0 to 0.3.1". While pinned, `plugin update` refuses to go past the pin
 and answers "already at the latest version", which is the pin working rather than a failure.
+
+The pin only counts when `marketplace add` writes it. Adding a `ref` by hand to an
+already-materialised entry in `settings.json` is ignored: `plugins/known_marketplaces.json`
+keeps the old source, `marketplace update` re-fetches the default branch, and `plugin update`
+declines. The re-add is the only pin that takes.
+
+### O27. `plugin update` compares version labels, never content
+
+    First observed:     2026-08-26 · 2.1.246
+    Surface:            plugin update, plugin uninstall, the plugin cache
+    How:                in a throwaway HOME with a `directory` marketplace pointed at a clone:
+                        edited a skill in the tree, `plugin update` answered "already at the
+                        latest version" and the edit was absent from the cache copy while
+                        present in the tree; `plugin uninstall` then `plugin install` refreshed
+                        the same cache directory in place; bumping plugin.json in the tree made
+                        `plugin update` pull into a new directory
+    Needs:              the claude CLI, git
+    Checkable:          manual (needs a throwaway HOME)
+
+The update decision reads the two version labels and stops there. Content that changes under an
+unchanged label never propagates: an unpinned user mid-cycle stays on whatever the branch held
+when their label last moved, and a contributor's skill edits never reach the loaded copy, even
+though a `directory` marketplace reads the tree in place, because the harness loads the cache
+copy rather than the marketplace (O14).
+
+Two refresh paths work. Reinstalling under the same label rewrites the cache directory in place,
+which with O19's "uninstall keeps the cache" makes `plugin uninstall` then `plugin install` the
+development loop for skills. Bumping the label pulls into a new directory, which works but
+leaves a directory per bump behind. CONTRIBUTING.md carries the loop.
 
 ### O26. Unpinned, the plugin cache is labelled with a version that was never released
 
