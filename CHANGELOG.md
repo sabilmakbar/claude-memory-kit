@@ -65,6 +65,12 @@ says nothing about the other.
   gate turns on mode as well as host. The docs still lead with `claude plugin update`, which works
   in every host. Recorded in `docs/INTERNALS.md` O20.
 
+- `.gitignore` no longer carries `WORKPLAN-*.md`. Working notes are one person's, on one machine,
+  so the pattern that hides them belongs in that machine's `.git/info/exclude` rather than in a
+  tracked file every clone inherits. This is the same rule D9 applies to the install marker: a
+  local exclude keeps a local fact local and changes nothing anyone else has to carry.
+  [#74](https://github.com/sabilmakbar/claude-memory-kit/pull/74)
+
 ### Tested
 
 - The two halves check, every reporting case paired with a control that must stay silent:
@@ -78,6 +84,14 @@ says nothing about the other.
   between two local clones, so a dead wrapper file cannot pass. The watched path list is
   checked against what the installer actually deploys into a sandbox, so a file added to the
   installer and not to the list fails the suite instead of going unwatched.
+
+- Every test that expects the installer to refuse now asserts **which** refusal fired. `install.sh`
+  has six exits and all of them return 1, so an exit-code-only assertion passes on any of them,
+  which is how the gate's own test ran for months against a missing-mode refusal it was not
+  written for. The version floor and the broken-`settings.json` cases were the two still unpinned;
+  both fire the right refusal today, and now say so. Each was checked against a fixture that
+  triggers a different refusal, where the old assertion passes and the new one fails.
+  [#74](https://github.com/sabilmakbar/claude-memory-kit/pull/74)
 
 ### Fixed
 

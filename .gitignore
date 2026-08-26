@@ -2,4 +2,3 @@ guardrail/denylist.local
 .verified
 .smoke-attempt
 .smoke-last.log
-WORKPLAN-*.md
