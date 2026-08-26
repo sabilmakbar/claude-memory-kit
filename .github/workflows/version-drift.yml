@@ -11,6 +11,10 @@ name: version drift
 #
 # No credentials. tests/version-probe.sh reads the shipped binary and never starts a
 # session, so nothing here consumes tokens.
+#
+# Only a run from main records anything. Dispatching from a branch probes and prints,
+# which is how a change to this file is tested, and that change arrives by its own pull
+# request rather than riding along with whatever else is in flight.
 
 on:
   schedule:
@@ -55,6 +59,7 @@ jobs:
       - name: Pick the versions this run has never seen
         id: pick
         env:
+          REF: ${{ github.ref_name }}
           COUNT: ${{ github.event.inputs.count || '32' }}
           SINCE: ${{ github.event.inputs.since || '2.1.74' }}
           OLDEST_FIRST: ${{ github.event.inputs.oldest_first || 'false' }}
@@ -94,6 +99,17 @@ jobs:
           echo "this run:"; cat /tmp/run.txt
           echo "n=$(wc -l < /tmp/run.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
 
+          # A dispatch from a branch runs workflow and probe code that nobody has reviewed,
+          # with write access to the index branch and to pull requests. It stays useful for
+          # developing this workflow, so it probes and prints, and records nothing. Only a
+          # run from main writes, and a change to this file arrives by its own pull request
+          # like any other.
+          if [ "$REF" = "main" ]; then echo "writes=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "writes=0" >> "$GITHUB_OUTPUT"
+            echo "::notice::running from $REF, so this is a dry run: it will probe and print, and record nothing"
+          fi
+
       - name: Probe each one
         if: steps.pick.outputs.n != '0'
         run: |
@@ -124,7 +140,7 @@ jobs:
           sort -u -o /tmp/rows.tsv /tmp/rows.tsv
 
       - name: Record what it found
-        if: steps.pick.outputs.n != '0'
+        if: steps.pick.outputs.n != '0' && steps.pick.outputs.writes == '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -161,7 +177,7 @@ jobs:
           fi
 
       - name: Say so when a build fails a check
-        if: steps.pick.outputs.n != '0'
+        if: steps.pick.outputs.n != '0' && steps.pick.outputs.writes == '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
