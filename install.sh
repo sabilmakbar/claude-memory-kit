@@ -893,10 +893,29 @@ fi
 # installer with the guard variable set, so gating cannot recurse.
 if [ "$DRY" -eq 0 ] && [ -z "${CLAUDE_MEMORY_KIT_INSTALL_GATED:-}" ] && [ -r "$REPO/tests/run.sh" ]; then
   echo "→ gating on the test suite"
-  if CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$REPO/tests/run.sh" >/dev/null 2>&1 </dev/null; then
+  # The output is kept rather than discarded. "Re-run it yourself" is fine at a terminal
+  # and useless in the two cases that matter: on a CI runner, where the log holds the
+  # refusal line and nothing else to act on, and on an intermittent failure, where a
+  # hand re-run that passes destroys the only evidence there was. Issue #72.
+  gate_log="$(mktemp "${TMPDIR:-/tmp}/memory-kit-gate.XXXXXX")"
+  if CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$REPO/tests/run.sh" >"$gate_log" 2>&1 </dev/null; then
     echo "  ✓ tests pass"
+    rm -f "$gate_log"
   else
-    echo "  ✗ tests fail — refusing to deploy an untested tree. Run: bash $REPO/tests/run.sh"
+    echo "  ✗ tests fail — refusing to deploy an untested tree."
+    # Named lines first, whole file second. A suite that fails without printing one is
+    # the case this whole change exists for, so it says so rather than printing nothing
+    # and leaving the reader back where they started.
+    # `|| true` is load-bearing under `set -e`: a grep that matches nothing exits 1, and
+    # nothing-to-match is exactly the silent-failure case this branch exists to report.
+    gate_fails=$(grep -e '✗' -e '^passed .*failed' "$gate_log" 2>/dev/null || true)
+    if [ -n "$gate_fails" ]; then
+      printf '%s\n' "$gate_fails" | sed 's/^/    /'
+    else
+      echo "    the suite printed no failure line this run, so the file is the only record"
+    fi
+    echo "    full output: $gate_log"
+    echo "    re-run by hand: bash $REPO/tests/run.sh"
     exit 1
   fi
 fi

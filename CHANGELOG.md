@@ -92,6 +92,21 @@ says nothing about the other.
   limitation is also stated on every install rather than only the first.
   [#71](https://github.com/sabilmakbar/claude-memory-kit/pull/71)
 
+- The install gate keeps the suite output that explains its own refusal. It discarded the run and
+  advised re-running the suite by hand, which works at a terminal and fails in the two cases that
+  matter: on a CI runner the log held the refusal line and nothing to act on, and an intermittent
+  failure that passes on a hand re-run destroys the only evidence there was. The refusal now names
+  the failing assertions and the tally, keeps the whole run in a file and names its path, and says
+  so explicitly when the suite failed without printing a failure line at all. A passing run deletes
+  its log. Reported in [#72](https://github.com/sabilmakbar/claude-memory-kit/issues/72).
+  [#73](https://github.com/sabilmakbar/claude-memory-kit/pull/73)
+
+- The gate's own test reaches the gate. It ran the installer with no `--mode`, so the run refused
+  on the missing mode instead, which also exits 1 and also deploys nothing: both assertions passed
+  without the gate ever running. The fixture now passes `--mode=managed` and asserts the run got
+  as far as the gate before checking what the gate did.
+  [#73](https://github.com/sabilmakbar/claude-memory-kit/pull/73)
+
 ## 0.3.1
 
 ### Added
@@ -223,6 +238,17 @@ needs no flag. Memory files are not touched by the upgrade.
   absolute path in `autoMemoryDirectory` wherever it pointed, so a suite running in a throwaway
   `$HOME` seeded from the real `settings.json` reverted the real store. `--purge-marker` now
   sweeps rather than reading that setting, so it still works after a plain uninstall. [#42](https://github.com/sabilmakbar/claude-memory-kit/pull/42)
+
+### Tested
+
+- The guardrail suite proves its fixture is complete before trusting any of its checks. The
+  fixture had twice been missing a directory the hook needs, first `core/` and then `hooks/`, and
+  each time the pre-commit hook announced a skip and every check below it passed by not running.
+  Both times an unrelated negative test happened to catch it, which is luck rather than coverage.
+  A canary now runs first: it stages a file that must be blocked, requires exit 1, and requires
+  that no skip was announced. This section is added after the fact. The change shipped inside
+  [#50](https://github.com/sabilmakbar/claude-memory-kit/pull/50) alongside the audit, and only
+  the audit was written down at the time. [#50](https://github.com/sabilmakbar/claude-memory-kit/pull/50)
 
 ### Documentation
 
