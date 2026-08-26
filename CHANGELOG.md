@@ -56,9 +56,9 @@ says nothing about the other.
 
 - The installer's version floor is 2.1.75 rather than 2.1.205, because the old number was the
   oldest build one machine happened to have rather than a boundary anyone found. Probing every
-  published build shows `autoMemoryDirectory` arrives in 2.1.74 and the plugin mechanism in
-  2.1.75, so the kit now installs on 130 releases it previously refused, and the refusal names
-  both requirements instead of only the setting.
+  published build shows `autoMemoryDirectory` arrives in 2.1.74, and a bisect puts the plugin
+  mechanism at 2.1.75, so the kit now installs on 106 releases it previously refused, and the
+  refusal names both requirements instead of only the setting.
 
 - The `/plugin` slash command is settled rather than unconfirmed. An interactive CLI session
   provides it, the VS Code extension does not, and `claude -p` does not resolve it either, so the

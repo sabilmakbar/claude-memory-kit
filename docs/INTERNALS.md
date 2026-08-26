@@ -6,12 +6,13 @@
 > [FLOWS.md](FLOWS.md).
 
     Observed against:   Claude Code 2.1.222 (O1–O7) · 2.1.228 (O8–O12) · 2.1.234 (O13–O19, O21)
-                        2.1.237 (O20) · 2.1.74 through 2.1.246, every published build (O22–O24)
+                        2.1.237 (O20) · 2.0.0 through 2.1.246, every published build (O22–O23)
+                        2.1.74 through 2.1.246, seven probes by hand (O24)
     Platform:           macOS, VS Code extension
     Last re-verified:   2026-08-12 (O1–O7) · 2026-08-13 (O8–O12) · 2026-08-19 (O13–O17, O21)
                         2026-08-20 (O18–O20) · 2026-08-26 (O22–O24)
-    Needs to re-run:    jq, find, a machine with an installed Claude Code; O22 and O23 need
-                        only npm and grep, and run on any machine
+    Needs to re-run:    jq, find, a machine with an installed Claude Code; O22 through O24
+                        need only npm and grep, and run on any machine
 
 Nothing here is promised by Claude Code. Every entry carries the date and version it was seen
 on, the surface it was read from, how it was checked, and what you need to re-run the check, so
@@ -287,7 +288,7 @@ Claude Code does not read for memory, so the project does not get the central st
     Supersedes:         O12, which reported no lower bound because the oldest build on that
                         machine was 2.1.205
 
-2.1.73 is the last build without it, so the key is 131 published versions older than the
+2.1.73 is the last build without it, so the key is 107 published builds older than the
 previous floor suggested. O12 was not wrong: it recorded honestly that no lower bound could be
 found from the builds installed on one machine. The registry holds every build, so the question
 it left open is answerable by anyone.
@@ -318,12 +319,16 @@ failure that takes longest to notice. The names are in every build back to the O
     How:                same binary search as O22, seven probes, looking for
                         `extraKnownMarketplaces`; 2.1.74 is the last build without it
     Needs:              npm, grep
-    Checkable:          automated (`tests/version-probe.sh <version>`)
+    Checkable:          manual. `tests/version-probe.sh` does not look for
+                        `extraKnownMarketplaces`, so no row in the index speaks to
+                        this boundary
 
 One version after the setting in O22, which is why `install.sh` can carry a single floor rather
 than two. The kit needs both: the setting to point auto memory at one store, and the plugin
 mechanism to deliver the skills. 2.1.75 is the oldest build that has them together, and it is the
-installer's floor.
+installer's floor. Being the higher of the two, it is also the number that decides every
+refusal, and the weekly probe does not re-check it: this floor rests on the bisect above
+rather than on the index.
 
 The same caveat as O22 applies, and harder here. A build carrying the marketplace key is not
 proof that `claude plugin install` behaves as it does today; it dates the mechanism rather than

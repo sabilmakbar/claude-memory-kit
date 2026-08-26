@@ -362,14 +362,18 @@ memory file names, no memory contents, no paths, no username. Paste it as it is.
 
 ## How it stays trustworthy
 
-Two test suites cover the kit: a fixture suite that gates every install and every push,
-and a smoke suite that checks the kit against your machine's real data. After a Claude
-Code update, a background hook re-runs the smoke suite and records the result, so a
-harness change that breaks something gets noticed instead of failing silently. The full
-story is in [DESIGN-health.md](docs/DESIGN-health.md).
+Three checks cover the kit: a fixture suite that gates every install and every push, a
+smoke suite that checks the kit against your machine's real data, and a weekly workflow
+that installs published Claude Code builds and reads what the installer wires itself to.
+After a Claude Code update, a background hook re-runs the smoke suite and records the
+result, so a harness change that breaks something gets noticed instead of failing
+silently. The full story is in [DESIGN-health.md](docs/DESIGN-health.md).
 
-Verified against Claude Code 2.1.222. The smoke suite also passes over transcripts written
-by 20 versions, 2.1.177 through 2.1.222. Older versions are untested.
+Verified against Claude Code 2.1.222. The weekly workflow has probed every published build
+from 2.0.0 to 2.1.246, and `tests/versions-checked.tsv` records what each one came back
+with; that is where the installer's version floor comes from. The smoke suite passes over
+transcripts written by 20 versions, 2.1.177 through 2.1.222, and transcripts from older
+builds are untested.
 
 ## FAQ
 
