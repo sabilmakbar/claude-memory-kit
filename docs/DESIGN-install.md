@@ -5,7 +5,7 @@
 > [FLOWS.md](FLOWS.md). For setup, the README.
 
     Status:            Implemented
-    Last revised:      2026-08-12
+    Last revised:      2026-08-26
     Verified against:  Claude Code 2.1.222
     Supersedes:        docs/DESIGN.md, split by feature 2026-08-12
 
@@ -240,6 +240,47 @@ This replaces the detection default that an earlier draft carried, where several
 advisory. Detection still runs and still prints what it found; it just advises instead of
 deciding.
 
+## D12. The documented install pins both halves to a release tag
+
+The kit ships in two halves that version independently, and both default to tracking the default
+branch. Unpinned, the plugin cache directory is named from the version `plugin.json` declares on
+that branch, which is the next release's number for the whole of a development cycle, so the
+number on disk names a build that never shipped. Measured, not argued: the `0.3.1` cache
+directory on the machine this was written on predates the `v0.3.1` tag by four hours and differs
+from it in seven files (O26).
+
+So the README carries the tag twice, once per half: `git clone --branch` for the tree, and
+`marketplace add <owner>/<repo>@<tag>` for the skills. Pinning is possible because the ref rides
+in the marketplace source string (O25), which is a thing an earlier record got wrong.
+
+**Bumping `plugin.json` only at release was considered and rejected.** It looks like the obvious
+fix, since the open number is what leaks. But the marketplace serves a branch either way, so the
+label still lies; it would just name an already-published version instead of an unpublished one,
+and two machines could then hold different content under one released number. Any static label
+inside a moving branch is wrong somewhere. Moving the source is the fix, not moving the bump.
+
+**Having `install.sh` write the pin itself was considered and rejected for now.** It was the plan
+while the CLI appeared unable to express a ref. Once `marketplace add <owner>/<repo>@<tag>` was
+shown to work, the feature reduced to saving one tag the user already types on the clone line
+above, in exchange for writing a key in `settings.json` that is shared with every other plugin,
+and for creating the stale-pin case below rather than only reporting it. It is deferred, not
+refused: deriving both halves from one `git describe` is the only shape that makes a typo in one
+of the two tags impossible.
+
+**What the installer does instead is report.** A pin that disagrees with the checkout's tag is
+named along with the `marketplace add` command that agrees them, and a pin on a checkout that is
+not on a tag is called out explicitly, because that is the one case nothing else catches: a
+development version has no number the health hook can compare, so its daily notice stays silent
+(DESIGN-health.md D4). Reporting rather than rewriting keeps this consistent with D11, where the
+installer refuses to pick a value that is the user's to pick.
+
+**Failure posture.** An unpinned install still works and still mislabels; nothing here forces
+anyone to pin. The residual is deliberate: `marketplace add <owner>/<repo>` with no tag will
+always serve the branch, and documentation can only offer the better form, not impose it. A
+README tag left behind by a release would send every new reader to an old version, so a test
+holds it to the newest released changelog heading and fails both on a drifted tag and on a README
+with no pin at all.
+
 ## What would reopen this
 
 - **D11, if the installer ever needs to run unattended on a fresh machine.** A required argument
@@ -251,6 +292,14 @@ deciding.
 - **D1, if the fixture suite ever became slow enough that the gate is skipped in practice.** A
   gate people work around is worse than no gate, because it carries the reassurance without the
   check.
+- **D12, if a mistyped tag ever puts the two halves on different releases in practice.** The
+  installer reports that today rather than preventing it, on the grounds that one user typing two
+  tags is a small target. One real occurrence is the evidence that would move the pin write from
+  deferred to done.
+- **D12, if the marketplace source ever stops accepting a ref.** The whole pinned install rests
+  on O25, which is a platform behaviour with no promise behind it. If it goes, the fallback is
+  bumping `plugin.json` at release and accepting the weaker label, because there would be nothing
+  left to pin.
 - **D4, if Claude Code gained a real ownership marker in `settings.json`.** Basename plus
   directory is an inference. A first-class owner field would replace it outright.
 - **D6, if the shape ever needs repairing rather than refusing.** The current rule is that a

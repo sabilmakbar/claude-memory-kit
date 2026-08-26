@@ -62,6 +62,15 @@ says nothing about the other.
 
 ### Changed
 
+- O17 is superseded on the point that mattered. It read `--help` on `plugin install` and
+  `marketplace add`, found no ref flag, and concluded a release tag could not change what the
+  plugin path delivers. The ref rides in the source string instead, so `--help` could not show
+  it: O25 records the three forms, which one fails, and that the pin persists and is enforced.
+  O26 records what unpinned costs, measured on this machine. O18 gains the converse experiment,
+  that writing `extraKnownMarketplaces` by hand materialises no marketplace at all. D12 in
+  `docs/DESIGN-install.md` is the decision those records forced.
+
+
 - The documented install pins both halves to a release tag: `git clone --branch`, and
   `claude plugin marketplace add sabilmakbar/claude-memory-kit@v0.3.1`. Unpinned, each half
   tracks the default branch and the plugin cache is labelled with the next release's number,
