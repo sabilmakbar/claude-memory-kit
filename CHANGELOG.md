@@ -81,6 +81,17 @@ says nothing about the other.
   gate turns on mode as well as host. The docs still lead with `claude plugin update`, which works
   in every host. Recorded in `docs/INTERNALS.md` O20.
 
+- The install marker keeps its `.git/info/exclude` line, and a later install repairs a marker
+  that has stopped being true. `--uninstall` kept the marker on purpose and removed its exclude
+  line in the same breath, leaving a kit-written file untracked in a memory repo one `git add .`
+  away from being committed. Nothing ever put it back either: the marker is written only on the
+  branch that writes `autoMemoryDirectory`, so every later install took the already-correct path
+  and a store whose marker read `reverted` beside a working install stayed that way. That path
+  now restores the exclude line and returns a `reverted` state to `active`, keeping the timestamp.
+  A `legacy` state and a store the kit never marked are both left alone. The settings-scope
+  limitation is also stated on every install rather than only the first.
+  [#71](https://github.com/sabilmakbar/claude-memory-kit/pull/71)
+
 ## 0.3.1
 
 ### Added
