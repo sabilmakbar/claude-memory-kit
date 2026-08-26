@@ -1335,9 +1335,56 @@ M="$SH/.claude/projects/-p/memory/.memory-kit-marker.json"
   && ok "uninstall removes a setting the kit wrote" || fail "setting survived uninstall"
 [ -f "$M" ] && ok "uninstall keeps the marker as the record" || fail "marker deleted on uninstall"
 [ "$(jq -r .state "$M" 2>/dev/null)" = reverted ] && ok "the kept marker reads reverted" || fail "marker state after uninstall"
+# The line stays exactly as long as the file does. Taking it out while keeping the
+# marker left a kit-written file untracked in the user's memory repo, one `git add .`
+# away from being committed into a history it is not true in.
 grep -qxF '.memory-kit-marker.json' "$SH/.claude/projects/-p/memory/.git/info/exclude" 2>/dev/null \
-  && fail "the local exclude line survived uninstall" || ok "uninstall takes its exclude line back out"
+  && ok "the kept marker keeps its exclude line" || fail "uninstall kept the marker but dropped its exclude line"
+[ -z "$(git -C "$SH/.claude/projects/-p/memory" status --porcelain --untracked-files=all \
+        -- .memory-kit-marker.json)" ] \
+  && ok "so the kept marker is not untracked noise" || fail "the marker shows as untracked after uninstall"
 [ -f "$SH/.claude/projects/-p/memory/user_x.md" ] && ok "uninstall keeps every memory file" || fail "memory lost"
+
+# A marker reading "reverted" while the setting still names the store. Reached by an
+# uninstall that ran against a different $HOME than the setting lives in — the sandbox
+# escape D9 describes — or by the setting being put back by hand. Built directly rather
+# than by uninstall-then-reinstall: uninstall removes the setting too, so that sequence
+# takes the write path, store_mark writes a whole fresh marker, and the repair is never
+# the thing under test.
+jq --arg d "$SH/.claude/projects/-p/memory" '.autoMemoryDirectory = $d' \
+  "$SH/.claude/settings.json" > "$SH/.claude/settings.tmp" && mv "$SH/.claude/settings.tmp" "$SH/.claude/settings.json"
+[ "$(jq -r .state "$M")" = reverted ] \
+  && ok "fixture: marker reads reverted while the setting names the store" \
+  || fail "fixture not in the state under test"
+out=$(HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed 2>&1)
+echo "$out" | grep -q 'autoMemoryDirectory is already' \
+  && ok "and the run takes the already-correct path, where store_mark never runs" \
+  || fail "fixture wrong: the run wrote the setting, so this proves nothing about the repair"
+[ "$(jq -r .state "$M" 2>/dev/null)" = active ] \
+  && ok "the repair marks a stale reverted marker active again" \
+  || fail "marker still reads $(jq -r .state "$M" 2>/dev/null) after reinstall"
+[ "$(jq -r '.reverted // "GONE"' "$M" 2>/dev/null)" != GONE ] \
+  && ok "and keeps the reverted timestamp, since it did happen" || fail "repair erased the revert record"
+
+# The exclude line is reasserted on the same path, so a store that lost it for any
+# reason gets it back on the next install rather than only on the first.
+rm -f "$SH/.claude/projects/-p/memory/.git/info/exclude"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+grep -qxF '.memory-kit-marker.json' "$SH/.claude/projects/-p/memory/.git/info/exclude" 2>/dev/null \
+  && ok "a reinstall puts a missing exclude line back" || fail "exclude line not restored on reinstall"
+
+# The opposite case, or the two above prove only that the repair runs. A store the kit
+# never marked is not the kit's to claim: D5.
+SH2=$(store_home repair-foreign); mkdir -p "$SH2/.claude/memory"
+git init -q "$SH2/.claude/memory"
+jq -n --arg d "$SH2/.claude/memory" '{autoMemoryDirectory:$d}' > "$SH2/.claude/settings.json"
+HOME="$SH2" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+[ -f "$SH2/.claude/memory/.memory-kit-marker.json" ] \
+  && fail "the repair wrote a marker into a store the kit never marked" \
+  || ok "a store with no marker is left unmarked"
+grep -qxF '.memory-kit-marker.json' "$SH2/.claude/memory/.git/info/exclude" 2>/dev/null \
+  && fail "the repair wrote an exclude line into a store it does not own" \
+  || ok "and gets no exclude line either"
 
 # a value with no marker beside it belongs to someone else, and D5 leaves it alone
 SH=$(store_home revert-foreign)

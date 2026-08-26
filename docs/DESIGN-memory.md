@@ -288,6 +288,25 @@ kit did is what makes the change reversible after the kit is gone, so deleting i
 destroys the only copy at the exact moment it becomes useful. `--purge-marker` deletes it, which
 matches the existing `--purge-cache` and `--purge-tracker` flags for users who want no trace.
 
+**The exclude line lives exactly as long as the marker file.** Revert used to keep the marker and
+take the line out in the same breath, which is the one combination that cannot be right: a file
+the kit deliberately left behind, in a repo the kit does not own, with nothing keeping it out of
+the next `git add .`. Committing it is the outcome the exclude exists to prevent, so removing the
+line belongs with deleting the file, in the `--purge-marker` sweep, and nowhere else.
+
+**A later install repairs a marker that has stopped being true.** The marker is written by
+`store_mark`, which runs only on the branch that writes `autoMemoryDirectory`. Every install after
+the first takes the already-correct path instead, so nothing ever read the marker back, and a
+store whose marker said `reverted` beside a working install stayed that way permanently: the run
+that would fix it is the run that skips the fix. The already-correct path now reasserts the
+exclude line and returns a `reverted` state to `active`, keeping the `reverted` timestamp, because
+the revert did happen and D9 keeps the record.
+
+Only `reverted` is overwritten. `legacy` means the kit moved on from that store on purpose, and a
+repair that flattened it would destroy a true record to fix a false one. A store with no marker is
+not repaired either, because it was never marked by this kit, and claiming it on a later run is
+the D5 violation this decision exists to avoid.
+
 **The revert acts only on a store inside the `$HOME` it was invoked with.** `autoMemoryDirectory`
 is an absolute path, read from a `settings.json` this run did not necessarily write, and the first
 version followed it wherever it pointed. Every other part of the kit is confined to its `$HOME` by

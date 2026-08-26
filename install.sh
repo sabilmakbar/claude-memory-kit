@@ -441,6 +441,42 @@ store_exclude() { # <store-path>
   return 0
 }
 
+# The marker is written by store_mark, which runs only when this install writes the
+# setting. Every later install takes the "already correct" path instead, so nothing
+# on that path ever looked at the marker again. A machine that was reverted and then
+# reinstalled therefore kept a marker reading "reverted" beside a working install,
+# for good: the run that would fix it is the run that skips the fix. D9 calls the
+# marker the record of what the kit did, so a record that outlives its own truth is
+# the one failure it cannot afford.
+#
+# Repair, not rewrite. A store with no marker was never marked by this kit, and D5
+# leaves those alone rather than claiming them on a later run.
+store_repair() { # <store-path>
+  local marker state tmp
+  marker="$1/$MARKER_NAME"
+  [ -f "$marker" ] || return 0
+  state=$(jq -r '.state // ""' "$marker" 2>/dev/null)
+  if [ "$DRY" -eq 1 ]; then
+    [ "$state" = reverted ] && printf '  would: mark %s active again\n' "$marker"
+    return 0
+  fi
+  # `reverted` is the only state this contradicts. `legacy` means the kit moved on
+  # from this store deliberately, and overwriting that would erase a true record.
+  if [ "$state" = reverted ]; then
+    tmp="$(mktemp "$marker.tmp.XXXXXX")"
+    if jq '.state = "active"' "$marker" > "$tmp" 2>/dev/null; then
+      mv "$tmp" "$marker"
+      # The reverted timestamp is left in place: it happened, and D9 keeps the record.
+      echo "    $MARKER_NAME read reverted while the setting names this store — marked active again"
+    else
+      rm -f "$tmp"
+    fi
+  fi
+  # Unconditional because the line can go missing without the state being wrong, and
+  # store_exclude already returns early when the line is there.
+  store_exclude "$1"
+}
+
 # Stores the kit found and did not act on. Kept outside every store, and outside the
 # deployed tree, so it survives --uninstall: a record that dies with the kit is
 # useless at the exact moment it is needed.
@@ -553,7 +589,11 @@ store_revert() {
     else
       rm -f "$tmp"
     fi
-    exclude_drop "$cur"
+    # The exclude line stays while the marker does. Dropping it here left a file the
+    # kit had deliberately kept sitting untracked in someone's memory repo, where the
+    # next `git add .` commits a machine-local record into a synced history: the exact
+    # outcome the exclude exists to prevent. exclude_drop belongs with the deletion in
+    # the sweep, not beside a decision to keep the file.
   fi
   return 0
 }
@@ -595,6 +635,7 @@ store_setup() {
   # someone's memory without saying so, which is the D4 rule applied to a value.
   if [ -n "$existing" ]; then
     echo "  ✓ autoMemoryDirectory is already $existing — left alone"
+    store_repair "$existing"
     return 0
   fi
 
