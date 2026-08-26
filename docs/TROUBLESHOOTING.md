@@ -4,7 +4,7 @@ Symptom, then check, then fix. If you are not sure anything is wrong, run the do
 `bash ~/.claude/memory-kit/tests/smoke.sh`. The README explains what its output means.
 
 This file covers faults. Questions about behaviour that is working as intended live in the
-README's FAQ.
+[FAQ](FAQ.md).
 
 ## The guardrail blocked my commit
 
@@ -70,7 +70,7 @@ its own, and names any it will not touch.
 `.md` file exists, its frontmatter is not readable by the index.
 
 **Fix.** Run `/memory-kit:review-memories`. It finds exactly this case and proposes the rename or the
-missing field. The rules are the three in the table above, and the FAQ explains them from the
+missing field. The rules are the three in the table above, and [FAQ.md](FAQ.md) explains them from the
 authoring side.
 
 The index is rebuilt from disk on every prompt, so a fix takes effect on your next message.
@@ -88,7 +88,7 @@ Work through these in order; each is cheap to check.
    `false` means re-run `install.sh`.
 4. **Did it try?** Open `~/.local/share/claude-feedback/proposals.md` and read the
    `## Daily log` table. A row for today or yesterday means it ran, and `0 new` is the normal
-   result on most days. The FAQ explains how to read that table.
+   result on most days. [FAQ.md](FAQ.md) explains how to read that table.
 5. **Did it fail?** `~/.local/share/claude-feedback/miner.log` holds the last run, and
    `miner.log.1` the one before.
 
