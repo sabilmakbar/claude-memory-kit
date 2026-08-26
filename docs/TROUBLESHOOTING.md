@@ -4,7 +4,7 @@ Symptom, then check, then fix. If you are not sure anything is wrong, run the do
 `bash ~/.claude/memory-kit/tests/smoke.sh`. The README explains what its output means.
 
 This file covers faults. Questions about behaviour that is working as intended live in the
-README's FAQ.
+[FAQ](FAQ.md).
 
 ## The guardrail blocked my commit
 
@@ -70,7 +70,7 @@ its own, and names any it will not touch.
 `.md` file exists, its frontmatter is not readable by the index.
 
 **Fix.** Run `/memory-kit:review-memories`. It finds exactly this case and proposes the rename or the
-missing field. The rules are the three in the table above, and the FAQ explains them from the
+missing field. The rules are the three in the table above, and [FAQ.md](FAQ.md) explains them from the
 authoring side.
 
 The index is rebuilt from disk on every prompt, so a fix takes effect on your next message.
@@ -88,7 +88,7 @@ Work through these in order; each is cheap to check.
    `false` means re-run `install.sh`.
 4. **Did it try?** Open `~/.local/share/claude-feedback/proposals.md` and read the
    `## Daily log` table. A row for today or yesterday means it ran, and `0 new` is the normal
-   result on most days. The FAQ explains how to read that table.
+   result on most days. [FAQ.md](FAQ.md) explains how to read that table.
 5. **Did it fail?** `~/.local/share/claude-feedback/miner.log` holds the last run, and
    `miner.log.1` the one before.
 
@@ -123,6 +123,56 @@ and retires its own copy of that proposal.
 
 If the two machines have genuinely different content in the same file, that is a normal merge
 conflict. Resolve it in the file, and remember the guardrail runs on the resulting commit.
+
+## A push is rejected, or commits land under the wrong account
+
+These look alike but they are two different problems, and a machine signed into a work
+account causes both.
+
+**Commits under the wrong name** is the commit identity step from the README's sync setup.
+Set `user.name` and `user.email` on the memory repo and everything from then on is
+attributed correctly. Commits already made keep their original author; rewriting them is
+possible and rarely worth it on a private memory repo.
+
+**A rejected push** is authentication, and the fix depends on how this machine talks to
+GitHub, so there is no single command to give you. The goal is the same whichever method
+you use: the memory repo authenticates as the account that owns it, independently of
+whatever this machine defaults to.
+
+- **SSH:** the repo needs a key belonging to the personal account, and ssh has to offer
+  only that key for this remote. A machine holding several keys otherwise authenticates
+  as whichever one GitHub accepts first, and the push succeeds as the wrong account
+  rather than failing.
+- **HTTPS, whether through the GitHub CLI or a keychain:** the stored credential the repo
+  uses has to belong to the personal account. Most credential stores key on the hostname
+  alone, so two accounts on github.com collide and whichever was saved first wins.
+
+When a sync fails, the kit's own message names the mechanism your repo is configured
+with, which tells you where to look.
+
+## The installer says the plugin is "ahead of" the newest release
+
+Not a fault. The skills came from a source that is not a release: an unpinned marketplace
+serves the default branch, and a local path serves a working tree. On a development checkout
+this is the expected state. To make the number meaningful, pin the marketplace to a tag; the
+README's install shows the form, and D12 in [DESIGN-install.md](DESIGN-install.md) holds the
+reasoning.
+
+## The installer says a pin "has no effect"
+
+The marketplace pin names a version below one already in the plugin cache, and the newest
+cached version is the one that loads. Nothing removes cache directories automatically, so the
+pin stays dead until you act. Remove the directory the installer names, then
+`claude plugin install memory-kit@memory-kit`, or pin forward to a release at or above the
+cached version. Background: O19 and O26 in [INTERNALS.md](INTERNALS.md).
+
+## I edited a skill, but the running copy never changes
+
+`claude plugin update` compares version labels and never content, so an edit under an
+unchanged version silently stays out of the loaded copy, even from a marketplace that points
+at your working tree. The loop that works is in CONTRIBUTING.md: `claude plugin uninstall`,
+then `claude plugin install`, then a new session. Measured as O27 in
+[INTERNALS.md](INTERNALS.md).
 
 ## Elsewhere
 

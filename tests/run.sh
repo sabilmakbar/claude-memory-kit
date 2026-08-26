@@ -126,9 +126,11 @@ plug_case "installed and current: nothing to do" "nothing to do" \
   'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/'"$PREL"'"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
 # The pair that gives the comparison its discriminating power: one cache below the release
 # and one above it must reach different branches. Before this, both said "stale" and both
-# advised an update, which cannot help the one that is already ahead.
+# advised an update, which cannot help the one that is already ahead. The ahead case seeds a
+# literal 9.9.9 rather than plugin.json's version, because at a release commit plugin.json
+# equals the newest heading and a fixture seeded from it silently becomes the current case.
 plug_case "installed ahead of the release: says ahead, not stale" "ahead of" \
-  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/'"$PWANT"'"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/9.9.9"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
 plug_case "installed behind the release: still says stale" "but the newest release is" \
   'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/0.0.1"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
 # A pin outranks the release, because it is the only version that install can receive.
@@ -550,7 +552,7 @@ out=$(tag_pairing "$TPC")
   || fail "mismatched tag v9.9.9 produced: $out"
 ( cd "$TPC" \
   && jq '.version="9.9.9"' .claude-plugin/plugin.json > pj.tmp && mv pj.tmp .claude-plugin/plugin.json \
-  && perl -pi -e 's/^## Unreleased$/## 9.9.9/' CHANGELOG.md \
+  && perl -pi -e 's/^## (Unreleased|[0-9][0-9.]*)$/## 9.9.9/ && ++$done unless $done' CHANGELOG.md \
   && perl -pi -e 's/v0\.[0-9]+\.[0-9]+/v9.9.9/g if /--branch |claude-memory-kit(\.git#|@)/' README.md )
 out=$(tag_pairing "$TPC")
 [ -z "$out" ] \
