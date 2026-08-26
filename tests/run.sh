@@ -1858,6 +1858,92 @@ fi
 # Unparseable was already covered. This is the other half: a file that IS valid JSON but
 # holds a shape the merge cannot use, and a file whose odd corners must survive untouched.
 # Ported from claude-session-kit, which had the survive case and we did not.
+# ---------- the two halves on different releases ----------
+# install.sh deploys the hooks, scripts and kit tree; the plugin cache holds the skills.
+# Either can move without the other, and nothing used to say so. Both numbers are already
+# on disk, so this compares what is there and records nothing new.
+echo "the two halves:"
+TH="$TMP/home-halves"; TKV="$TH/.claude/memory-kit"; TPC="$TH/.claude/plugins/cache/memory-kit/memory-kit"
+mkdir -p "$TKV" "$TPC"
+halves() { HOME="$TH" bash -c ". \"$KIT/core/lib.sh\"; mk_halves_mismatch" 2>/dev/null; }
+
+# Present-and-equal first, so every silence case below has a reporting case beside it that
+# differs only in the version numbers.
+printf 'v0.3.2\n' >"$TKV/.kit-version"; mkdir -p "$TPC/0.3.2"
+[ -z "$(halves)" ] && ok "both halves on the same release: nothing to report" \
+  || fail "reported a mismatch when the halves agreed: $(halves)"
+
+rm -rf "$TPC/0.3.2"; mkdir -p "$TPC/0.3.1"
+out=$(halves)
+case "$out" in
+  "the skills are at 0.3.1 while the hooks and the kit tree are at 0.3.2:"*"claude plugin update memory-kit@memory-kit")
+     ok "skills behind: reported, naming plugin update" ;;
+  *) fail "skills behind not reported as expected: ${out:-silence}" ;;
+esac
+printf 'v0.3.0\n' >"$TKV/.kit-version"
+out2=$(halves)
+case "$out2" in
+  "the hooks and the kit tree are at 0.3.0 while the skills are at 0.3.1:"*"install.sh"*)
+     ok "kit behind: reported, naming install.sh" ;;
+  *) fail "kit behind not reported as expected: ${out2:-silence}" ;;
+esac
+# Direction is knowable here, so the two notices must differ. The deploy-drift git hook
+# deliberately makes no direction claim; this one must, or half the readers run the wrong
+# command.
+[ "$out" != "$out2" ] && ok "the two directions produce different advice" \
+  || fail "both directions produced the same sentence"
+
+# Nothing removes an old cache directory, so a machine that has updated keeps several and
+# the newest is the one the harness loads. Paired with the reporting case above, where
+# 0.3.1 alone against a 0.3.2 kit did report.
+printf 'v0.3.2\n' >"$TKV/.kit-version"; mkdir -p "$TPC/0.3.2"
+[ -z "$(halves)" ] && ok "several cached versions: the newest is compared" \
+  || fail "compared something other than the newest cached version: $(halves)"
+rm -rf "$TPC/0.3.2"
+
+# Anything that is not an exact release is silence, not a guess: a development checkout has
+# no release number for the plugin to match, and comparing there would report every day.
+for label in v0.3.2-4-gabc1234 v0.3.2-4-gabc1234-dirty unknown "" "0.3.2 "; do
+  printf '%s\n' "$label" >"$TKV/.kit-version"
+  [ -z "$(halves)" ] && ok "a .kit-version of '${label:-empty}' is not compared" \
+    || fail "compared a non-release label '${label}': $(halves)"
+done
+rm -f "$TKV/.kit-version"
+[ -z "$(halves)" ] && ok "no .kit-version at all: nothing to report" || fail "spoke with no version record"
+
+# The plugin half missing is a different fault with a different owner: the plugin's own
+# SessionStart hook reports the reverse case, and install.sh reports this one while it runs.
+# Comparing a release against nothing would report a mismatch no command fixes.
+printf 'v0.3.2\n' >"$TKV/.kit-version"; rm -rf "$TPC"
+[ -z "$(halves)" ] && ok "the plugin not installed at all: nothing to report" \
+  || fail "spoke with no plugin cache"
+mkdir -p "$TPC/0.3.2"
+[ -z "$(halves)" ] && ok "…and the restored matching cache stays silent" || fail "spoke on a matching pair"
+
+# Through the health hook, which is how a user actually sees it: valid JSON, and throttled
+# to once per session per day like every other notice this hook carries.
+rm -rf "$TPC/0.3.2"; mkdir -p "$TPC/0.3.1"
+out=$(echo '{"session_id":"halves1"}' | HOME="$TH" bash "$KIT/hooks/memory-kit-health.sh" 2>&1)
+printf '%s' "$out" | jq -e . >/dev/null 2>&1 \
+  && ok "the health hook emits valid JSON for a version difference" || fail "invalid JSON: $out"
+printf '%s' "$out" | jq -r '.systemMessage' 2>/dev/null | grep -q 'claude plugin update memory-kit@memory-kit' \
+  && ok "…carrying the command that fixes it" || fail "the notice does not name the fix"
+out=$(echo '{"session_id":"halves1"}' | HOME="$TH" bash "$KIT/hooks/memory-kit-health.sh" 2>&1)
+[ -z "$out" ] && ok "…and it is reported once per session per day" || fail "repeated the same day: $out"
+
+# This hook is the one that must speak when jq is gone, so the halves clause must not need
+# jq either. Paired with the reporting case above, which had jq: same fixture, same verdict.
+if [ -x "$NOJQ/bash" ] && ! env PATH="$NOJQ" sh -c 'command -v jq' >/dev/null 2>&1; then
+  out=$(echo '{"session_id":"halves2"}' | PATH="$NOJQ" HOME="$TH" "$NOJQ/bash" \
+          "$KIT/hooks/memory-kit-health.sh" 2>/dev/null)
+  printf '%s' "$out" | grep -q 'the skills are at 0.3.1' \
+    && ok "the version difference is still reported with no jq on PATH" \
+    || fail "the halves check needs jq: ${out:-silence}"
+else
+  ok "SKIP: could not build a jq-less PATH for the halves check"
+fi
+rm -rf "$TH"
+
 echo "settings.json shapes:"
 SHAPE_DIR=""   # set by shape_case; the result lines and the path cannot share stdout
 shape_case() { # shape_case <desc> <json> <expect-rc> <expect-our-hooks>
