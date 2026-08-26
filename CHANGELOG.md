@@ -60,6 +60,11 @@ says nothing about the other.
   2.1.75, so the kit now installs on 130 releases it previously refused, and the refusal names
   both requirements instead of only the setting.
 
+- The `/plugin` slash command is settled rather than unconfirmed. An interactive CLI session
+  provides it, the VS Code extension does not, and `claude -p` does not resolve it either, so the
+  gate turns on mode as well as host. The docs still lead with `claude plugin update`, which works
+  in every host. Recorded in `docs/INTERNALS.md` O20.
+
 ### Tested
 
 - The two halves check, every reporting case paired with a control that must stay silent:
@@ -73,6 +78,19 @@ says nothing about the other.
   between two local clones, so a dead wrapper file cannot pass. The watched path list is
   checked against what the installer actually deploys into a sandbox, so a file added to the
   installer and not to the list fails the suite instead of going unwatched.
+
+### Fixed
+
+- The install marker keeps its `.git/info/exclude` line, and a later install repairs a marker
+  that has stopped being true. `--uninstall` kept the marker on purpose and removed its exclude
+  line in the same breath, leaving a kit-written file untracked in a memory repo one `git add .`
+  away from being committed. Nothing ever put it back either: the marker is written only on the
+  branch that writes `autoMemoryDirectory`, so every later install took the already-correct path
+  and a store whose marker read `reverted` beside a working install stayed that way. That path
+  now restores the exclude line and returns a `reverted` state to `active`, keeping the timestamp.
+  A `legacy` state and a store the kit never marked are both left alone. The settings-scope
+  limitation is also stated on every install rather than only the first.
+  [#71](https://github.com/sabilmakbar/claude-memory-kit/pull/71)
 
 ## 0.3.1
 

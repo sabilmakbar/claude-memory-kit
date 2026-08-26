@@ -288,8 +288,9 @@ claude plugin update memory-kit@memory-kit      # restart to apply
 ```
 
 `/plugin update memory-kit@memory-kit` may do the same thing where your host provides that
-slash command. It is **not available in the VS Code extension**, and we have not confirmed
-which hosts do provide it, so the CLI form is the one to rely on. If `claude` is not on your `PATH` it ships inside the extension:
+slash command. An interactive CLI session does provide it, confirmed on 2.1.246. The VS Code
+extension does not, and neither does `claude -p`, so the CLI form above is the one that works
+in every host. If `claude` is not on your `PATH` it ships inside the extension:
 
 ```bash
 ~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude plugin update memory-kit@memory-kit

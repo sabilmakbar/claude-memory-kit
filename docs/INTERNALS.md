@@ -483,6 +483,7 @@ commands in either order.
 ### O20. The VS Code extension installs plugins by command and URI, not by a slash command
 
     First observed:     2026-08-20 · extension 2.1.237
+    Re-verified:        2026-08-26 · CLI 2.1.246, interactive session and `-p`
     Surface:            the extension manifest and bundle
     How:                `claude-vscode.installPlugin` is one of the 23 declared commands, titled
                         "Claude Code: Install Plugin" and gated on `claude-vscode.updateSupported`.
@@ -495,16 +496,19 @@ commands in either order.
     Needs:              jq, grep over a 302MB binary
     Checkable:          automated
 
-So `/plugin` is not a safe instruction to publish. This host does not offer it, and which hosts do
-was not established. The CLI form works wherever the binary does, which is why the docs lead with
-it.
+So `/plugin` is real and gated by host and by mode. **Settled 2026-08-26 on 2.1.246 by typing
+it:** an interactive CLI session provides the command, this extension answers "isn't available in
+this environment", and `claude -p "/plugin"` does not resolve it either. So the earlier reading,
+implemented and gated rather than absent, was right, and the gate is not only about the extension:
+headless mode does not carry it. The docs still lead with `claude plugin update`, because that form
+works in every host, including `-p` and any wrapper that shells out.
 
 **The distinction worth keeping:** the command is not missing from the product, it is unavailable
 in this environment. Both the `"/plugin"` literal and the refusal message live in the same binary.
-Finding a string is not proof that it is a registered command, so "implemented and gated" is the
-reading, not the finding: settling it takes typing `/plugin` in a terminal session, where the host
-is the CLI rather than the extension. Until then the docs say unconfirmed rather than naming a
-host.
+Finding a string was never proof that it is a registered command, which is why this was recorded as
+a reading rather than a finding until someone typed it. Typing it is what closed it, and the result
+split three ways rather than two, so "which host" was the wrong question: the same binary answers
+differently interactively and under `-p`.
 
 `/install-plugin` is a deep-link path, not a chat command, and the two are easy to conflate from a
 grep alone.
