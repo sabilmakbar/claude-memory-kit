@@ -22,6 +22,14 @@ says nothing about the other.
 
 ### Added
 
+- A weekly workflow probes published Claude Code builds for what `install.sh` wires itself to.
+  `tests/version-probe.sh` installs one version, reads the shipped executable and records a
+  verdict: that the build reports its own version, knows `autoMemoryDirectory`, and carries
+  every hook event name in `settings.snippet.json`. It starts no session and needs no
+  credentials. Results accumulate in `tests/versions-checked.tsv`, and only a verdict is
+  written there, so a runner missing `npm` or `jq` cannot mark builds as checked by failing.
+  [#64](https://github.com/sabilmakbar/claude-memory-kit/pull/64)
+
 - A pull that leaves the deployed tree behind now says so, at the moment the gap opens.
   `git pull`, a branch switch and `git pull --rebase` compare the files `install.sh` deploys
   against the deployed commit and name the differing files and the command to fix them. The
@@ -43,6 +51,14 @@ says nothing about the other.
   the half that is behind and the one command that fixes it, and stays silent on a development
   checkout, where a tree between releases has no number for the plugin to match. The reasoning
   is D4 in `docs/DESIGN-health.md`.
+
+### Changed
+
+- The installer's version floor is 2.1.75 rather than 2.1.205, because the old number was the
+  oldest build one machine happened to have rather than a boundary anyone found. Probing every
+  published build shows `autoMemoryDirectory` arrives in 2.1.74 and the plugin mechanism in
+  2.1.75, so the kit now installs on 130 releases it previously refused, and the refusal names
+  both requirements instead of only the setting.
 
 ### Tested
 
