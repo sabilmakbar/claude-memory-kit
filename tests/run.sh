@@ -1386,6 +1386,16 @@ grep -qxF '.memory-kit-marker.json' "$SH2/.claude/memory/.git/info/exclude" 2>/d
   && fail "the repair wrote an exclude line into a store it does not own" \
   || ok "and gets no exclude line either"
 
+# The B3 scope note reaches a re-install, not only a first one. It used to sit inside
+# the branch that writes the setting, so everyone upgrading never saw it.
+out=$(HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed 2>&1)
+echo "$out" | grep -q 'also reads the key from project and local settings' \
+  && ok "the settings-scope limitation is stated on a re-install too" \
+  || fail "scope note missing from a run that did not write the setting"
+echo "$out" | grep -q 'autoMemoryDirectory is already' \
+  && ok "and that run did take the already-correct path" \
+  || fail "fixture wrong: the run wrote the setting, so the check above proves nothing"
+
 # a value with no marker beside it belongs to someone else, and D5 leaves it alone
 SH=$(store_home revert-foreign)
 printf '{"autoMemoryDirectory":"/somewhere/else"}' > "$SH/.claude/settings.json"

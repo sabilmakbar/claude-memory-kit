@@ -441,6 +441,19 @@ store_exclude() { # <store-path>
   return 0
 }
 
+# B3. Which settings scope the kit writes, and what that leaves out. This lived inside
+# the branch that writes the setting, so the only people who ever read it were those
+# installing for the first time. Everyone re-running an install that already names the
+# right store — which is most runs, and every upgrade — never saw it, and the limitation
+# it describes does not go away after the first install.
+store_scope_note() {
+  echo "    This is your USER setting, so it is one store for every project. Claude Code"
+  echo "    also reads the key from project and local settings, which this installer never"
+  echo "    writes and the kit does not read back, so a per-project store set by hand would"
+  echo "    be used by Claude Code and missed by the kit. Wiring per-project stores into the"
+  echo "    one named here is a feature request, not a setting you can safely add yourself."
+}
+
 # The marker is written by store_mark, which runs only when this install writes the
 # setting. Every later install takes the "already correct" path instead, so nothing
 # on that path ever looked at the marker again. A machine that was reverted and then
@@ -636,6 +649,7 @@ store_setup() {
   if [ -n "$existing" ]; then
     echo "  ✓ autoMemoryDirectory is already $existing — left alone"
     store_repair "$existing"
+    store_scope_note
     return 0
   fi
 
@@ -666,11 +680,7 @@ store_setup() {
     echo "    setting, so nothing has to guess where your memory lives and no symlink is"
     echo "    involved. Deleting the key puts every project back where it was before"
     echo "    this install."
-    echo "    This is your USER setting, so it is one store for every project. Claude Code"
-    echo "    also reads the key from project and local settings, which this installer never"
-    echo "    writes and the kit does not read back, so a per-project store set by hand would"
-    echo "    be used by Claude Code and missed by the kit. Wiring per-project stores into the"
-    echo "    one named here is a feature request, not a setting you can safely add yourself."
+    store_scope_note
     if [ "$count" -eq 1 ]; then store_mark "$chosen" adopted; else store_mark "$chosen" created; fi
   else
     rm -f "$tmp"
