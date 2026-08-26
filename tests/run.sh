@@ -1997,6 +1997,21 @@ shape_case "one of our events holding non-groups: refuses" \
   && ok "and refuses before deploying anything" || fail "deployed despite an unusable event"
 rm -rf "$h"
 
+echo "docs/INTERNALS.md numbering:"
+# The record's own rule is that numbers are never reused, and two entries had both taken O13
+# before this check existed. Nothing else would have caught it: a duplicate reads fine in
+# isolation, and a decision citing the number silently gains a second referent.
+dupes=$(grep -oE '^### O[0-9]+' "$KIT/docs/INTERNALS.md" | sort | uniq -d | tr '\n' ' ')
+[ -z "$dupes" ] && ok "every observation number is used once" \
+  || fail "reused observation number(s): $dupes"
+# Control: the same pattern must be able to report a duplicate, or the assertion is vacuous.
+dup_fixture=$(mktemp)
+printf '### O1. a\n### O1. b\n' > "$dup_fixture"
+[ -n "$(grep -oE '^### O[0-9]+' "$dup_fixture" | sort | uniq -d)" ] \
+  && ok "…and the check can see one when it is there" \
+  || fail "the duplicate check cannot detect a duplicate"
+rm -f "$dup_fixture"
+
 echo
 echo "passed $PASS, failed $FAIL"
 [ "$FAIL" = 0 ]
