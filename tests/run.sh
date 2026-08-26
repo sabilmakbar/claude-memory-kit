@@ -410,6 +410,22 @@ else
     || fail "plugin.json says $pv, newest released changelog entry is $newest"
 fi
 
+# The README pins the install to a tag. A tag left behind by a release sends every new
+# reader to an old version, and nothing else in the repo would notice: the commands still
+# work, they just install the wrong thing. Pinned to the newest released heading, the same
+# value install.sh compares the plugin against.
+rt=$(grep -oE '(--branch |claude-memory-kit(\.git#|@))v[0-9]+\.[0-9]+\.[0-9]+' "$KIT/README.md" \
+  | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sort -u)
+rel=$(grep -E '^## ' "$KIT/CHANGELOG.md" | grep -viE 'unreleased' | head -1 \
+  | sed 's/^## *//;s/[^0-9.].*//')
+# Without this the check passes by silence the moment the commands are reworded.
+[ "$(printf '%s\n' "$rt" | grep -c .)" -ge 1 ] \
+  && ok "the README install names a pinned tag" \
+  || fail "no pinned tag found in the README install commands"
+[ "$rt" = "v$rel" ] \
+  && ok "the README tag v$rel matches the newest release" \
+  || fail "the README pins $(printf '%s' "$rt" | tr '\n' ' ')but the newest release is v$rel"
+
 bare=$(cd "$KIT" && grep -rnE '(^|[^:a-z-])/(save-memory|review-memories|initialize-memory|review-feedback-proposals)\b' \
   . --exclude-dir=.git --exclude=CHANGELOG.md 2>/dev/null || true)
 [ -z "$bare" ] \

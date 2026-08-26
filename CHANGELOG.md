@@ -54,6 +54,14 @@ says nothing about the other.
 
 ### Changed
 
+- The documented install pins both halves to a release tag: `git clone --branch`, and
+  `claude plugin marketplace add sabilmakbar/claude-memory-kit@v0.3.1`. Unpinned, each half
+  tracks the default branch and the plugin cache is labelled with the next release's number,
+  so the version the kit reports names a build that was never released. The README also names
+  the two forms that pin the plugin half, the URL form that looks like it should and does not,
+  and why editing `extraKnownMarketplaces` by hand installs nothing. A test holds the
+  README's tag to the newest released heading, so a release cannot leave it behind.
+
 - The installer's version floor is 2.1.75 rather than 2.1.205, because the old number was the
   oldest build one machine happened to have rather than a boundary anyone found. Probing every
   published build shows `autoMemoryDirectory` arrives in 2.1.74, and a bisect puts the plugin
@@ -94,6 +102,14 @@ says nothing about the other.
   [#74](https://github.com/sabilmakbar/claude-memory-kit/pull/74)
 
 ### Fixed
+
+- `install.sh` compares the plugin against a version that exists. It used this checkout's
+  `plugin.json`, which carries the next release's number for the whole of every development
+  cycle, so anyone sitting on the newest release was told they were behind and pointed at a
+  version that never shipped. The target is now the marketplace pin when there is one, since
+  that is the only version that install can receive, and otherwise the newest released
+  changelog heading. A plugin newer than the target is reported as ahead rather than stale,
+  because that is what an unpinned marketplace produces and an update cannot fix it.
 
 - The install marker keeps its `.git/info/exclude` line, and a later install repairs a marker
   that has stopped being true. `--uninstall` kept the marker on purpose and removed its exclude
