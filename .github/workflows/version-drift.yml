@@ -1,0 +1,143 @@
+name: version drift
+
+# Answers the one question tests.yml cannot. The suite proves the kit agrees with itself,
+# against transcripts it writes on the spot. This probes a real Claude Code build for the
+# things the wiring rests on, so a build that stops shipping them is noticed here rather
+# than on somebody's machine.
+#
+# tests/versions-checked.tsv is the memory. Each run takes published versions that are not
+# in it yet, newest first, up to `count`, probes them and appends the rows. A fresh release
+# is covered within a week of shipping, and older builds backfill a few per run.
+#
+# No credentials. tests/version-probe.sh reads the shipped binary and never starts a
+# session, so nothing here consumes tokens.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      count:
+        description: 'how many unchecked versions to probe this run'
+        default: '8'
+      since:
+        description: 'oldest version worth probing (2.1.205 is what INTERNALS.md claims for)'
+        default: '2.1.205'
+      oldest_first:
+        description: 'backfill the tail instead of covering the head'
+        type: boolean
+        default: false
+
+# Two runs appending to the same file would race on the push.
+concurrency:
+  group: version-drift
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # appends probe rows to the index
+  issues: write     # opens one issue when a build fails a check
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick the versions this run has never seen
+        id: pick
+        env:
+          COUNT: ${{ github.event.inputs.count || '8' }}
+          SINCE: ${{ github.event.inputs.since || '2.1.205' }}
+          OLDEST_FIRST: ${{ github.event.inputs.oldest_first || 'false' }}
+        run: |
+          set -u
+          npm view @anthropic-ai/claude-code versions --json | jq -r '.[]' | sort -V > /tmp/all.txt
+          # sort -V put them in release order, so the window is everything from SINCE down
+          # the file. An unknown SINCE means probe the lot rather than silently nothing.
+          start=$(grep -n "^${SINCE}\$" /tmp/all.txt | cut -d: -f1 || true)
+          if [ -n "${start:-}" ]; then sed -n "${start},\$p" /tmp/all.txt > /tmp/window.txt
+          else cp /tmp/all.txt /tmp/window.txt; fi
+
+          # grep -vxF rather than comm: comm needs both sides in the same collation, and
+          # these are in version order, not lexical order.
+          grep -v '^#' tests/versions-checked.tsv | cut -f1 | grep . | sort -u > /tmp/done.txt || true
+          if [ -s /tmp/done.txt ]; then grep -vxF -f /tmp/done.txt /tmp/window.txt > /tmp/todo.txt || true
+          else cp /tmp/window.txt /tmp/todo.txt; fi
+
+          # sort -Vr rather than tac, so this behaves the same when run by hand on a Mac,
+          # where tac does not exist.
+          if [ "$OLDEST_FIRST" = "true" ]; then sort -V /tmp/todo.txt | head -n "$COUNT" > /tmp/run.txt
+          else sort -Vr /tmp/todo.txt | head -n "$COUNT" > /tmp/run.txt; fi
+
+          echo "window: $(wc -l < /tmp/window.txt), already probed: $(wc -l < /tmp/done.txt), unchecked: $(wc -l < /tmp/todo.txt)"
+          echo "this run:"; cat /tmp/run.txt
+          echo "n=$(wc -l < /tmp/run.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Probe each one
+        if: steps.pick.outputs.n != '0'
+        run: |
+          set -u
+          # Always exists, so the later steps can read it without guarding.
+          : > /tmp/rows.tsv
+          while read -r v; do
+            [ -n "$v" ] || continue
+            echo "::group::$v"
+            if out="$(bash tests/version-probe.sh "$v")"; then
+              printf '%s\n' "$out" | tee -a /tmp/rows.tsv
+              echo "::endgroup::"
+            else
+              rc=$?
+              echo "::endgroup::"
+              # 2 means the runner is missing something every probe needs, so the rest of
+              # the run would fail the same way. 3 means this one build was unreachable.
+              # Neither writes a row: the index decides what is never probed again, and
+              # only a verdict about a build belongs in it.
+              if [ "$rc" -eq 2 ]; then
+                echo "::error::the probe cannot run here; nothing recorded"
+                exit 1
+              fi
+              echo "::warning::$v could not be probed; nothing recorded, a later run retries it"
+            fi
+          done < /tmp/run.txt
+          if [ ! -s /tmp/rows.tsv ]; then echo "no verdicts this run"; exit 0; fi
+          sort -u -o /tmp/rows.tsv /tmp/rows.tsv
+          cat /tmp/rows.tsv >> tests/versions-checked.tsv
+
+      - name: Record what it found
+        if: steps.pick.outputs.n != '0'
+        run: |
+          set -u
+          git diff --quiet -- tests/versions-checked.tsv && { echo "nothing new"; exit 0; }
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # --only takes that one path and commits it, so nothing else can ride along.
+          git commit --only tests/versions-checked.tsv \
+            -m "test: probe $(wc -l < /tmp/rows.tsv | tr -d ' ') Claude Code build(s) for the wiring this kit depends on"
+          # A push made with GITHUB_TOKEN does not start another workflow run, so this
+          # cannot loop with tests.yml.
+          git push
+
+      - name: Say so when a build fails a check
+        if: steps.pick.outputs.n != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          awk -F'\t' '$3 == "fail"' /tmp/rows.tsv > /tmp/red.tsv
+          [ -s /tmp/red.tsv ] || { echo "all green"; exit 0; }
+          {
+            echo "\`tests/version-probe.sh\` did not get what it expected from these builds:"
+            echo
+            echo '| version | result |'
+            echo '|---|---|'
+            cut -f1,4 /tmp/red.tsv | sed 's/^/| /; s/\t/ | /; s/$/ |/'
+            echo
+            echo "The probe reads the shipped binary; it never starts a session. A red row means"
+            echo "either the build stopped shipping something the wiring uses, or the probe needs"
+            echo "updating. Check which before changing either."
+            echo
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } > /tmp/body.md
+          gh issue create \
+            --title "version drift: $(cut -f1 /tmp/red.tsv | tr '\n' ' ' | sed 's/ $//')" \
+            --body-file /tmp/body.md
