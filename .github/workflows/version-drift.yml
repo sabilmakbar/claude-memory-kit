@@ -19,7 +19,9 @@ on:
     inputs:
       count:
         description: 'how many unchecked versions to probe this run'
-        default: '8'
+        # Releases arrive at roughly ten a week, so a smaller number never clears a
+        # backlog and slowly falls behind the newest build as well.
+        default: '32'
       since:
         description: 'oldest version worth probing (2.1.205 is what INTERNALS.md claims for)'
         default: '2.1.205'
@@ -34,8 +36,15 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write   # appends probe rows to the index
-  issues: write     # opens one issue when a build fails a check
+  contents: write        # pushes the index branch
+  pull-requests: write   # opens the pull request that carries it
+  issues: write          # opens one issue when a build fails a check
+
+env:
+  # main is protected, so the index arrives by pull request like everything else. One
+  # branch, reused: later runs append to it, and the index is read from it rather than
+  # from main, so a run never re-probes builds that are waiting in an unmerged branch.
+  INDEX_BRANCH: ci/version-index
 
 jobs:
   probe:
@@ -46,7 +55,7 @@ jobs:
       - name: Pick the versions this run has never seen
         id: pick
         env:
-          COUNT: ${{ github.event.inputs.count || '8' }}
+          COUNT: ${{ github.event.inputs.count || '32' }}
           SINCE: ${{ github.event.inputs.since || '2.1.205' }}
           OLDEST_FIRST: ${{ github.event.inputs.oldest_first || 'false' }}
         run: |
@@ -58,9 +67,21 @@ jobs:
           if [ -n "${start:-}" ]; then sed -n "${start},\$p" /tmp/all.txt > /tmp/window.txt
           else cp /tmp/all.txt /tmp/window.txt; fi
 
+          # The index as it stands, which is the branch's copy when one is waiting.
+          # Explicit refspec: checkout@v4 configures one only for the branch it checked
+          # out, so a plain fetch would land in FETCH_HEAD and leave origin/<branch>
+          # undefined for the git show below.
+          if git fetch origin "+refs/heads/$INDEX_BRANCH:refs/remotes/origin/$INDEX_BRANCH" 2>/dev/null; then
+            git show "origin/$INDEX_BRANCH:tests/versions-checked.tsv" > /tmp/index.tsv
+            echo "index branch $INDEX_BRANCH exists, reading it"
+          else
+            cp tests/versions-checked.tsv /tmp/index.tsv
+            echo "no index branch yet, reading main"
+          fi
+
           # grep -vxF rather than comm: comm needs both sides in the same collation, and
           # these are in version order, not lexical order.
-          grep -v '^#' tests/versions-checked.tsv | cut -f1 | grep . | sort -u > /tmp/done.txt || true
+          grep -v '^#' /tmp/index.tsv | cut -f1 | grep . | sort -u > /tmp/done.txt || true
           if [ -s /tmp/done.txt ]; then grep -vxF -f /tmp/done.txt /tmp/window.txt > /tmp/todo.txt || true
           else cp /tmp/window.txt /tmp/todo.txt; fi
 
@@ -101,21 +122,40 @@ jobs:
           done < /tmp/run.txt
           if [ ! -s /tmp/rows.tsv ]; then echo "no verdicts this run"; exit 0; fi
           sort -u -o /tmp/rows.tsv /tmp/rows.tsv
-          cat /tmp/rows.tsv >> tests/versions-checked.tsv
 
       - name: Record what it found
         if: steps.pick.outputs.n != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -u
-          git diff --quiet -- tests/versions-checked.tsv && { echo "nothing new"; exit 0; }
+          if [ ! -s /tmp/rows.tsv ]; then echo "nothing to record"; exit 0; fi
           git config user.name  'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          # Continue the waiting branch when there is one, so its rows are kept.
+          if git rev-parse --verify "origin/$INDEX_BRANCH" >/dev/null 2>&1; then
+            git checkout -B "$INDEX_BRANCH" "origin/$INDEX_BRANCH"
+          else
+            git checkout -B "$INDEX_BRANCH"
+          fi
+          cat /tmp/rows.tsv >> tests/versions-checked.tsv
           # --only takes that one path and commits it, so nothing else can ride along.
           git commit --only tests/versions-checked.tsv \
-            -m "test: probe $(wc -l < /tmp/rows.tsv | tr -d ' ') Claude Code build(s) for the wiring this kit depends on"
-          # A push made with GITHUB_TOKEN does not start another workflow run, so this
-          # cannot loop with tests.yml.
-          git push
+            -m "record $(wc -l < /tmp/rows.tsv | tr -d ' ') probed Claude Code build(s)"
+          git push -u origin "$INDEX_BRANCH"
+
+          if gh pr view "$INDEX_BRANCH" --json number >/dev/null 2>&1; then
+            echo "existing pull request updated by the push"
+          else
+            gh pr create --base main --head "$INDEX_BRANCH" \
+              --title "Record which Claude Code builds have been probed" \
+              --body "Rows appended by the version drift workflow. Each one is a verdict from \`tests/version-probe.sh\` against a published build: the version it reported, whether it still ships what this kit wires itself to, and the date it was checked.
+
+          Later runs append here rather than opening a second pull request, and they read this branch instead of main, so nothing is probed twice while this is waiting.
+
+          Red rows also open their own issue; a run with none is routine and can be merged without reading every line."
+          fi
 
       - name: Say so when a build fails a check
         if: steps.pick.outputs.n != '0'
