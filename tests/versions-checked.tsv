@@ -1,0 +1,9 @@
+# Which Claude Code builds have been probed by tests/version-probe.sh, and what came back.
+# Appended by .github/workflows/version-drift.yml; a version listed here is not probed again.
+# Columns: version, date probed (UTC), result, detail.
+# A build that could not be probed at all is absent rather than recorded, so a later
+# run retries it instead of treating an unusable runner as an answer.
+#
+# Empty on purpose. A row here means this probe ran, and no probe had run before this file
+# existed. The versions in docs/INTERNALS.md were verified by hand against surfaces a runner
+# cannot reach, which is a different and stronger claim.
