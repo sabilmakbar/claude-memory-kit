@@ -100,6 +100,14 @@ echo "installer names the right plugin action per state:"
 # people to the wrong command. Each is seeded and asserted, including the two that look
 # alike from outside: not installed at all, and installed but behind.
 PWANT=$(jq -r .version "$KIT/.claude-plugin/plugin.json")
+# The version the installer now compares against: the newest RELEASED heading, not
+# plugin.json. Those differ for the whole of every development cycle, which is exactly when
+# the old comparison called a current install stale.
+PREL=$(grep -E '^## ' "$KIT/CHANGELOG.md" | grep -viE 'unreleased' | head -1 \
+  | sed 's/^## *//;s/[^0-9.].*//')
+pinned_settings() {  # <ref> -> settings.json naming a pinned marketplace, plugin enabled
+  printf '{"enabledPlugins":{"memory-kit@memory-kit":true},"extraKnownMarketplaces":{"memory-kit":{"source":{"source":"github","repo":"sabilmakbar/claude-memory-kit","ref":"%s"}}}}' "$1"
+}
 plug_case() {   # <label> <expected substring> [seed]
   local lbl="$1" want="$2" seed="${3:-true}" h out
   h=$(mktemp -d); P="$h/.claude"; mkdir -p "$P"
@@ -115,7 +123,22 @@ plug_case "marketplace known, plugin missing: one command left" "One command lef
 plug_case "installed but behind: offers /plugin update" "/plugin update memory-kit@memory-kit" \
   'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/0.0.1"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
 plug_case "installed and current: nothing to do" "nothing to do" \
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/'"$PREL"'"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
+# The pair that gives the comparison its discriminating power: one cache below the release
+# and one above it must reach different branches. Before this, both said "stale" and both
+# advised an update, which cannot help the one that is already ahead.
+plug_case "installed ahead of the release: says ahead, not stale" "ahead of" \
   'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/'"$PWANT"'"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
+plug_case "installed behind the release: still says stale" "but the newest release is" \
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/0.0.1"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
+# A pin outranks the release, because it is the only version that install can receive.
+plug_case "pinned and matching: names the pin, not the release" "matching the marketplace pin" \
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/'"$PREL"'"; pinned_settings v'"$PREL"' > "$P/settings.json"'
+plug_case "pinned and behind: names the pin as the target" "the marketplace pin is" \
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/0.0.1"; pinned_settings v'"$PREL"' > "$P/settings.json"'
+# A pin naming a branch carries no version, so the release is still the better answer.
+plug_case "pinned to a branch: falls back to the release" "the newest release" \
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/0.0.1"; pinned_settings main > "$P/settings.json"'
 # Reading the state is read-only, so --dry-run must still report it: a preview that omits
 # the half you are missing omits it at the least useful moment.
 h=$(mktemp -d); mkdir -p "$h/.claude"
