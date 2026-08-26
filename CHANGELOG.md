@@ -22,6 +22,28 @@ says nothing about the other.
 
 ### Added
 
+- The suite runs on tag pushes, and a tag-pairing check arms itself when HEAD sits exactly on
+  a tag: plugin.json, the README's pinned tag and the newest changelog heading must all equal
+  the tag being pushed. A release tagged with any of the three left behind goes red minutes
+  after the push instead of shipping mismatched. Between tags the check does not apply, so a
+  release pull request carrying the next number trips nothing before its tag exists.
+
+- `install.sh` names the cache directory that defeats a backward pin. A pin below a version
+  already in the plugin cache silently has no effect, because the newest cached directory is
+  the one that loads and nothing ever removes one; the installer now prints that directory and
+  the two remedies instead of leaving the pin looking live. An unpinned remote marketplace on
+  a tagged checkout is offered the exact pin command, and a `directory` marketplace is never
+  nudged, because that is the development install and pinning it would end the edit loop.
+
+
+- `install.sh` reports a marketplace pin that disagrees with the checkout it is run from.
+  Two cases: the pin names a different tag, where it names the `marketplace add` command that
+  puts both halves on one release, and the pin sits on a checkout that is not on a tag, where
+  the skills stay pinned while the hooks and the tree move past them. The second is the case nothing
+  else catches, because a development version has no number for the daily halves notice to
+  compare, so that notice stays silent. Read-only, so `--dry-run` reports it too, and it
+  reports rather than rewrites: the pin belongs to whoever set it.
+
 - A weekly workflow probes published Claude Code builds for what `install.sh` wires itself to.
   `tests/version-probe.sh` installs one version, reads the shipped executable and records a
   verdict: that the build reports its own version, knows `autoMemoryDirectory`, and carries
@@ -53,6 +75,23 @@ says nothing about the other.
   is D4 in `docs/DESIGN-health.md`.
 
 ### Changed
+
+- O17 is superseded on the point that mattered. It read `--help` on `plugin install` and
+  `marketplace add`, found no ref flag, and concluded a release tag could not change what the
+  plugin path delivers. The ref rides in the source string instead, so `--help` could not show
+  it: O25 records the three forms, which one fails, and that the pin persists and is enforced.
+  O26 records what unpinned costs, measured on this machine. O18 gains the converse experiment,
+  that writing `extraKnownMarketplaces` by hand materialises no marketplace at all. D12 in
+  `docs/DESIGN-install.md` is the decision those records forced.
+
+
+- The documented install pins both halves to a release tag: `git clone --branch`, and
+  `claude plugin marketplace add sabilmakbar/claude-memory-kit@v0.3.1`. Unpinned, each half
+  tracks the default branch and the plugin cache is labelled with the next release's number,
+  so the version the kit reports names a build that was never released. The README also names
+  the two forms that pin the plugin half, the URL form that looks like it should and does not,
+  and why editing `extraKnownMarketplaces` by hand installs nothing. A test holds the
+  README's tag to the newest released heading, so a release cannot leave it behind.
 
 - The installer's version floor is 2.1.75 rather than 2.1.205, because the old number was the
   oldest build one machine happened to have rather than a boundary anyone found. Probing every
@@ -94,6 +133,14 @@ says nothing about the other.
   [#74](https://github.com/sabilmakbar/claude-memory-kit/pull/74)
 
 ### Fixed
+
+- `install.sh` compares the plugin against a version that exists. It used this checkout's
+  `plugin.json`, which carries the next release's number for the whole of every development
+  cycle, so anyone sitting on the newest release was told they were behind and pointed at a
+  version that never shipped. The target is now the marketplace pin when there is one, since
+  that is the only version that install can receive, and otherwise the newest released
+  changelog heading. A plugin newer than the target is reported as ahead rather than stale,
+  because that is what an unpinned marketplace produces and an update cannot fix it.
 
 - The install marker keeps its `.git/info/exclude` line, and a later install repairs a marker
   that has stopped being true. `--uninstall` kept the marker on purpose and removed its exclude

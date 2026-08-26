@@ -60,16 +60,41 @@ You need `jq`. The miner and sync also use `git` and the `claude` CLI. Details i
 [DEPENDENCIES.md](docs/DEPENDENCIES.md).
 
 ```bash
-git clone https://github.com/sabilmakbar/claude-memory-kit.git ~/claude-memory-kit
+git clone --branch v0.3.1 https://github.com/sabilmakbar/claude-memory-kit.git ~/claude-memory-kit
 ~/claude-memory-kit/install.sh --mode=managed
 ```
 
 Then add the skills, which ship as a Claude Code plugin:
 
 ```bash
-claude plugin marketplace add sabilmakbar/claude-memory-kit
+claude plugin marketplace add sabilmakbar/claude-memory-kit@v0.3.1
 claude plugin install memory-kit@memory-kit
 ```
+
+**Why the tag appears twice.** Both halves carry a version, and both default to tracking the
+default branch rather than a release. Leave the tag off and you get whatever `main` held that
+day, filed under the version number `main` declared, which is the next release's number rather
+than one that shipped. Pinning both halves to the same tag is what makes the version this kit
+reports mean something.
+
+To move to a newer release, repeat those commands with the new tag, then
+`claude plugin update memory-kit@memory-kit`. Pin forward, not back: a pin below a version
+already in the plugin cache has no effect, because the newest cached version is the one that
+loads, and `install.sh` names the blocking directory when it sees that state.
+
+Two forms pin the plugin half: `owner/repo@v0.3.1` as above, or
+`https://github.com/sabilmakbar/claude-memory-kit.git#v0.3.1`. Writing `@v0.3.1` on the URL
+form does not work, and fails with a git error that names a repository nobody asked for.
+
+Tracking `main` instead is a reasonable choice if you want unreleased work. `install.sh` says
+so when it sees it, rather than calling your install stale.
+
+Editing `extraKnownMarketplaces` in `settings.json` by hand is not an install path. Claude Code
+reads that key when a session starts, so `claude plugin install` reports the plugin missing
+until then. Use `claude plugin marketplace add`.
+
+Re-running `install.sh` from an untagged checkout leaves any pin in place, so the skills stay
+on the pinned tag while the hooks and kit tree move ahead of it.
 
 **Both steps are needed, and neither works alone.** The plugin gives you the skills, namespaced
 `/memory-kit:save-memory` and so on, so they cannot collide with a skill of the same name from

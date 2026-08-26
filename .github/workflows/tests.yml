@@ -2,6 +2,11 @@ name: tests
 on:
   push:
     branches: [main]
+    # A tag is the shipping moment, so the suite runs on it too. The tag-pairing check in
+    # tests/run.sh only activates when HEAD sits exactly on a tag, which is what this trigger
+    # provides: a v0.4.0 whose plugin.json, README pin or changelog heading disagrees goes red
+    # minutes after the push, instead of shipping mismatched and being found by a user.
+    tags: ['v*']
   pull_request:
 
 jobs:
@@ -12,6 +17,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Without the tags, `git describe --tags --exact-match` finds nothing on the
+          # runner's shallow clone and the tag-pairing check skips itself on the one run
+          # that exists to execute it. Passing by silence, so the fetch is not optional.
+          fetch-tags: true
       - run: tests/run.sh
       # Needs the real claude CLI, which a runner does not have, so it skips itself with exit
       # 0. Wired in anyway: the day a runner image ships the CLI, this starts covering the

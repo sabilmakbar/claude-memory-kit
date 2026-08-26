@@ -100,6 +100,14 @@ echo "installer names the right plugin action per state:"
 # people to the wrong command. Each is seeded and asserted, including the two that look
 # alike from outside: not installed at all, and installed but behind.
 PWANT=$(jq -r .version "$KIT/.claude-plugin/plugin.json")
+# The version the installer now compares against: the newest RELEASED heading, not
+# plugin.json. Those differ for the whole of every development cycle, which is exactly when
+# the old comparison called a current install stale.
+PREL=$(grep -E '^## ' "$KIT/CHANGELOG.md" | grep -viE 'unreleased' | head -1 \
+  | sed 's/^## *//;s/[^0-9.].*//')
+pinned_settings() {  # <ref> -> settings.json naming a pinned marketplace, plugin enabled
+  printf '{"enabledPlugins":{"memory-kit@memory-kit":true},"extraKnownMarketplaces":{"memory-kit":{"source":{"source":"github","repo":"sabilmakbar/claude-memory-kit","ref":"%s"}}}}' "$1"
+}
 plug_case() {   # <label> <expected substring> [seed]
   local lbl="$1" want="$2" seed="${3:-true}" h out
   h=$(mktemp -d); P="$h/.claude"; mkdir -p "$P"
@@ -115,7 +123,22 @@ plug_case "marketplace known, plugin missing: one command left" "One command lef
 plug_case "installed but behind: offers /plugin update" "/plugin update memory-kit@memory-kit" \
   'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/0.0.1"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
 plug_case "installed and current: nothing to do" "nothing to do" \
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/'"$PREL"'"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
+# The pair that gives the comparison its discriminating power: one cache below the release
+# and one above it must reach different branches. Before this, both said "stale" and both
+# advised an update, which cannot help the one that is already ahead.
+plug_case "installed ahead of the release: says ahead, not stale" "ahead of" \
   'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/'"$PWANT"'"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
+plug_case "installed behind the release: still says stale" "but the newest release is" \
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/0.0.1"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
+# A pin outranks the release, because it is the only version that install can receive.
+plug_case "pinned and matching: names the pin, not the release" "matching the marketplace pin" \
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/'"$PREL"'"; pinned_settings v'"$PREL"' > "$P/settings.json"'
+plug_case "pinned and behind: names the pin as the target" "the marketplace pin is" \
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/0.0.1"; pinned_settings v'"$PREL"' > "$P/settings.json"'
+# A pin naming a branch carries no version, so the release is still the better answer.
+plug_case "pinned to a branch: falls back to the release" "the newest release" \
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/0.0.1"; pinned_settings main > "$P/settings.json"'
 # Reading the state is read-only, so --dry-run must still report it: a preview that omits
 # the half you are missing omits it at the least useful moment.
 h=$(mktemp -d); mkdir -p "$h/.claude"
@@ -166,6 +189,95 @@ out=$( cd "$CB" && HOME="$h" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash install.sh -
 printf '%s' "$out" | grep -q 'commit(s) behind' \
   && fail "a current checkout claimed to be behind" || ok "integration: a current checkout says nothing"
 rm -rf "$h" "$(dirname "$CB")"
+
+# The pin against the checkout. Four states, and the two silent ones matter as much as the
+# two that speak: a report that fires when the halves agree is noise, and one that stays
+# quiet when they disagree is the silent divergence this exists to catch.
+PC=$(mktemp -d)/c
+git clone -q "$KIT" "$PC" 2>/dev/null
+cp "$KIT/install.sh" "$PC/install.sh"
+pin_home() {   # <ref> -> a HOME whose settings.json pins the marketplace to <ref>
+  local h; h=$(mktemp -d); mkdir -p "$h/.claude"
+  printf '{"extraKnownMarketplaces":{"memory-kit":{"source":{"source":"github","repo":"sabilmakbar/claude-memory-kit","ref":"%s"}}}}' \
+    "$1" > "$h/.claude/settings.json"
+  printf '%s' "$h"
+}
+pin_run() {    # <home> -> installer output from the tagged clone
+  ( cd "$PC" && HOME="$1" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 \
+      bash install.sh --dry-run --mode=advisory 2>&1 </dev/null )
+}
+git -C "$PC" tag -f v9.9.9 >/dev/null 2>&1
+h=$(pin_home v0.3.1)
+out=$(pin_run "$h")
+printf '%s' "$out" | grep -q 'pinned to v0.3.1 but this checkout is v9.9.9' \
+  && ok "pin against a different tag is reported" \
+  || fail "a pin disagreeing with the checkout tag went unreported"
+printf '%s' "$out" | grep -q 'marketplace add sabilmakbar/claude-memory-kit@v9.9.9' \
+  && ok "…naming the command that agrees them" || fail "no marketplace add command offered"
+rm -rf "$h"
+# Same pin, checkout now ON that tag: must go quiet.
+git -C "$PC" tag -d v9.9.9 >/dev/null 2>&1; git -C "$PC" tag -f v0.3.1 >/dev/null 2>&1
+h=$(pin_home v0.3.1)
+printf '%s' "$(pin_run "$h")" | grep -q 'pinned to' \
+  && fail "a pin matching the checkout tag was still reported" \
+  || ok "a pin matching the checkout tag says nothing"
+rm -rf "$h"
+# Pinned, checkout between tags: the silent-divergence case, because a development version
+# has no number for the halves check to compare.
+git -C "$PC" tag -d v0.3.1 >/dev/null 2>&1
+h=$(pin_home v0.3.1)
+printf '%s' "$(pin_run "$h")" | grep -q 'not on a tag' \
+  && ok "a pin on an untagged checkout is reported" \
+  || fail "a stale pin on an untagged checkout went unreported"
+rm -rf "$h"
+# A pin below an existing cache directory is silently out of effect, because the newest
+# directory is the one that loads. The report must name the blocking directory; and without
+# the pin, the same cache shape must get the development-shaped message instead, or the
+# check cannot tell a dead pin from an ordinary dev tree.
+git -C "$PC" tag -f v0.3.1 >/dev/null 2>&1
+h=$(mktemp -d)
+mkdir -p "$h/.claude/plugins/cache/memory-kit/memory-kit/0.3.1" \
+         "$h/.claude/plugins/cache/memory-kit/memory-kit/0.3.2"
+printf '{"enabledPlugins":{"memory-kit@memory-kit":true},"extraKnownMarketplaces":{"memory-kit":{"source":{"source":"github","repo":"sabilmakbar/claude-memory-kit","ref":"v0.3.1"}}}}' \
+  > "$h/.claude/settings.json"
+out=$(pin_run "$h")
+printf '%s' "$out" | grep -q 'pin has no effect' \
+  && ok "a pin below the cache names the blocking directory" \
+  || fail "backward pin went unreported: $(printf '%s' "$out" | grep -i ahead | head -1)"
+printf '%s' "$out" | grep -q "cache/memory-kit/memory-kit/0.3.2" \
+  && ok "…and the directory it names is the newer one" \
+  || fail "the blocking directory is not named"
+rm -rf "$h"
+# The same cache, unpinned: the development-shaped message, no dead-pin talk, and the nudge
+# to pin, because the checkout is on a tag and the marketplace source is remote.
+h=$(mktemp -d); mkdir -p "$h/.claude/plugins/cache/memory-kit/memory-kit/0.3.2"
+printf '{"enabledPlugins":{"memory-kit@memory-kit":true},"extraKnownMarketplaces":{"memory-kit":{"source":{"source":"github","repo":"sabilmakbar/claude-memory-kit"}}}}' \
+  > "$h/.claude/settings.json"
+out=$(pin_run "$h")
+printf '%s' "$out" | grep -q 'pin has no effect' \
+  && fail "an unpinned cache was reported as a dead pin" \
+  || ok "unpinned, the same cache is not called a dead pin"
+printf '%s' "$out" | grep -q 'the marketplace is not pinned' \
+  && ok "a remote unpinned marketplace gets the pin command" \
+  || fail "no pin nudge for a remote unpinned marketplace"
+rm -rf "$h"
+# A directory marketplace is the development install: nudging it to pin would end the edit
+# loop, so the nudge must stay quiet there while everything else still speaks.
+h=$(mktemp -d); mkdir -p "$h/.claude/plugins/cache/memory-kit/memory-kit/0.3.2"
+printf '{"enabledPlugins":{"memory-kit@memory-kit":true},"extraKnownMarketplaces":{"memory-kit":{"source":{"source":"directory","path":"/tmp/x"}}}}' \
+  > "$h/.claude/settings.json"
+out=$(pin_run "$h")
+printf '%s' "$out" | grep -q 'the marketplace is not pinned' \
+  && fail "a directory marketplace was nudged to pin" \
+  || ok "a directory marketplace is never nudged to pin"
+rm -rf "$h"
+
+# No pin: nothing to say, on the same untagged checkout that just spoke.
+h=$(mktemp -d); mkdir -p "$h/.claude"; printf '{}' > "$h/.claude/settings.json"
+printf '%s' "$(pin_run "$h")" | grep -q 'not on a tag\|pinned to' \
+  && fail "an unpinned marketplace produced a pin report" \
+  || ok "no pin, no pin report"
+rm -rf "$h" "$(dirname "$PC")"
 
 # Uninstall states the plugin order. Removing the marketplace before the plugin leaves
 # `plugin uninstall` unable to resolve it, so the order is the instruction, not the list.
@@ -386,6 +498,65 @@ else
     && ok "plugin.json $pv matches the newest released changelog entry" \
     || fail "plugin.json says $pv, newest released changelog entry is $newest"
 fi
+
+# The README pins the install to a tag. A tag left behind by a release sends every new
+# reader to an old version, and nothing else in the repo would notice: the commands still
+# work, they just install the wrong thing. Pinned to the newest released heading, the same
+# value install.sh compares the plugin against.
+rt=$(grep -oE '(--branch |claude-memory-kit(\.git#|@))v[0-9]+\.[0-9]+\.[0-9]+' "$KIT/README.md" \
+  | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sort -u)
+rel=$(grep -E '^## ' "$KIT/CHANGELOG.md" | grep -viE 'unreleased' | head -1 \
+  | sed 's/^## *//;s/[^0-9.].*//')
+# Without this the check passes by silence the moment the commands are reworded.
+[ "$(printf '%s\n' "$rt" | grep -c .)" -ge 1 ] \
+  && ok "the README install names a pinned tag" \
+  || fail "no pinned tag found in the README install commands"
+[ "$rt" = "v$rel" ] \
+  && ok "the README tag v$rel matches the newest release" \
+  || fail "the README pins $(printf '%s' "$rt" | tr '\n' ' ')but the newest release is v$rel"
+
+# The shipping moment is the tag, so that is where the pairing must hold: plugin.json, the
+# README pin and the newest changelog heading all equal to the tag itself. Checked only when
+# HEAD sits exactly on a tag, because mid-cycle those values legitimately differ from any tag
+# and a release PR carrying the next number must not trip anything before its tag exists.
+# tests.yml runs the suite on tag pushes with fetch-tags, which is what arms this on the one
+# run that matters. Returns the mismatches, empty when paired or when HEAD is untagged.
+tag_pairing() {  # <root> -> mismatch lines on stdout
+  local root="$1" t tv pv rel rt
+  t=$(git -C "$root" describe --tags --exact-match HEAD 2>/dev/null) || return 0
+  tv=${t#v}
+  pv=$(jq -r .version "$root/.claude-plugin/plugin.json" 2>/dev/null)
+  rel=$(grep -E '^## ' "$root/CHANGELOG.md" 2>/dev/null | grep -viE 'unreleased' | head -1 \
+    | sed 's/^## *//;s/[^0-9.].*//')
+  rt=$(grep -oE '(--branch |claude-memory-kit(\.git#|@))v[0-9]+\.[0-9]+\.[0-9]+' "$root/README.md" 2>/dev/null \
+    | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sort -u | tr '\n' ' ' | sed 's/ $//')
+  [ "$pv" = "$tv" ]  || echo "plugin.json says $pv on tag $t"
+  [ "$rel" = "$tv" ] || echo "newest changelog heading is $rel on tag $t"
+  [ "$rt" = "$t" ]   || echo "README pins '$rt' on tag $t"
+}
+out=$(tag_pairing "$KIT")
+[ -z "$out" ] \
+  && ok "tag pairing holds (or HEAD is between tags, where it does not apply)" \
+  || fail "tag pairing broken: $out"
+# The fixture pair, in a clone so the real checkout is never tagged by a test. A tag that
+# nothing else agrees with must be named three times; align all three files and the same tag
+# must pass. Without the second half, a tag_pairing that always complains would also pass.
+TPC=$(mktemp -d)/c
+git clone -q "$KIT" "$TPC" 2>/dev/null
+git -C "$TPC" -c user.email=t@e -c user.name=t tag -f v9.9.9 >/dev/null 2>&1
+out=$(tag_pairing "$TPC")
+[ "$(printf '%s\n' "$out" | grep -c 'on tag v9.9.9')" -eq 3 ] \
+  && ok "a mismatched tag is named by all three checks" \
+  || fail "mismatched tag v9.9.9 produced: $out"
+( cd "$TPC" \
+  && jq '.version="9.9.9"' .claude-plugin/plugin.json > pj.tmp && mv pj.tmp .claude-plugin/plugin.json \
+  && perl -pi -e 's/^## Unreleased$/## 9.9.9/' CHANGELOG.md \
+  && perl -pi -e 's/v0\.[0-9]+\.[0-9]+/v9.9.9/g if /--branch |claude-memory-kit(\.git#|@)/' README.md )
+out=$(tag_pairing "$TPC")
+[ -z "$out" ] \
+  && ok "an aligned tag passes the pairing" \
+  || fail "aligned tag still complained: $out"
+rm -rf "$(dirname "$TPC")"
 
 bare=$(cd "$KIT" && grep -rnE '(^|[^:a-z-])/(save-memory|review-memories|initialize-memory|review-feedback-proposals)\b' \
   . --exclude-dir=.git --exclude=CHANGELOG.md 2>/dev/null || true)
