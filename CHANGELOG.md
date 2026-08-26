@@ -92,6 +92,21 @@ says nothing about the other.
   limitation is also stated on every install rather than only the first.
   [#71](https://github.com/sabilmakbar/claude-memory-kit/pull/71)
 
+- The install gate keeps the suite output that explains its own refusal. It discarded the run and
+  advised re-running the suite by hand, which works at a terminal and fails in the two cases that
+  matter: on a CI runner the log held the refusal line and nothing to act on, and an intermittent
+  failure that passes on a hand re-run destroys the only evidence there was. The refusal now names
+  the failing assertions and the tally, keeps the whole run in a file and names its path, and says
+  so explicitly when the suite failed without printing a failure line at all. A passing run deletes
+  its log. Reported in [#72](https://github.com/sabilmakbar/claude-memory-kit/issues/72).
+  [#73](https://github.com/sabilmakbar/claude-memory-kit/pull/73)
+
+- The gate's own test reaches the gate. It ran the installer with no `--mode`, so the run refused
+  on the missing mode instead, which also exits 1 and also deploys nothing: both assertions passed
+  without the gate ever running. The fixture now passes `--mode=managed` and asserts the run got
+  as far as the gate before checking what the gate did.
+  [#73](https://github.com/sabilmakbar/claude-memory-kit/pull/73)
+
 ## 0.3.1
 
 ### Added

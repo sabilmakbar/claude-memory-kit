@@ -930,7 +930,9 @@ check "unreachable origin: miner run still succeeds" 0 $?
 # one is a deliberate act. Together these two checks do the job claude-session-kit
 # gives its `CS_*` prefix, which is why the knobs here keep their existing names.
 echo "config.example inventory:"
-NOT_KNOBS="CLAUDE_MEMORY_KIT_INSTALL_GATED CLAUDE_CONFIG_DENYLIST CLAUDE_PROJECT_DIR"
+# TMPDIR is the platform's, not ours: the gate log goes where the system says temp files
+# go. Listing it here rather than in config.example keeps it out of the knobs a user sets.
+NOT_KNOBS="CLAUDE_MEMORY_KIT_INSTALL_GATED CLAUDE_CONFIG_DENYLIST CLAUDE_PROJECT_DIR TMPDIR"
 undeclared=""
 for k in $(grep -rhE '\$\{[A-Z][A-Z0-9_]*:-' "$KIT/scripts" "$KIT/hooks" "$KIT/core" \
              "$KIT/guardrail/pre-commit" "$KIT/install.sh" 2>/dev/null \
@@ -1754,13 +1756,49 @@ cp -R "$KIT/scripts" "$GK/scripts"; cp -R "$KIT/core" "$GK/core"
 cp -R "$KIT/hooks" "$GK/hooks"; cp -R "$KIT/tests" "$GK/tests"
 cp -R "$KIT/guidance" "$GK/guidance"; cp -R "$KIT/skills" "$GK/skills"; cp -R "$KIT/guardrail" "$GK/guardrail"
 cp "$KIT/install.sh" "$KIT/settings.snippet.json" "$GK/"
-printf '#!/bin/sh\nexit 1\n' > "$GK/tests/run.sh"
+# The stub prints a failure line the way the real suite does, so the gate has something
+# to surface. A stub that printed nothing would let a gate that discards output pass.
+printf '#!/bin/sh\necho "  ✗ a named assertion failed"\necho "passed 1, failed 1"\nexit 1\n' > "$GK/tests/run.sh"
 GH2="$TMP/home10"; mkdir -p "$GH2/.claude"
 # clear the guard explicitly: when THIS suite is itself run by an installer's gate,
 # the fixture must not inherit the skip and let the sabotaged kit through
-HOME="$GH2" CLAUDE_MEMORY_KIT_INSTALL_GATED= bash "$GK/install.sh" >/dev/null 2>&1
-check "gate: failing tests refuse to deploy" 1 $?
+# --mode is required before the gate is reached. Without it the run refuses on the
+# missing mode instead, which also exits 1 and also deploys nothing, so the two
+# assertions below passed for years without the gate ever running.
+gout=$(HOME="$GH2" CLAUDE_MEMORY_KIT_INSTALL_GATED= bash "$GK/install.sh" --mode=managed 2>&1); grc=$?
+echo "$gout" | grep -q "gating on the test suite" \
+  && ok "gate: the run reaches the gate at all" || fail "the run never reached the gate"
+check "gate: failing tests refuse to deploy" 1 $grc
 [ ! -d "$GH2/.claude/memory-kit" ] && ok "gate: nothing was deployed" || fail "gate deployed anyway"
+
+# Issue #72: the refusal has to carry why. A CI runner keeps only this output, and an
+# intermittent failure cannot be reproduced by hand afterwards.
+echo "$gout" | grep -q 'a named assertion failed' \
+  && ok "gate: the refusal names the failing assertion" || fail "gate discarded the failure line"
+echo "$gout" | grep -q 'passed 1, failed 1' \
+  && ok "gate: and carries the suite's own tally" || fail "gate dropped the summary line"
+glog=$(echo "$gout" | sed -n 's/.*full output: //p')
+[ -n "$glog" ] && [ -f "$glog" ] \
+  && ok "gate: names a log file that exists" || fail "gate named no readable log ($glog)"
+grep -q 'a named assertion failed' "$glog" 2>/dev/null \
+  && ok "gate: and the log holds the whole run" || fail "gate log missing the failure"
+
+# A suite that fails silently is the case the change exists for, so it must not print
+# an empty diagnosis. Same fixture, stub reverted to the old output-free failure.
+printf '#!/bin/sh\nexit 1\n' > "$GK/tests/run.sh"
+GH3="$TMP/home10b"; mkdir -p "$GH3/.claude"
+sout=$(HOME="$GH3" CLAUDE_MEMORY_KIT_INSTALL_GATED= bash "$GK/install.sh" --mode=managed 2>&1)
+echo "$sout" | grep -q 'no failure line this run' \
+  && ok "gate: a silent failure says so rather than printing nothing" || fail "gate silent on a silent failure"
+
+# The passing path leaves no file behind, or every install litters TMPDIR.
+before=$(ls "${TMPDIR:-/tmp}" 2>/dev/null | grep -c '^memory-kit-gate\.')
+printf '#!/bin/sh\nexit 0\n' > "$GK/tests/run.sh"
+GH4="$TMP/home10c"; mkdir -p "$GH4/.claude"
+HOME="$GH4" CLAUDE_MEMORY_KIT_INSTALL_GATED= bash "$GK/install.sh" --mode=managed >/dev/null 2>&1
+after=$(ls "${TMPDIR:-/tmp}" 2>/dev/null | grep -c '^memory-kit-gate\.')
+[ "$after" -le "$before" ] \
+  && ok "gate: a passing run leaves no log behind" || fail "gate littered TMPDIR ($before -> $after)"
 
 # ---------- uninstall: symmetric with what install wires ----------
 # Everything the installer writes outside its own tree has to come back out, and the
