@@ -1133,7 +1133,7 @@ echo "install.sh version floor:"
 # every side effect, not just the exit code: a floor check that refuses AFTER
 # deploying the tree would pass an exit-code-only test.
 VF="$TMP/vfloor"; mkdir -p "$VF/.claude/sessions"
-printf '{"version":"2.1.100"}' > "$VF/.claude/sessions/a.json"
+printf '{"version":"2.1.74"}' > "$VF/.claude/sessions/a.json"
 printf '{"model":"opus"}\n' > "$VF/.claude/settings.json"
 cp "$VF/.claude/settings.json" "$TMP/vfloor.before"
 HOME="$VF" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
@@ -1142,12 +1142,13 @@ cmp -s "$VF/.claude/settings.json" "$TMP/vfloor.before" \
   && ok "the refusal leaves settings.json byte-identical" || fail "settings.json changed on refusal"
 [ -d "$VF/.claude/memory-kit" ] && fail "the refusal deployed the tree" || ok "the refusal deploys nothing"
 [ -d "$VF/.claude/skills" ] && fail "the refusal created skills/" || ok "the refusal creates no directories"
-# the floor version itself must install: an off-by-one here locks out the oldest
-# build the key was ever seen in, which is the one this floor was derived from
+# The pair above and below are the measured boundary, one version apart: 2.1.74 has
+# autoMemoryDirectory (O22) but not the plugin mechanism (O24), and 2.1.75 has both.
+# An off-by-one either way is visible here rather than on somebody's machine.
 VG="$TMP/vfloor-ok"; mkdir -p "$VG/.claude/sessions"
-printf '{"version":"2.1.205"}' > "$VG/.claude/sessions/a.json"
+printf '{"version":"2.1.75"}' > "$VG/.claude/sessions/a.json"
 out=$(HOME="$VG" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed 2>&1)
-echo "$out" | grep -q "Claude Code 2.1.205" && echo "$out" | grep -qv "older than" \
+echo "$out" | grep -q "Claude Code 2.1.75" && echo "$out" | grep -qv "older than" \
   && ok "the floor version itself installs" || fail "floor version refused ($out)"
 # an unreadable version is not a refusal. The stub keeps this hermetic: without it the
 # result depends on whether the machine running the tests has claude on PATH.
@@ -1996,6 +1997,21 @@ shape_case "one of our events holding non-groups: refuses" \
 [ ! -d "$h/.claude/memory-kit" ] \
   && ok "and refuses before deploying anything" || fail "deployed despite an unusable event"
 rm -rf "$h"
+
+echo "docs/INTERNALS.md numbering:"
+# The record's own rule is that numbers are never reused, and two entries had both taken O13
+# before this check existed. Nothing else would have caught it: a duplicate reads fine in
+# isolation, and a decision citing the number silently gains a second referent.
+dupes=$(grep -oE '^### O[0-9]+' "$KIT/docs/INTERNALS.md" | sort | uniq -d | tr '\n' ' ')
+[ -z "$dupes" ] && ok "every observation number is used once" \
+  || fail "reused observation number(s): $dupes"
+# Control: the same pattern must be able to report a duplicate, or the assertion is vacuous.
+dup_fixture=$(mktemp)
+printf '### O1. a\n### O1. b\n' > "$dup_fixture"
+[ -n "$(grep -oE '^### O[0-9]+' "$dup_fixture" | sort | uniq -d)" ] \
+  && ok "…and the check can see one when it is there" \
+  || fail "the duplicate check cannot detect a duplicate"
+rm -f "$dup_fixture"
 
 echo
 echo "passed $PASS, failed $FAIL"

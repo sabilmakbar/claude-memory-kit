@@ -5,10 +5,13 @@
 > `DESIGN-*.md` records, which cite these by number. For how the kit behaves, read
 > [FLOWS.md](FLOWS.md).
 
-    Observed against:   Claude Code 2.1.222 (O1–O7) · 2.1.228 (O8–O12) · 2.1.234 (O13–O19) · 2.1.237 (O20)
+    Observed against:   Claude Code 2.1.222 (O1–O7) · 2.1.228 (O8–O12) · 2.1.234 (O13–O19, O21)
+                        2.1.237 (O20) · 2.1.74 through 2.1.246, every published build (O22–O24)
     Platform:           macOS, VS Code extension
-    Last re-verified:   2026-08-12 (O1–O7) · 2026-08-13 (O8–O12) · 2026-08-19 (O13–O17) · 2026-08-20 (O18–O20)
-    Needs to re-run:    jq, find, a machine with an installed Claude Code
+    Last re-verified:   2026-08-12 (O1–O7) · 2026-08-13 (O8–O12) · 2026-08-19 (O13–O17, O21)
+                        2026-08-20 (O18–O20) · 2026-08-26 (O22–O24)
+    Needs to re-run:    jq, find, a machine with an installed Claude Code; O22 and O23 need
+                        only npm and grep, and run on any machine
 
 Nothing here is promised by Claude Code. Every entry carries the date and version it was seen
 on, the surface it was read from, how it was checked, and what you need to re-run the check, so
@@ -271,6 +274,61 @@ about an hour later with no session having run in between, which suggests it is 
 rather than kept. The consequence does not rest on that: the kit's symlink is in the directory
 Claude Code does not read for memory, so the project does not get the central store either way.
 
+### O22. `autoMemoryDirectory` first appears in the published build 2.1.74
+
+    First observed:     2026-08-26 · 2.1.74 through 2.1.246
+    Surface:            published npm package
+    How:                binary search over the 495 published versions of
+                        `@anthropic-ai/claude-code`, installing each into a temporary prefix
+                        and reading the shipped executable with `grep -a`; seven probes, and a
+                        control string matched none of the same builds
+    Needs:              npm, grep
+    Checkable:          automated (`tests/version-probe.sh <version>`)
+    Supersedes:         O12, which reported no lower bound because the oldest build on that
+                        machine was 2.1.205
+
+2.1.73 is the last build without it, so the key is 131 published versions older than the
+previous floor suggested. O12 was not wrong: it recorded honestly that no lower bound could be
+found from the builds installed on one machine. The registry holds every build, so the question
+it left open is answerable by anyone.
+
+**This is a different surface from O12, and weaker.** The extension ships
+`claude-code-settings.schema.json`, which declares what that build accepts. The npm package
+ships one compiled executable instead, so this reads a string out of it. Finding the string
+shows the build carries the name, not that it honours the key. Absence is the strong signal,
+which is the direction the automated check relies on.
+
+### O23. Published builds carry the hook event names the installer writes
+
+    First observed:     2026-08-26 · 2.1.74 through 2.1.246
+    Surface:            published npm package
+    How:                same probe as O22; `PreToolUse`, `SessionStart` and `UserPromptSubmit`
+                        each found with `grep -a`, and a control string found in none
+    Needs:              npm, grep
+    Checkable:          automated (`tests/version-probe.sh <version>`)
+
+`install.sh` keys its hooks by these names, and a build that renamed one would not error. The
+hooks would be wired and never fire, so the kit would go quiet rather than break, which is the
+failure that takes longest to notice. The names are in every build back to the O22 floor.
+
+### O24. The plugin mechanism first appears in the published build 2.1.75
+
+    First observed:     2026-08-26 · 2.1.75 through 2.1.246
+    Surface:            published npm package
+    How:                same binary search as O22, seven probes, looking for
+                        `extraKnownMarketplaces`; 2.1.74 is the last build without it
+    Needs:              npm, grep
+    Checkable:          automated (`tests/version-probe.sh <version>`)
+
+One version after the setting in O22, which is why `install.sh` can carry a single floor rather
+than two. The kit needs both: the setting to point auto memory at one store, and the plugin
+mechanism to deliver the skills. 2.1.75 is the oldest build that has them together, and it is the
+installer's floor.
+
+The same caveat as O22 applies, and harder here. A build carrying the marketplace key is not
+proof that `claude plugin install` behaves as it does today; it dates the mechanism rather than
+describing it.
+
 ### O13. Transcripts and memory derive from different paths, so the two directories can differ
 
     First observed:     2026-08-13 · 2.1.228
@@ -295,7 +353,7 @@ sanitizing alone would not have been enough.
 
 ## The plugin surface
 
-### O13. A marketplace is a registry entry; a remote source is cloned, a path is not
+### O21. A marketplace is a registry entry; a remote source is cloned, a path is not
 
     First observed:     2026-08-19 · 2.1.234
     Surface:            ~/.claude/plugins/marketplaces/<name>/
@@ -483,7 +541,8 @@ find, which the kit treats as a blocked feature rather than an error.
     Checkable:          automated
 
 No lower bound was found, because the key predates the oldest build available to test. A version
-gate for it would therefore never fire on any machine that can run the kit at all.
+gate for it would therefore never fire on any machine that can run the kit at all. O22 found that
+bound by going to the registry rather than to one machine: 2.1.74.
 
 The schema sits next to the binary and declares what that build accepts, which makes it better
 evidence than the documentation for questions of the form "does this version know this key". It

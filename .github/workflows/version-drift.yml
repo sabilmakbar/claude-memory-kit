@@ -23,8 +23,8 @@ on:
         # backlog and slowly falls behind the newest build as well.
         default: '32'
       since:
-        description: 'oldest version worth probing (2.1.205 is what INTERNALS.md claims for)'
-        default: '2.1.205'
+        description: 'oldest version worth probing (2.1.74 is the first build carrying autoMemoryDirectory)'
+        default: '2.1.74'
       oldest_first:
         description: 'backfill the tail instead of covering the head'
         type: boolean
@@ -56,7 +56,7 @@ jobs:
         id: pick
         env:
           COUNT: ${{ github.event.inputs.count || '32' }}
-          SINCE: ${{ github.event.inputs.since || '2.1.205' }}
+          SINCE: ${{ github.event.inputs.since || '2.1.74' }}
           OLDEST_FIRST: ${{ github.event.inputs.oldest_first || 'false' }}
         run: |
           set -u
@@ -147,6 +147,8 @@ jobs:
 
           if gh pr view "$INDEX_BRANCH" --json number >/dev/null 2>&1; then
             echo "existing pull request updated by the push"
+          elif [ "${ALLOW_PR:-1}" = "0" ]; then
+            echo "::notice::rows are on $INDEX_BRANCH; open the pull request by hand"
           else
             gh pr create --base main --head "$INDEX_BRANCH" \
               --title "Record which Claude Code builds have been probed" \
@@ -154,7 +156,8 @@ jobs:
 
           Later runs append here rather than opening a second pull request, and they read this branch instead of main, so nothing is probed twice while this is waiting.
 
-          Red rows also open their own issue; a run with none is routine and can be merged without reading every line."
+          Red rows also open their own issue; a run with none is routine and can be merged without reading every line." \
+            || echo "::notice::could not open the pull request; the rows are safe on $INDEX_BRANCH. Enable Settings > Actions > General > Allow GitHub Actions to create and approve pull requests, or open it by hand."
           fi
 
       - name: Say so when a build fails a check
@@ -178,6 +181,13 @@ jobs:
             echo
             echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           } > /tmp/body.md
-          gh issue create \
-            --title "version drift: $(cut -f1 /tmp/red.tsv | tr '\n' ' ' | sed 's/ $//')" \
-            --body-file /tmp/body.md
+          # Named individually up to five, counted past that: a sweep below the floor can
+          # turn every build red at once, and a title listing 128 versions is unreadable.
+          n=$(wc -l < /tmp/red.tsv | tr -d ' ')
+          if [ "$n" -le 5 ]; then
+            title="version drift: $(cut -f1 /tmp/red.tsv | tr '\n' ' ' | sed 's/ $//')"
+          else
+            title="version drift: $n builds, $(head -1 /tmp/red.tsv | cut -f1) to $(tail -1 /tmp/red.tsv | cut -f1)"
+          fi
+          gh issue create --title "$title" --body-file /tmp/body.md \
+            || echo "::notice::could not open the issue; the rows are on $INDEX_BRANCH"
