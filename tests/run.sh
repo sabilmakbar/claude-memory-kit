@@ -126,9 +126,11 @@ plug_case "installed and current: nothing to do" "nothing to do" \
   'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/'"$PREL"'"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
 # The pair that gives the comparison its discriminating power: one cache below the release
 # and one above it must reach different branches. Before this, both said "stale" and both
-# advised an update, which cannot help the one that is already ahead.
+# advised an update, which cannot help the one that is already ahead. The ahead case seeds a
+# literal 9.9.9 rather than plugin.json's version, because at a release commit plugin.json
+# equals the newest heading and a fixture seeded from it silently becomes the current case.
 plug_case "installed ahead of the release: says ahead, not stale" "ahead of" \
-  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/'"$PWANT"'"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
+  'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/9.9.9"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
 plug_case "installed behind the release: still says stale" "but the newest release is" \
   'mkdir -p "$P/plugins/cache/memory-kit/memory-kit/0.0.1"; printf "{\"enabledPlugins\":{\"memory-kit@memory-kit\":true}}" > "$P/settings.json"'
 # A pin outranks the release, because it is the only version that install can receive.
