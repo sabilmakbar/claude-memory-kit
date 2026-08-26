@@ -168,8 +168,8 @@ Three checks keep the kit honest: a fixture suite gates every install and every 
 smoke suite checks the kit against your machine's real data after each Claude Code update,
 and a weekly workflow probes every newly published Claude Code build for what the
 installer depends on. The story is in [DESIGN-health.md](docs/DESIGN-health.md); the
-probed-build ledger is `tests/versions-checked.tsv`, covering every published build from
-2.0.0 to 2.1.246, and it is where the installer's version floor comes from.
+probed-build ledger is `tests/versions-checked.tsv`, always current on `main`, and it is
+where the installer's version floor comes from.
 
 ## FAQ and troubleshooting
 
