@@ -43,18 +43,9 @@ Claude Code config, shared with every other tool you have installed. The kit wri
 because registering a hook is the only way the memory index can rebuild itself on every
 prompt.
 
-Two things make that safe, and neither is good intentions. The test suite runs first and refuses
-to install if anything fails. Then, before anything at all is deployed, your file is checked: if
-it cannot be parsed, or if the part the kit merges into is not the shape it expects, the run
-stops and names the key to fix, with nothing installed and your file untouched. Past that point
-the merge only ever adds. A second run adds nothing, settings unrelated to hooks survive, a hook
-belonging to another tool is reported rather than claimed, an event the kit does not wire is
-never even read, and a run that fails later puts the previous contents back. Add `--dry-run` to
-see the plan before any of it happens.
-
-[DESIGN-install.md](docs/DESIGN-install.md) says why each of those rules exists, including why
-the shape check deliberately stops at the events this kit wires rather than judging the rest of
-your file.
+The test suite runs first and refuses to install if anything fails, the merge into your file
+only ever adds, and `--dry-run` shows the plan before anything happens. The full safety rules,
+and why each exists, are in [DESIGN-install.md](docs/DESIGN-install.md).
 
 You need `jq`. The miner and sync also use `git` and the `claude` CLI. Details in
 [DEPENDENCIES.md](docs/DEPENDENCIES.md).
@@ -71,49 +62,19 @@ claude plugin marketplace add sabilmakbar/claude-memory-kit@v0.3.1
 claude plugin install memory-kit@memory-kit
 ```
 
-**Why the tag appears twice.** Both halves carry a version, and both default to tracking the
-default branch rather than a release. Leave the tag off and you get whatever `main` held that
-day, filed under the version number `main` declared, which is the next release's number rather
-than one that shipped. Pinning both halves to the same tag is what makes the version this kit
-reports mean something.
+**Both steps are needed.** The plugin brings the skills, `/memory-kit:save-memory` and so on.
+`install.sh` brings the hooks, the kit tree and the config those skills read. Order does not
+matter.
 
-To move to a newer release, repeat those commands with the new tag, then
-`claude plugin update memory-kit@memory-kit`. Pin forward, not back: a pin below a version
-already in the plugin cache has no effect, because the newest cached version is the one that
-loads, and `install.sh` names the blocking directory when it sees that state.
+**The tag appears twice on purpose.** Without it, both halves track the default branch instead
+of a release. To upgrade, repeat the commands with the new tag, then
+`claude plugin update memory-kit@memory-kit`. Pin forward, not back. The reasons and the traps
+are in [DESIGN-install.md](docs/DESIGN-install.md), D12.
 
-Two forms pin the plugin half: `owner/repo@v0.3.1` as above, or
-`https://github.com/sabilmakbar/claude-memory-kit.git#v0.3.1`. Writing `@v0.3.1` on the URL
-form does not work, and fails with a git error that names a repository nobody asked for.
+**`--mode` is asked once and remembered.** `managed` means the kit makes the change,
+`advisory` means it only suggests. More on it below.
 
-Tracking `main` instead is a reasonable choice if you want unreleased work. `install.sh` says
-so when it sees it, rather than calling your install stale.
-
-Editing `extraKnownMarketplaces` in `settings.json` by hand is not an install path. Claude Code
-reads that key when a session starts, so `claude plugin install` reports the plugin missing
-until then. Use `claude plugin marketplace add`.
-
-Re-running `install.sh` from an untagged checkout leaves any pin in place, so the skills stay
-on the pinned tag while the hooks and kit tree move ahead of it.
-
-**Both steps are needed, and neither works alone.** The plugin gives you the skills, namespaced
-`/memory-kit:save-memory` and so on, so they cannot collide with a skill of the same name from
-somewhere else. `install.sh` gives you the hooks, the kit tree and the config that those skills
-read: install only the plugin and the skills appear but fail on their first use, because the
-guidance file and config they open are not there yet. Order does not matter.
-
-If an older version of this kit installed the skills into `~/.claude/skills`, a re-run of
-`install.sh` retires those copies. It only removes a copy it recognises as its own; anything with
-local edits, or written by another tool, is reported and left alone.
-
-`--mode` is required the first time and remembered afterwards. It says who makes changes to your
-memory: `managed` is the kit, `advisory` is you. There is more on it below, and running without
-it prints the choice rather than guessing.
-
-The installer runs its own test suite first and refuses to install if anything fails.
-It then places the kit in `~/.claude/memory-kit`, adds its hooks to your Claude Code
-settings without touching hooks from other tools, and keeps any memory files you already
-have. Re-running it is always safe, and is also how you upgrade (see below).
+Re-running the installer is always safe, and is also how you upgrade (see below).
 
 Start a new Claude Code session, then confirm the index got built:
 
@@ -138,13 +99,9 @@ project are invisible in the next. The kit makes them global by setting `autoMem
 in your `settings.json`, which names the folder directly. Every project then reads and writes
 the same store.
 
-It writes the **user** setting, the one in `~/.claude/settings.json`, which is why it covers every
-project at once. Claude Code also reads `autoMemoryDirectory` from project and local settings. The
-installer never writes those, and the kit does not read them back, so a per-project store added by
-hand would be used by Claude Code and missed by everything here: the index, the write guard, the
-reminders and the commit guardrail would all keep watching the global store. If you want a project
-to keep its own memory alongside the global one, that is a feature request rather than a setting to
-add yourself.
+It writes the **user** setting, so it covers every project at once. Do not add a per-project
+value by hand: Claude Code would use it, and everything in this kit would keep watching the
+global store. The scopes and what reads them are in [DESIGN-memory.md](docs/DESIGN-memory.md).
 
 The installer prints which of these four situations it found:
 
@@ -155,27 +112,12 @@ The installer prints which of these four situations it found:
 | Several memory stores | Lists them and never merges them. What happens next depends on the mode |
 | No memory at all | Uses `~/.claude/memory` |
 
-Several stores is normal rather than unusual: auto memory is on by default, so a folder appears
-in any repository where Claude decided something was worth saving. Folding several into one is a
-merge, not a move, and a merge done by guesswork can bury a store you wanted. So the kit refuses
-to guess.
-
-**The mode says who makes the change**, and you have to choose it. `managed` means the kit does
-it, and says what it is about to do first. `advisory` means the kit tells you what it thinks
-should change and you make the change yourself, so nothing about your memory is written at all.
-Neither mode is ever fully automatic over your own memory files, because those hold your
-preferences and an automated edit goes wrong in ways you would not see.
-
-A first install refuses until you say which one, and lists what it found first so the choice is
-informed:
-
-```bash
-~/claude-memory-kit/install.sh --mode=managed
-```
-
-It is asked once. The answer is recorded, so upgrading stays a plain re-run with no flag.
-Passing `--mode` again changes it and says so. The installer will not pick for you, because this
-is the setting that decides whether the kit may rewrite your memory.
+Several stores is normal: auto memory is on by default, so folders appear wherever Claude
+saved something. Merging them by guesswork could bury a store you wanted, so the kit refuses to
+guess and the mode decides who acts. `managed`: the kit makes the change and says so first.
+`advisory`: the kit tells you and you do it yourself. The installer will not pick for you,
+because this is the setting that decides whether the kit may rewrite your memory
+([DESIGN-install.md](docs/DESIGN-install.md), D11).
 
 **To undo any of it, delete the `autoMemoryDirectory` key.** Every project goes back to its own
 folder. `./install.sh --uninstall` does it for you, and only when the kit was the one that wrote
@@ -312,42 +254,16 @@ Then update the plugin for the skills:
 claude plugin update memory-kit@memory-kit      # restart to apply
 ```
 
-`/plugin update memory-kit@memory-kit` may do the same thing where your host provides that
-slash command. An interactive CLI session does provide it, confirmed on 2.1.246. The VS Code
-extension does not, and neither does `claude -p`, so the CLI form above is the one that works
-in every host. If `claude` is not on your `PATH` it ships inside the extension:
+The CLI form works in every host. If `claude` is not on your `PATH`, or you want the VS Code
+routes, see [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
-```bash
-~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude plugin update memory-kit@memory-kit
-```
+You do not have to track any of this yourself. The installer says which of the four plugin
+states you are in and names the command that fixes it. Halves on different releases are
+reported once a day. A pull that leaves the deployed tree behind is reported the moment it
+happens. The mechanics are in [DESIGN-health.md](docs/DESIGN-health.md) and
+[DESIGN-install.md](docs/DESIGN-install.md).
 
-Use `~/.vscode-server/extensions/...` on a remote or WSL host.
-
-In VS Code there are two other routes, both verified in the extension manifest rather than
-guessed: the command palette entry **Claude Code: Install Plugin**, and a URI handler, which
-accepts `vscode://anthropic.claude-code/install-plugin?plugin=<name>&marketplace=<owner/repo>`.
-Neither is a chat slash command.
-
-You do not have to remember which half is behind. The installer reads the plugin's
-installed version and says which of the four cases you are in: not installed at all,
-marketplace added but plugin missing, installed and matching this checkout, or installed
-at an older version with the update command to run. `--dry-run` reports it too.
-
-If the two halves do end up on different releases, a session start says so once a day, naming
-the half that is behind and the one command that brings it up.
-
-You do not have to remember to re-run it either. A pull only updates the checkout, and the
-deployed tree at `~/.claude/memory-kit` stays on whatever the last install put there, which
-used to go unnoticed until something behaved like the old version. From a development
-checkout the kit now says so at the moment the gap opens: `git pull`, a branch switch and
-`git pull --rebase` each check whether the files the installer deploys have changed since the
-deployed commit, and print the differing files and `bash install.sh` if they have. It compares
-content rather than version labels, so a pull that only touched the README or a design doc
-stays quiet. Nothing to enable: the hooks live in `guardrail/`, which `install.sh` points
-`core.hooksPath` at, so they arrive with the pull that brings them.
-
-It runs the test suite first and refuses to deploy a tree the tests reject. Then it replaces
-kit code only, and carries the rest forward:
+The installer replaces kit code only, and carries the rest forward:
 
 | Kept as it is | Why it survives |
 |---|---|
@@ -356,10 +272,8 @@ kit code only, and carries the rest forward:
 | your edited `config` | seeded once; later installs refresh `config.example` only |
 | other tools' hooks in `settings.json` | the hook merge is append-only and deduped per hook |
 
-Two things it does rather than just preserve. A knob that has been renamed since your last
-install gets rewritten in place in your `config`, keeping its value, and it tells you when it
-does. And `config.example` is refreshed every time, so knobs added since your last upgrade
-show up there with their defaults.
+Renamed knobs are rewritten in your `config` with their values kept, and `config.example` is
+refreshed so new knobs show up with their defaults.
 
 ## Is it working?
 
