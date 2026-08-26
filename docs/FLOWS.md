@@ -95,3 +95,19 @@ that changes nothing and keeps the proposal pending.
 
 The window advances only after the tracker is confirmed rewritten, which is why an
 interrupted run costs you a delay rather than a day of messages.
+
+## What speaks up uninvited
+
+Everything above runs quietly. Three checks break silence on their own, each at most once a
+day, and each says the one command that fixes what it found:
+
+- **After a pull in a development checkout**: if the files the installer deploys changed since
+  the deployed commit, the differing files are named, with `bash install.sh` as the fix.
+- **At session start, daily**: if the deployed kit and the installed plugin sit on different
+  releases, the half that is behind is named.
+- **On GitHub, weekly**: every newly published Claude Code build is probed for what
+  `install.sh` wires itself to, and a build missing something opens an issue rather than a
+  message here.
+
+The reasoning for each is in [DESIGN-health.md](DESIGN-health.md) and
+[DESIGN-install.md](DESIGN-install.md).

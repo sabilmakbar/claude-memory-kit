@@ -132,3 +132,11 @@ you.
 It is tracked per machine as well as globally, so if a machine has never reviewed its own
 mount-local memories the note says that too. Like every other notice, it appears once a day
 at most and never blocks anything.
+
+## When it talks first
+
+The kit stays quiet unless something needs a decision or a fix. You will see a message
+without asking in a few cases: the daily proposal from the miner, a note that the deployed
+kit and the plugin are on different releases, and, in a development checkout, a note that a
+pull changed files the installer deploys. Each names the command that resolves it, at most
+once a day. [FLOWS.md](FLOWS.md) lists them all.

@@ -124,6 +124,30 @@ and retires its own copy of that proposal.
 If the two machines have genuinely different content in the same file, that is a normal merge
 conflict. Resolve it in the file, and remember the guardrail runs on the resulting commit.
 
+## The installer says the plugin is "ahead of" the newest release
+
+Not a fault. The skills came from a source that is not a release: an unpinned marketplace
+serves the default branch, and a local path serves a working tree. On a development checkout
+this is the expected state. To make the number meaningful, pin the marketplace to a tag; the
+README's install shows the form, and D12 in [DESIGN-install.md](DESIGN-install.md) holds the
+reasoning.
+
+## The installer says a pin "has no effect"
+
+The marketplace pin names a version below one already in the plugin cache, and the newest
+cached version is the one that loads. Nothing removes cache directories automatically, so the
+pin stays dead until you act. Remove the directory the installer names, then
+`claude plugin install memory-kit@memory-kit`, or pin forward to a release at or above the
+cached version. Background: O19 and O26 in [INTERNALS.md](INTERNALS.md).
+
+## I edited a skill, but the running copy never changes
+
+`claude plugin update` compares version labels and never content, so an edit under an
+unchanged version silently stays out of the loaded copy, even from a marketplace that points
+at your working tree. The loop that works is in CONTRIBUTING.md: `claude plugin uninstall`,
+then `claude plugin install`, then a new session. Measured as O27 in
+[INTERNALS.md](INTERNALS.md).
+
 ## Elsewhere
 
 **A push is rejected, or commits land under the wrong account.** Covered in the README, in
