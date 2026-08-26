@@ -60,6 +60,11 @@ says nothing about the other.
   2.1.75, so the kit now installs on 130 releases it previously refused, and the refusal names
   both requirements instead of only the setting.
 
+- The `/plugin` slash command is settled rather than unconfirmed. An interactive CLI session
+  provides it, the VS Code extension does not, and `claude -p` does not resolve it either, so the
+  gate turns on mode as well as host. The docs still lead with `claude plugin update`, which works
+  in every host. Recorded in `docs/INTERNALS.md` O20.
+
 ### Tested
 
 - The two halves check, every reporting case paired with a control that must stay silent:
@@ -74,12 +79,7 @@ says nothing about the other.
   checked against what the installer actually deploys into a sandbox, so a file added to the
   installer and not to the list fails the suite instead of going unwatched.
 
-### Changed
-
-- The `/plugin` slash command is settled rather than unconfirmed. An interactive CLI session
-  provides it, the VS Code extension does not, and `claude -p` does not resolve it either, so the
-  gate turns on mode as well as host. The docs still lead with `claude plugin update`, which works
-  in every host. Recorded in `docs/INTERNALS.md` O20.
+### Fixed
 
 - The install marker keeps its `.git/info/exclude` line, and a later install repairs a marker
   that has stopped being true. `--uninstall` kept the marker on purpose and removed its exclude
