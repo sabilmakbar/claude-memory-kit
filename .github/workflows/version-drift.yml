@@ -27,8 +27,8 @@ on:
         # backlog and slowly falls behind the newest build as well.
         default: '32'
       since:
-        description: 'oldest version worth probing (2.1.74 is the first build carrying autoMemoryDirectory)'
-        default: '2.1.74'
+        description: 'oldest version to probe; empty means the supported floor'
+        default: ''
       oldest_first:
         description: 'backfill the tail instead of covering the head'
         type: boolean
@@ -49,6 +49,12 @@ env:
   # branch, reused: later runs append to it, and the index is read from it rather than
   # from main, so a run never re-probes builds that are waiting in an unmerged branch.
   INDEX_BRANCH: ci/version-index
+  # The oldest build that can pass this probe: autoMemoryDirectory arrives in 2.1.74 (O22).
+  # Defined once, because it is two things at the same time, the default floor for a run and
+  # the line below which a red row is history rather than drift. A second copy of a number
+  # like this is the drift the guardrail exemption list already taught this repo about.
+  # install.sh refuses below 2.1.75 instead, because it needs the plugin mechanism too (O24).
+  FLOOR: '2.1.74'
 
 jobs:
   probe:
@@ -61,11 +67,18 @@ jobs:
         env:
           REF: ${{ github.ref_name }}
           COUNT: ${{ github.event.inputs.count || '32' }}
-          SINCE: ${{ github.event.inputs.since || '2.1.74' }}
+          SINCE: ${{ github.event.inputs.since }}
           OLDEST_FIRST: ${{ github.event.inputs.oldest_first || 'false' }}
         run: |
           set -u
+          SINCE="${SINCE:-$FLOOR}"
           npm view @anthropic-ai/claude-code versions --json | jq -r '.[]' | sort -V > /tmp/all.txt
+          # Everything at or above the floor, for the alarm step below: a build predating
+          # what the kit reads is history, and reporting it as drift trains people to ignore
+          # the one channel that means something broke.
+          fstart=$(grep -n "^${FLOOR}\$" /tmp/all.txt | cut -d: -f1 || true)
+          if [ -n "${fstart:-}" ]; then sed -n "${fstart},\$p" /tmp/all.txt > /tmp/atfloor.txt
+          else cp /tmp/all.txt /tmp/atfloor.txt; fi
           # sort -V put them in release order, so the window is everything from SINCE down
           # the file. An unknown SINCE means probe the lot rather than silently nothing.
           start=$(grep -n "^${SINCE}\$" /tmp/all.txt | cut -d: -f1 || true)
@@ -161,7 +174,7 @@ jobs:
             -m "record $(wc -l < /tmp/rows.tsv | tr -d ' ') probed Claude Code build(s)"
           git push -u origin "$INDEX_BRANCH"
 
-          if gh pr view "$INDEX_BRANCH" --json number >/dev/null 2>&1; then
+          if [ -n "$(gh pr list --head "$INDEX_BRANCH" --state open --json number --jq '.[0].number // empty')" ]; then
             echo "existing pull request updated by the push"
           elif [ "${ALLOW_PR:-1}" = "0" ]; then
             echo "::notice::rows are on $INDEX_BRANCH; open the pull request by hand"
@@ -182,8 +195,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -u
-          awk -F'\t' '$3 == "fail"' /tmp/rows.tsv > /tmp/red.tsv
-          [ -s /tmp/red.tsv ] || { echo "all green"; exit 0; }
+          awk -F'\t' '$3 == "fail"' /tmp/rows.tsv | sort -V > /tmp/red-all.tsv
+          # Below the floor a red row states a fact already recorded as an observation, so it
+          # is kept in the index and left out of the alarm.
+          if [ -s /tmp/red-all.tsv ]; then
+            grep -F -f <(sed 's/$/\t/' /tmp/atfloor.txt) /tmp/red-all.tsv > /tmp/red.tsv || : > /tmp/red.tsv
+          else
+            : > /tmp/red.tsv
+          fi
+          below=$(( $(wc -l < /tmp/red-all.tsv) - $(wc -l < /tmp/red.tsv) ))
+          [ "$below" -gt 0 ] && echo "::notice::$below build(s) below $FLOOR failed as expected and are recorded, not reported"
+          [ -s /tmp/red.tsv ] || { echo "nothing failed at or above $FLOOR"; exit 0; }
           {
             echo "\`tests/version-probe.sh\` did not get what it expected from these builds:"
             echo
