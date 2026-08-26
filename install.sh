@@ -1147,6 +1147,30 @@ case "$PLUG_STATE" in
     echo "  a version behind means the skills are the older copy, even though the hooks, tree"
     echo "  and config this run just deployed are current." ;;
 esac
+# The pin and this checkout are two independent choices, and they can disagree with nothing
+# reporting it later: a tree between tags carries a version git describe cannot reduce to
+# digits, so mk_kit_release returns rc 1 and the daily halves notice stays quiet. Read-only
+# like the block above, so a preview says it too. Reports rather than rewrites: the pin is
+# the user's, and which half to move is theirs to pick.
+KIT_TAG=""; KIT_IS_GIT=""
+if git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1; then
+  KIT_IS_GIT=1
+  KIT_TAG=$(git -C "$REPO" describe --tags --exact-match HEAD 2>/dev/null || true)
+fi
+case "$PLUG_PIN" in
+  v[0-9]*.[0-9]*.[0-9]*|[0-9]*.[0-9]*.[0-9]*)
+    if [ -z "$KIT_IS_GIT" ]; then :   # an archive tree has no version to compare the pin to
+    elif [ -z "$KIT_TAG" ]; then
+      echo "  the marketplace is pinned to $PLUG_PIN and this checkout is not on a tag."
+      echo "  The skills stay at $PLUG_PIN while the hooks and the tree move past it, and"
+      echo "  nothing reports the gap later: a development version has no number to compare."
+      echo "  Re-add the marketplace at the tag you want, or drop the pin to follow main."
+    elif [ "${KIT_TAG#v}" != "${PLUG_PIN#v}" ]; then
+      echo "  the marketplace is pinned to $PLUG_PIN but this checkout is $KIT_TAG:"
+      echo "      claude plugin marketplace add sabilmakbar/claude-memory-kit@$KIT_TAG"
+      echo "  puts both halves on one release. Without it they sit on different ones."
+    fi ;;
+esac
 # Whether this checkout is itself behind, from refs already fetched — no network call, so an
 # offline install is unaffected. The plugin lives in its own clone under plugins/marketplaces,
 # independent of this one, so a stale checkout and a stale plugin are two separate facts.

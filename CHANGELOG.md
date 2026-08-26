@@ -22,6 +22,14 @@ says nothing about the other.
 
 ### Added
 
+- `install.sh` reports a marketplace pin that disagrees with the checkout it is run from.
+  Two cases: the pin names a different tag, where it names the `marketplace add` command that
+  puts both halves on one release, and the pin sits on a checkout that is not on a tag, where
+  the skills stay pinned while the hooks and the tree move past them. The second is the case nothing
+  else catches, because a development version has no number for the daily halves notice to
+  compare, so that notice stays silent. Read-only, so `--dry-run` reports it too, and it
+  reports rather than rewrites: the pin belongs to whoever set it.
+
 - A weekly workflow probes published Claude Code builds for what `install.sh` wires itself to.
   `tests/version-probe.sh` installs one version, reads the shipped executable and records a
   verdict: that the build reports its own version, knows `autoMemoryDirectory`, and carries

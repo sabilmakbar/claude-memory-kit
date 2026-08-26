@@ -190,6 +190,53 @@ printf '%s' "$out" | grep -q 'commit(s) behind' \
   && fail "a current checkout claimed to be behind" || ok "integration: a current checkout says nothing"
 rm -rf "$h" "$(dirname "$CB")"
 
+# The pin against the checkout. Four states, and the two silent ones matter as much as the
+# two that speak: a report that fires when the halves agree is noise, and one that stays
+# quiet when they disagree is the silent divergence this exists to catch.
+PC=$(mktemp -d)/c
+git clone -q "$KIT" "$PC" 2>/dev/null
+cp "$KIT/install.sh" "$PC/install.sh"
+pin_home() {   # <ref> -> a HOME whose settings.json pins the marketplace to <ref>
+  local h; h=$(mktemp -d); mkdir -p "$h/.claude"
+  printf '{"extraKnownMarketplaces":{"memory-kit":{"source":{"source":"github","repo":"sabilmakbar/claude-memory-kit","ref":"%s"}}}}' \
+    "$1" > "$h/.claude/settings.json"
+  printf '%s' "$h"
+}
+pin_run() {    # <home> -> installer output from the tagged clone
+  ( cd "$PC" && HOME="$1" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 \
+      bash install.sh --dry-run --mode=advisory 2>&1 </dev/null )
+}
+git -C "$PC" tag -f v9.9.9 >/dev/null 2>&1
+h=$(pin_home v0.3.1)
+out=$(pin_run "$h")
+printf '%s' "$out" | grep -q 'pinned to v0.3.1 but this checkout is v9.9.9' \
+  && ok "pin against a different tag is reported" \
+  || fail "a pin disagreeing with the checkout tag went unreported"
+printf '%s' "$out" | grep -q 'marketplace add sabilmakbar/claude-memory-kit@v9.9.9' \
+  && ok "…naming the command that agrees them" || fail "no marketplace add command offered"
+rm -rf "$h"
+# Same pin, checkout now ON that tag: must go quiet.
+git -C "$PC" tag -d v9.9.9 >/dev/null 2>&1; git -C "$PC" tag -f v0.3.1 >/dev/null 2>&1
+h=$(pin_home v0.3.1)
+printf '%s' "$(pin_run "$h")" | grep -q 'pinned to' \
+  && fail "a pin matching the checkout tag was still reported" \
+  || ok "a pin matching the checkout tag says nothing"
+rm -rf "$h"
+# Pinned, checkout between tags: the silent-divergence case, because a development version
+# has no number for the halves check to compare.
+git -C "$PC" tag -d v0.3.1 >/dev/null 2>&1
+h=$(pin_home v0.3.1)
+printf '%s' "$(pin_run "$h")" | grep -q 'not on a tag' \
+  && ok "a pin on an untagged checkout is reported" \
+  || fail "a stale pin on an untagged checkout went unreported"
+rm -rf "$h"
+# No pin: nothing to say, on the same untagged checkout that just spoke.
+h=$(mktemp -d); mkdir -p "$h/.claude"; printf '{}' > "$h/.claude/settings.json"
+printf '%s' "$(pin_run "$h")" | grep -q 'not on a tag\|pinned to' \
+  && fail "an unpinned marketplace produced a pin report" \
+  || ok "no pin, no pin report"
+rm -rf "$h" "$(dirname "$PC")"
+
 # Uninstall states the plugin order. Removing the marketplace before the plugin leaves
 # `plugin uninstall` unable to resolve it, so the order is the instruction, not the list.
 h=$(mktemp -d)
