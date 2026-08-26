@@ -224,6 +224,17 @@ needs no flag. Memory files are not touched by the upgrade.
   `$HOME` seeded from the real `settings.json` reverted the real store. `--purge-marker` now
   sweeps rather than reading that setting, so it still works after a plain uninstall. [#42](https://github.com/sabilmakbar/claude-memory-kit/pull/42)
 
+### Tested
+
+- The guardrail suite proves its fixture is complete before trusting any of its checks. The
+  fixture had twice been missing a directory the hook needs, first `core/` and then `hooks/`, and
+  each time the pre-commit hook announced a skip and every check below it passed by not running.
+  Both times an unrelated negative test happened to catch it, which is luck rather than coverage.
+  A canary now runs first: it stages a file that must be blocked, requires exit 1, and requires
+  that no skip was announced. This section is added after the fact. The change shipped inside
+  [#50](https://github.com/sabilmakbar/claude-memory-kit/pull/50) alongside the audit, and only
+  the audit was written down at the time. [#50](https://github.com/sabilmakbar/claude-memory-kit/pull/50)
+
 ### Documentation
 
 - The install output and the README name the settings scope the kit writes, and say what that
