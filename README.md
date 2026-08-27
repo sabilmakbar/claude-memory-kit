@@ -40,14 +40,14 @@ You need `jq`. The miner and sync also use `git` and the `claude` CLI. Details i
 [DEPENDENCIES.md](docs/DEPENDENCIES.md).
 
 ```bash
-git clone --branch v0.4.0 https://github.com/sabilmakbar/claude-memory-kit.git ~/claude-memory-kit
+git clone --branch v0.4.1 https://github.com/sabilmakbar/claude-memory-kit.git ~/claude-memory-kit
 ~/claude-memory-kit/install.sh --mode=managed
 ```
 
 Then add the skills, which ship as a Claude Code plugin:
 
 ```bash
-claude plugin marketplace add sabilmakbar/claude-memory-kit@v0.4.0
+claude plugin marketplace add sabilmakbar/claude-memory-kit@v0.4.1
 claude plugin install memory-kit@memory-kit
 ```
 
