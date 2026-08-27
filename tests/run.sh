@@ -414,9 +414,10 @@ watched(){ # watched <repo-relative-path>
 }
 unwatched=""
 while IFS= read -r rel; do
-  # config is seeded from config.example and never overwritten, .kit-version is written by the
-  # installer, denylist.local holds private terms. None comes from a tracked file to diff.
-  case "$rel" in config|.kit-version|guardrail/denylist.local) continue;; esac
+  # config is seeded from config.example and never overwritten, .kit-version and .kit-source
+  # are written by the installer, denylist.local holds private terms. None comes from a
+  # tracked file to diff.
+  case "$rel" in config|.kit-version|.kit-source|guardrail/denylist.local) continue;; esac
   watched "$rel" || unwatched="$unwatched $rel"
 done < <(cd "$h/.claude/memory-kit" && find . -type f | sed 's|^\./||')
 [ -z "$unwatched" ] && ok "kit-drift.sh watches every file the installer deploys" \
@@ -2023,6 +2024,11 @@ git -C "$UH2/.claude/memory" ls-files -v MEMORY.md | grep -q '^S' \
   && ok "install: records the kit version" || fail "no .kit-version written"
 [ "$(tr -d '[:space:]' < "$UH2/.claude/memory-kit/.kit-version" 2>/dev/null)" != "" ] \
   && ok "install: the recorded version is not blank" || fail ".kit-version is whitespace only"
+# The halves notice can only name a real path if the installer says where it ran from.
+# This install ran from the checkout, so the record must be exactly that path.
+[ "$(cat "$UH2/.claude/memory-kit/.kit-source" 2>/dev/null)" = "$KIT" ] \
+  && ok "install: records the install source" \
+  || fail ".kit-source missing or wrong: $(cat "$UH2/.claude/memory-kit/.kit-source" 2>/dev/null)"
 mine=$(jq '[.hooks[]?[]?.hooks[]?.command | select(contains("memory-kit/"))] | length' "$UH2/.claude/settings.json")
 [ "$mine" -ge 8 ] && ok "install: our hooks wired ($mine entries)" || fail "hooks not wired ($mine)"
 grep -q "other-tool" "$UH2/.claude/settings.json" \
@@ -2179,6 +2185,25 @@ esac
 # command.
 [ "$out" != "$out2" ] && ok "the two directions produce different advice" \
   || fail "both directions produced the same sentence"
+
+# With the install source on record, the notice upgrades "your checkout" to the real
+# path. A recorded path whose install.sh is gone must fall back to the generic wording,
+# not name a dead path. Still in the kit-behind state from above, the only direction
+# that names install.sh.
+SRCD="$TMP/halves-src"; mkdir -p "$SRCD"; : >"$SRCD/install.sh"; chmod +x "$SRCD/install.sh"
+printf '%s\n' "$SRCD" >"$TKV/.kit-source"
+out3=$(halves)
+case "$out3" in
+  *"re-run $SRCD/install.sh") ok "install source on record: the notice names the real path" ;;
+  *) fail "recorded source not named: ${out3:-silence}" ;;
+esac
+rm -rf "$SRCD"
+out4=$(halves)
+case "$out4" in
+  *"your checkout") ok "recorded source gone: the generic wording returns" ;;
+  *) fail "a dead source path was not handled: ${out4:-silence}" ;;
+esac
+rm -f "$TKV/.kit-source"
 
 # Nothing removes an old cache directory, so a machine that has updated keeps several and
 # the newest is the one the harness loads. Paired with the reporting case above, where

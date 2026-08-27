@@ -5,7 +5,7 @@
 > [FLOWS.md](FLOWS.md). For setup, the README.
 
     Status:            Implemented
-    Last revised:      2026-08-26
+    Last revised:      2026-08-27
     Verified against:  Claude Code 2.1.222
     Supersedes:        docs/DESIGN.md, split by feature 2026-08-12
 
@@ -285,6 +285,39 @@ README tag left behind by a release would send every new reader to an old versio
 holds it to the newest released changelog heading and fails both on a drifted tag and on a README
 with no pin at all.
 
+## D13. The installer records where it ran from
+
+The halves notice's fix-it command was the one advice the hook side could not make concrete.
+Hooks run from the deployed tree, a file copy with no path back to the clone it came from, so
+the notice could only say "re-run install.sh from your checkout". Measured on 2026-08-27: a
+fresh session asked to upgrade this machine followed the plugin updater's "restart to apply" to
+completion, never ran the installer, and the generic wording named nothing it could execute,
+because the checkout was not at the path the README assumes.
+
+So install.sh writes the absolute path of the checkout it ran from into `.kit-source`, beside
+`.kit-version`, and the halves notice says `re-run <path>/install.sh` while that file still
+exists. Recorded only from a git checkout: the deployed tree carries its own `install.sh` for
+re-verification and self-uninstall, and recording that copy would make the advice circular, so
+a rerun from the deployed tree keeps the last checkout on record. A recorded path that stops
+resolving falls back to the generic wording, because advice naming a dead path is worse than
+advice naming no path.
+
+**Failure posture.** An archive install has no checkout to record and keeps the generic wording
+for good, the same honesty rule as `.kit-version` recording `unknown`. The record is a hint for
+one sentence, not state anything depends on: nothing reads it but the notice, and deleting it
+costs a word of precision, not a feature.
+
+## D14. No moving `latest` tag: the README's concrete tag is held current by a test
+
+A `latest` tag would let Getting started stop naming versions. Rejected, because the halves
+check stands on `git describe`. Measured with a `latest` tag beside a release tag on the same
+commit: describe returns `latest` in every arrangement tried (lightweight, annotated, and under
+`--exact-match`), so `.kit-version` records a non-numeric label, the release accessor rejects
+it (DESIGN-health.md D4), and the halves check goes silent on exactly the machines that
+installed the documented way. The staleness a moving tag would solve is already solved
+detectively: the suite fails when the README names anything but the newest released changelog
+heading, so a stale README tag cannot survive a release with CI green.
+
 ## What would reopen this
 
 - **D11, if the installer ever needs to run unattended on a fresh machine.** A required argument
@@ -315,6 +348,9 @@ with no pin at all.
 - **D8, if a mechanism appeared that reached all four execution contexts.** The file exists
   because environment variables do not, and `settings.json` is not ours.
 - **D9, if the migration ever misses a case.** It is the whole reason the rename was acceptable.
+- **D14, if the version record ever stops deriving from `git describe`.** The rejection is an
+  interaction with the describe-based `.kit-version`, not a preference; a different provenance
+  for the version record would need the moving tag weighed again.
 
 ## Failure posture
 

@@ -972,6 +972,17 @@ else
   _mk_kv=$(git -C "$REPO" describe --tags --always --dirty 2>/dev/null) || _mk_kv=""
   printf '%s\n' "${_mk_kv:-unknown}" > "$DEST/.kit-version"
 fi
+# record where the kit was installed from, so hook-side notices can name a real path
+# instead of "your checkout". Only a git checkout is recorded: the deployed tree also
+# carries install.sh (for re-verification and self-uninstall), and recording $DEST would
+# make the advice circular, so a rerun from the deployed tree keeps the last checkout on
+# record. The reader checks the recorded install.sh still exists before naming it, which
+# covers a checkout that has since moved or been deleted.
+if [ "$DRY" -eq 1 ]; then
+  printf '  would: record the install source in %s\n' "$DEST/.kit-source"
+elif git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1; then
+  printf '%s\n' "$REPO" > "$DEST/.kit-source"
+fi
 # knobs: the example refreshes every install so new knobs show up; the live config is
 # seeded once and never overwritten, the same deal denylist.local gets above. Both sit
 # at the tree root, which the wipe above does not touch.
