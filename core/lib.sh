@@ -225,8 +225,18 @@ mk_halves_mismatch() {
         printf 'the skills are at %s while the hooks and the kit tree are at %s: run claude plugin update memory-kit@memory-kit' \
             "$_mk_hp" "$_mk_hk"
     else
-        printf 'the hooks and the kit tree are at %s while the skills are at %s: re-run install.sh from your checkout' \
-            "$_mk_hk" "$_mk_hp"
+        # install.sh records its source checkout in .kit-source, so the advice can name
+        # a runnable path. Named only while its install.sh still exists: a checkout that
+        # has moved or been deleted falls back to the generic wording, because advice
+        # naming a dead path is worse than advice naming no path.
+        _mk_src=$(cat "$HOME/.claude/memory-kit/.kit-source" 2>/dev/null) || _mk_src=""
+        if [ -n "$_mk_src" ] && [ -x "$_mk_src/install.sh" ]; then
+            printf 'the hooks and the kit tree are at %s while the skills are at %s: re-run %s/install.sh' \
+                "$_mk_hk" "$_mk_hp" "$_mk_src"
+        else
+            printf 'the hooks and the kit tree are at %s while the skills are at %s: re-run install.sh from your checkout' \
+                "$_mk_hk" "$_mk_hp"
+        fi
     fi
 }
 
