@@ -18,6 +18,22 @@ that was tagged, and the tag is what you check out to go back to it. Versions mo
 from claude-session-kit: the two share conventions, neither depends on the other, and a bump in one
 says nothing about the other.
 
+## Unreleased
+
+### Added
+
+- `install.sh` records the checkout it ran from in `.kit-source`, and the daily halves notice
+  names `re-run <path>/install.sh` instead of "re-run install.sh from your checkout", falling
+  back to the generic wording when the recorded path no longer has an installer
+  ([#80](https://github.com/sabilmakbar/claude-memory-kit/pull/80)).
+
+### Fixed
+
+- The README's upgrade steps work on the clone the install section creates: `git pull` cannot
+  move a tag-pinned clone, so the steps now fetch tags and check out the new tag, no longer
+  assume `~/claude-memory-kit`, and say that the plugin updater's "restart to apply" covers
+  the skills half only ([#79](https://github.com/sabilmakbar/claude-memory-kit/pull/79)).
+
 ## 0.4.0
 
 ### Added
