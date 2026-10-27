@@ -679,6 +679,37 @@ grun
 check "a term after a comment line is still read" 1 $?
 rm -f "$GH/denylist.local"
 
+# Credentials: one hit and one near miss per kind. The near misses matter as much,
+# because a pattern loose enough to catch prose gets the hook bypassed with --no-verify.
+# Every fake is assembled at run time, so no token-shaped literal sits in this file for
+# a secret scanner to flag ($e is empty and only breaks up a literal). Fields:
+# label|hit|near miss.
+r36=$(printf 'a1B2%.0s' 1 2 3 4 5 6 7 8 9); e=""
+while IFS='|' read -r label hit miss; do
+  for v in hit miss; do
+    case "$v" in hit) tok="$hit"; want=1; does=blocks ;; miss) tok="$miss"; want=0; does=passes ;; esac
+    printf -- '---\nname: feedback_cred\ndescription: d\nmetadata:\n  type: feedback\n  source: direct\n---\nuse %s here\n\n**Why:** it matters.\n' "$tok" > feedback_cred.md
+    git add feedback_cred.md
+    out=$(HOME="$GHOME" "$GH/pre-commit" 2>&1); rc=$?
+    check "$label: the $v $does" "$want" "$rc"
+    if [ "$v" = hit ]; then
+      echo "$out" | grep -q "feedback_cred.md: $label" \
+        && ok "…and the message names the kind and the file" || fail "kind not named ($out)"
+      echo "$out" | grep -qF -- "$tok" \
+        && fail "the message echoes the secret" || ok "…without printing the secret"
+    fi
+  done
+done <<EOF
+private key|-----BEGIN RSA PRIVATE${e} KEY-----|-----BEGIN PUBLIC KEY-----
+GitHub token|ghp_$r36|ghp_${r36:0:20}
+GitHub token|github_pat_${r36:0:22}|github_pat_short
+AWS access key id|AKIA${e}ABCDEFGHIJKLMNOP|akia${e}abcdefghijklmnop
+Slack token|xoxb-${e}1234567890-abcdef|xoxb-${e}12345
+Google API key|AIza${r36:0:35}|AIza${r36:0:30}
+JSON web token|eyJ${e}hbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.c2lnbmF0dXJlLXZhbHVl|eyJ${e}hbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0
+EOF
+git rm -q --cached feedback_cred.md && rm feedback_cred.md
+
 # The frontmatter lint is gated on being IN the store; the PII scan is not. Outside
 # the store the lint used to run anyway, which is why an exemption list existed at
 # all and why it grew a copy per check.

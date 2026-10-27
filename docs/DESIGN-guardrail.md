@@ -19,6 +19,10 @@ The built-in patterns catch any home path, any email, and a mount section, so th
 carries no identifying information and can be public. Employer names and other private terms come
 from an untracked `denylist.local` or an environment variable.
 
+Common credential formats are built in too: private key headers and GitHub, AWS, Slack, Google
+and JWT tokens. They are matched case-sensitively, and the message names the kind and the file
+but never prints the line, because a secret echoed into a terminal has leaked a second time.
+
 It runs as the memory repo's pre-commit hook and enforces both leak-safety and the file
 conventions. **Commit time is the last moment before content becomes irreversible history**,
 which is why the check sits there rather than at push time.

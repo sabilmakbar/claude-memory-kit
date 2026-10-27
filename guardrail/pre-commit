@@ -3,7 +3,8 @@
 # Scans every staged .md file — memory repos keep files at the root or under memory/, so
 # no path layout is assumed. Non-markdown infra is excluded.
 #
-# Built-in patterns are GENERIC (any home path, any email, a mount section) so THIS file
+# Built-in patterns are GENERIC (any home path, any email, a mount section, common
+# credential formats) so THIS file
 # carries no identifying info. Add your own private terms (employer, mount names, ...) via:
 #   - env var:  export CLAUDE_CONFIG_DENYLIST="term1|term2"   (regex, |-separated)
 #   - and/or an untracked denylist.local next to this hook    (one term/regex per line)
@@ -25,6 +26,38 @@ files=()
 while IFS= read -r f; do files+=("$f"); done \
   < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.md$')
 [ "${#files[@]}" -eq 0 ] && exit 0
+
+# Credentials, by kind: label|ERE, one per line. Matched case-sensitively, unlike the
+# patterns below, because every one of these formats fixes its case and folding it would
+# let ordinary prose match. Named rather than printed: a key needs revoking, not just
+# unstaging, and echoing the matched line would copy the secret into terminal logs and
+# any transcript of the session that ran the commit.
+secrets='private key|-----BEGIN [A-Z ]*PRIVATE KEY-----
+GitHub token|gh[pousr]_[A-Za-z0-9]{36,}
+GitHub token|github_pat_[A-Za-z0-9_]{20,}
+AWS access key id|AKIA[0-9A-Z]{16}
+Slack token|xox[baprs]-[A-Za-z0-9-]{10,}
+Google API key|AIza[0-9A-Za-z_-]{35}
+JSON web token|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'
+creds=""
+for f in "${files[@]}"; do
+  fadded="$(git diff --cached -U0 --no-color -- "$f" | grep -E '^\+' | grep -vE '^\+\+\+')"
+  while IFS= read -r spec; do
+    printf '%s\n' "$fadded" | grep -qE -e "${spec#*|}" || continue
+    case "$creds" in *"   $f: ${spec%%|*}"*) continue ;; esac   # two GitHub shapes, one line
+    creds="$creds   $f: ${spec%%|*}
+"
+  done <<< "$secrets"
+done
+if [ -n "$creds" ]; then
+  { echo "✖ commit blocked — staged content looks like a credential:"
+    printf '%s' "$creds"
+    echo ""
+    echo "The matching lines are not shown, so the secret is not copied into logs as well."
+    echo "Remove it, and revoke it if it was ever real. Override (discouraged): git commit --no-verify"
+  } >&2
+  exit 1
+fi
 
 added="$(git diff --cached -U0 --no-color -- "${files[@]}" | grep -E '^\+' | grep -vE '^\+\+\+')"
 # drop known-safe SSH remote URLs (git@github.com etc.) so they don't trip the email pattern
