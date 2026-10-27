@@ -18,6 +18,47 @@ that was tagged, and the tag is what you check out to go back to it. Versions mo
 from claude-session-kit: the two share conventions, neither depends on the other, and a bump in one
 says nothing about the other.
 
+## Unreleased
+
+### Added
+
+- A memory store can keep its global guidelines in `AGENTS.md`. Claude Code has no user-level
+  `AGENTS.md`, so the store's copy is imported from `~/.claude/CLAUDE.md` with `@`; the kit
+  treats `AGENTS.md` as store scaffolding like `CLAUDE.md`, and the miner and the review skill
+  read guidelines through that import ([#85](https://github.com/sabilmakbar/claude-memory-kit/pull/85)).
+
+- The commit guardrail blocks common credential formats: private key headers and GitHub, AWS,
+  Slack, Google API and JWT tokens. They are matched case-sensitively so prose cannot trip
+  them, and the message names the kind and the file without printing the line, so the secret
+  is not copied into terminal logs as well ([#85](https://github.com/sabilmakbar/claude-memory-kit/pull/85)).
+
+### Fixed
+
+- The README and DEPENDENCIES.md say what reaches the network. They claimed nothing leaves the
+  machine and no network calls, while the daily miner sends a size-capped digest of what you
+  typed, your memory files and your global guidelines to Claude, and pulls the memory store
+  when it has a remote. Both now say so and name `MEMORY_KIT_NO_MINER` as the switch that
+  turns both off ([#85](https://github.com/sabilmakbar/claude-memory-kit/pull/85)).
+
+- `--uninstall` unsets the development checkout's own `core.hooksPath=guardrail`, found from
+  the script's location or from `.kit-source`, and only while it still holds the value install
+  wrote. It used to undo the memory store's and leave the checkout's behind ([#85](https://github.com/sabilmakbar/claude-memory-kit/pull/85)).
+
+- The headless miner run is bounded on stock macOS. It was wrapped in `timeout` only when that
+  command existed, so on a Mac without coreutils it had no limit; a shell watchdog now applies
+  the same ten minutes ([#85](https://github.com/sabilmakbar/claude-memory-kit/pull/85)).
+
+- A memory file with a space in its name is one file. The index build, the stamp report and
+  the commit lint word-split their file lists, so such a file dropped out of the index and
+  passed the lint unjudged ([#85](https://github.com/sabilmakbar/claude-memory-kit/pull/85)).
+
+- The review and initialize skills write scratch files with `mktemp` and remove them, instead
+  of fixed names under `/tmp` ([#85](https://github.com/sabilmakbar/claude-memory-kit/pull/85)).
+
+Also: probed-build ledger updates ([#82](https://github.com/sabilmakbar/claude-memory-kit/pull/82),
+[#83](https://github.com/sabilmakbar/claude-memory-kit/pull/83)) and a cross-reference in
+DESIGN-health.md D4 ([#84](https://github.com/sabilmakbar/claude-memory-kit/pull/84)).
+
 ## 0.4.1
 
 ### Added
