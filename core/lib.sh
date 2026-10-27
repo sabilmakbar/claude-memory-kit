@@ -55,7 +55,7 @@ mk_mounts_dir()   { printf '%s/.claude/memory-mounts' "$HOME"; }
 # guesses against it.
 mk_is_nonmemory() { # <basename> -> rc 0 when the file is store scaffolding, not a memory
     case "$1" in
-        MEMORY.md|README.md|CLAUDE.md) return 0 ;;
+        MEMORY.md|README.md|CLAUDE.md|AGENTS.md) return 0 ;;
         *) return 1 ;;
     esac
 }

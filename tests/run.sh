@@ -820,9 +820,10 @@ grep -q "Unindexed.*old-note.md" "$FH/.claude/memory/MEMORY.md" && ok "unindexed
 
 printf '# my repo\n' > "$FH/.claude/memory/README.md"
 printf '# guide\n' > "$FH/.claude/memory/CLAUDE.md"
+printf '# guide\n' > "$FH/.claude/memory/AGENTS.md"
 HOME="$FH" CLAUDE_PROJECT_DIR="$FH/proj" bash "$KIT/scripts/refresh-memory-index.sh" >/dev/null 2>&1
-grep "Unindexed" "$FH/.claude/memory/MEMORY.md" | grep -qE "README|CLAUDE" \
-  && fail "known docs wrongly flagged" || ok "README/CLAUDE.md exempt from unindexed warning"
+grep "Unindexed" "$FH/.claude/memory/MEMORY.md" | grep -qE "README|CLAUDE|AGENTS" \
+  && fail "known docs wrongly flagged" || ok "README/CLAUDE.md/AGENTS.md exempt from unindexed warning"
 
 # --- stamped-frontmatter reporting (issue #16, D7) ---
 # The pass used to strip these keys in place. It now names them and changes nothing:

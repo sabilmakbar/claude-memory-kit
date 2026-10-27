@@ -122,8 +122,9 @@ Copy anything worth keeping out of the backup, then delete it. From then on, pla
 `git pull` and `git push` in `~/.claude/memory` is how your machines share what they
 learn.
 
-Two finishing touches on each machine: link the repo's global `CLAUDE.md` if it ships one
-(`ln -sfn ~/.claude/memory/CLAUDE.md ~/.claude/CLAUDE.md`), and give the repo its own
+Two finishing touches on each machine: if the repo ships global guidelines, import them from
+`~/.claude/CLAUDE.md` (a file holding the line `@~/.claude/memory/AGENTS.md`, or `CLAUDE.md` if
+that is the name the repo uses), and give the repo its own
 commit identity (`git -C ~/.claude/memory config user.name` and `user.email`), so memory
 commits are attributed to you rather than to whatever this machine defaults to. If a push
 is rejected, or commits land under the wrong account, see
