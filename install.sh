@@ -728,6 +728,26 @@ if [ "$UNINSTALL" -eq 1 ]; then
     fi
   fi
 
+  # A development checkout gets core.hooksPath=guardrail too (see the install step
+  # below). Its hooks are tracked files, so nothing goes silent when the tree goes, but
+  # it is still a setting install made outside its own tree, and D7 says uninstall
+  # undoes exactly those. Two things can name the checkout: this script, when it runs
+  # from one, and .kit-source, when it runs from the deployed copy. Only the exact value
+  # install writes is unset; any other value was somebody else's choice.
+  src=$(cat "$DEST/.kit-source" 2>/dev/null || true)
+  [ "$src" = "$REPO" ] && src=""
+  for ck in "$REPO" "$src"; do
+    [ -n "$ck" ] && [ -d "$ck/.git" ] && command -v git >/dev/null 2>&1 || continue
+    hp=$(git -C "$ck" config --get core.hooksPath 2>/dev/null || true)
+    case "$hp" in
+      guardrail)
+        run git -C "$ck" config --unset core.hooksPath
+        echo "  unset core.hooksPath in $ck (the checkout's own guardrail, wired by install)" ;;
+      "") ;;
+      *) echo "  ! core.hooksPath in $ck is $hp, which is not ours, so it stays" ;;
+    esac
+  done
+
   # Knob settings live inside the tree, so they go with it, the same way session-kit
   # treats its own. Print any non-default line first, so a hand-tuned setup is
   # recoverable from the terminal rather than simply gone.

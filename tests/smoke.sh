@@ -32,7 +32,18 @@ exec </dev/null
 
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+# Rule 2 covers this checkout's git config too. Run from a checkout, the round trip in
+# section 4 ends in an uninstall that unsets the checkout's core.hooksPath=guardrail, so
+# put back whatever it held. From the deployed tree KIT has no .git, nothing here runs,
+# and git -C is never pointed at whatever repo might enclose it.
+KIT_HP=""; [ -e "$KIT/.git" ] && KIT_HP=$(git -C "$KIT" config --get core.hooksPath 2>/dev/null || true)
+kit_hp_restore() {
+  [ -e "$KIT/.git" ] || return 0
+  [ "$(git -C "$KIT" config --get core.hooksPath 2>/dev/null)" = "$KIT_HP" ] && return 0
+  if [ -n "$KIT_HP" ]; then git -C "$KIT" config core.hooksPath "$KIT_HP"
+  else git -C "$KIT" config --unset core.hooksPath; fi
+}
+trap 'rm -rf "$TMP"; kit_hp_restore' EXIT
 QUIET=0; [ "${1:-}" = "--quiet" ] && QUIET=1
 PASS=0; FAIL=0; SKIP=0
 

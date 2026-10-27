@@ -11,7 +11,19 @@ exec </dev/null
 
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+# The installer runs from this checkout throughout, and --uninstall unsets a checkout's
+# core.hooksPath when it still holds the guardrail install wired. Put back whatever this
+# checkout had, so running the suite never leaves its own commit guard disarmed. Only
+# when KIT has a .git of its own: from the deployed tree, git -C would walk up and write
+# into whatever repo happens to enclose it.
+KIT_HP=""; [ -e "$KIT/.git" ] && KIT_HP=$(git -C "$KIT" config --get core.hooksPath 2>/dev/null || true)
+kit_hp_restore() {
+  [ -e "$KIT/.git" ] || return 0
+  [ "$(git -C "$KIT" config --get core.hooksPath 2>/dev/null)" = "$KIT_HP" ] && return 0
+  if [ -n "$KIT_HP" ]; then git -C "$KIT" config core.hooksPath "$KIT_HP"
+  else git -C "$KIT" config --unset core.hooksPath; fi
+}
+trap 'rm -rf "$TMP"; kit_hp_restore' EXIT
 PASS=0; FAIL=0
 
 ok()   { PASS=$((PASS+1)); echo "  ✓ $1"; }
@@ -2104,6 +2116,29 @@ git -C "$UH3/.claude/memory" config core.hooksPath /somewhere/else   # install r
 out=$(HOME="$UH3" bash "$KIT/install.sh" --uninstall 2>&1)
 [ "$(git -C "$UH3/.claude/memory" config --get core.hooksPath)" = "/somewhere/else" ] \
   && ok "a foreign core.hooksPath is reported, not unset" || fail "unset someone else's hooksPath"
+
+# The checkout's own core.hooksPath=guardrail is install's too, so uninstall takes it back,
+# run from the checkout or from the deployed copy, which finds it through .kit-source. A
+# clone stands in for the checkout: run from $KIT, this would unset the real one.
+CK="$TMP/ck"; git clone -q "$KIT" "$CK" 2>/dev/null
+cp "$KIT/install.sh" "$CK/install.sh"
+CKH="$TMP/home-ck"; mkdir -p "$CKH/.claude"
+ck_install() { HOME="$CKH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$CK/install.sh" --mode=advisory >/dev/null 2>&1; }
+ck_hp() { git -C "$CK" config --get core.hooksPath 2>/dev/null || true; }
+ck_install
+[ "$(ck_hp)" = guardrail ] && ok "install: the checkout's own guardrail is wired" || fail "checkout hooksPath is [$(ck_hp)]"
+HOME="$CKH" bash "$CK/install.sh" --uninstall >/dev/null 2>&1
+[ -z "$(ck_hp)" ] && ok "uninstall from the checkout unsets its core.hooksPath" \
+  || fail "the checkout's hooksPath survived uninstall: $(ck_hp)"
+ck_install
+HOME="$CKH" bash "$CKH/.claude/memory-kit/install.sh" --uninstall >/dev/null 2>&1
+[ -z "$(ck_hp)" ] && ok "uninstall from the deployed copy finds the checkout through .kit-source" \
+  || fail "the deployed copy's uninstall left the checkout's hooksPath: $(ck_hp)"
+ck_install
+git -C "$CK" config core.hooksPath .githooks
+HOME="$CKH" bash "$CK/install.sh" --uninstall >/dev/null 2>&1
+[ "$(ck_hp)" = .githooks ] && ok "a checkout hooksPath install did not write stays" \
+  || fail "unset a checkout hooksPath that was not ours"
 
 # --dry-run must change nothing at all
 DH="$TMP/home-dry"; mkdir -p "$DH/.claude"

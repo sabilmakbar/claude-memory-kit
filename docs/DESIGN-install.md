@@ -102,6 +102,11 @@ when it points at our tree.
 
 It also clears the `skip-worktree` flag that hid `MEMORY.md`. Memory files are never touched.
 
+The development checkout's own `core.hooksPath=guardrail` goes too, found through the script's own
+location or, when run from the deployed copy, through `.kit-source` (D13). Nothing goes silent if
+it stays, since those hooks are tracked files, but install set it, so uninstall unsets it, and
+only while it still holds the value install wrote.
+
 The miner's tracker is kept by default because its rejection history is what stops a reinstall
 re-proposing what you refused. Two flags remove it, and both say what they are deleting.
 
