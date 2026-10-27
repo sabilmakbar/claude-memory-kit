@@ -1176,6 +1176,25 @@ done
 [ -z "$declared_internal" ] && ok "internal names stay out of the inventory" \
                             || fail "internal name offered as a knob:$declared_internal"
 
+echo "core/lib.sh mk_with_timeout:"
+# Forced onto the watchdog: a PATH holding only sleep and sh, so neither timeout nor
+# gtimeout can be found. That is stock macOS, the machine the fallback exists for, and
+# CI's ubuntu runner would otherwise only ever exercise GNU timeout.
+WB="$TMP/wdbin"; mkdir -p "$WB"
+ln -s "$(command -v sleep)" "$WB/sleep"; ln -s "$(command -v sh)" "$WB/sh"
+t0=$(date +%s)
+( . "$KIT/core/lib.sh"; PATH="$WB"; mk_with_timeout 1 sleep 30 ) 2>/dev/null; rc=$?
+dt=$(( $(date +%s) - t0 ))
+[ "$dt" -lt 10 ] && ok "watchdog: a command past the limit is stopped (${dt}s)" \
+  || fail "watchdog: a 1s limit took ${dt}s"
+[ "$rc" != 0 ] && ok "…and its status says it did not finish" || fail "a stopped command reported success"
+t0=$(date +%s)
+( . "$KIT/core/lib.sh"; PATH="$WB"; mk_with_timeout 30 sh -c 'exit 3' ); rc=$?
+dt=$(( $(date +%s) - t0 ))
+check "watchdog: a command inside the limit keeps its own status" 3 "$rc"
+[ "$dt" -lt 10 ] && ok "…and returns without waiting out the limit" \
+  || fail "a quick command waited ${dt}s for its watchdog"
+
 # ---------- tunable knobs: env > file > default ----------
 echo "core/lib.sh mk_conf:"
 KH="$TMP/home-conf"; mkdir -p "$KH/.claude/memory-kit"

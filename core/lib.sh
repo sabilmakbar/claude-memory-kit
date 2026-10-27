@@ -139,6 +139,27 @@ mk_session_id() {
 # mtime as epoch: GNU stat, then BSD stat, then 0.
 mk_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; }
 
+# mk_with_timeout <secs> <cmd> [args...] → the command's status. GNU `timeout`, then
+# Homebrew's `gtimeout`, then a watchdog, because stock macOS ships neither and the
+# headless miner run used to go unbounded there. The watchdog sends TERM at the limit,
+# as `timeout` does, so a stopped run reports 143 rather than 124. It is reaped as soon
+# as the command finishes, sleep included: the miner's caller backgrounds it, and a
+# sleep left holding the limit would outlive every run.
+mk_with_timeout() {
+    _mk_secs="$1"; shift
+    if command -v timeout >/dev/null 2>&1; then timeout "$_mk_secs" "$@"; return; fi
+    if command -v gtimeout >/dev/null 2>&1; then gtimeout "$_mk_secs" "$@"; return; fi
+    "$@" &
+    _mk_pid=$!
+    ( trap 'kill "$_mk_s" 2>/dev/null; exit 0' TERM
+      sleep "$_mk_secs" & _mk_s=$!
+      wait "$_mk_s" && kill -TERM "$_mk_pid" 2>/dev/null ) >/dev/null 2>&1 &
+    _mk_wd=$!
+    wait "$_mk_pid"; _mk_rc=$?
+    kill -TERM "$_mk_wd" 2>/dev/null; wait "$_mk_wd" 2>/dev/null
+    return "$_mk_rc"
+}
+
 # ---- once-per-session-per-day notice markers --------------------------------
 
 # mk_notice_due <sid> <name> → rc 0 when the notice should fire (also sweeps

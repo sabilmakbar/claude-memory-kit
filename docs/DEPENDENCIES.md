@@ -43,8 +43,9 @@ without them. The report tells you which features will sit idle.
 - **bash, including 3.2**, the version macOS still ships. The scripts target it rather
   than assuming a newer bash from Homebrew.
 - **macOS and Linux** with their stock userland, no Homebrew coreutils needed. Portable
-  calls throughout, with dual GNU/BSD fallbacks such as `stat -c || stat -f`. `timeout`
-  is used when present and skipped when not. CI runs the suite on `ubuntu` and `macos`.
+  calls throughout, with dual GNU/BSD fallbacks such as `stat -c || stat -f`. The miner's
+  run is bounded by `timeout` or `gtimeout` when present, and by a shell watchdog when
+  neither is. CI runs the suite on `ubuntu` and `macos`.
 - **Claude Code** itself. The kit reads its undocumented internals, so a version-check
   hook re-runs the real-data suite after an update and records the result.
 
