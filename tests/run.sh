@@ -644,6 +644,16 @@ git add memory/notes.md
 grun; check "blocks bad file under memory/" 1 $?
 git rm -q --cached memory/notes.md && rm memory/notes.md
 
+# a space in the name: word-split, this reached the lint as two names that do not
+# exist, was judged as nothing, and passed
+printf -- '---\nname: x\n---\nno desc\n' > 'feedback_bad name.md'
+git add 'feedback_bad name.md'
+out=$(HOME="$GHOME" "$GH/pre-commit" 2>&1); rc=$?
+check "blocks a bad file whose name has a space" 1 "$rc"
+echo "$out" | grep -qF 'feedback_bad name.md:' \
+  && ok "…and names it whole" || fail "spaced name not reported whole ($out)"
+git rm -q --cached 'feedback_bad name.md' && rm 'feedback_bad name.md'
+
 # style rule: em-dashes blocked in reader-facing docs only (same rule and scope as
 # claude-session-kit). This suite is outside the scope, so it may hold the literal char.
 mkdir -p docs
@@ -867,6 +877,17 @@ printf '# guide\n' > "$FH/.claude/memory/AGENTS.md"
 HOME="$FH" CLAUDE_PROJECT_DIR="$FH/proj" bash "$KIT/scripts/refresh-memory-index.sh" >/dev/null 2>&1
 grep "Unindexed" "$FH/.claude/memory/MEMORY.md" | grep -qE "README|CLAUDE|AGENTS" \
   && fail "known docs wrongly flagged" || ok "README/CLAUDE.md/AGENTS.md exempt from unindexed warning"
+
+# A name with a space is one file. Both passes used to word-split their file lists, so
+# the index lost the entry and the stamp report named two halves that do not exist.
+printf -- '---\nname: feedback_has space\ndescription: spaced\nmodified: 2026-08-10T08:00:00.000Z\n---\nb\n' \
+  > "$FH/.claude/memory/feedback_has space.md"
+out=$(HOME="$FH" CLAUDE_PROJECT_DIR="$FH/proj" bash "$KIT/scripts/refresh-memory-index.sh" 2>/dev/null)
+grep -qF '(feedback_has space.md) — spaced' "$FH/.claude/memory/MEMORY.md" \
+  && ok "a memory file with a space in its name is indexed" || fail "spaced name missing from the index"
+printf '%s' "$out" | grep -qF 'feedback_has space.md' \
+  && ok "…and a stamp in it is reported under its whole name" || fail "spaced stamped file not named ($out)"
+rm -f "$FH/.claude/memory/feedback_has space.md"
 
 # --- stamped-frontmatter reporting (issue #16, D7) ---
 # The pass used to strip these keys in place. It now names them and changes nothing:

@@ -148,15 +148,19 @@ memfiles="$(git diff --cached --name-only --diff-filter=ACM \
 #
 # Staged content, never the worktree copy, or the lint judges something this commit
 # does not contain.
+#
+# One name per line, never word-split: a file with a space in its name used to reach
+# the lint as two names that do not exist, so it was judged as nothing and passed.
 bad=""
-for f in $memfiles; do
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
   mk_is_nonmemory "$(basename "$f")" && continue
   _gr_why="$(git show ":$f" 2>/dev/null \
     | jq -Rs --arg p "$_gr_logical/$f" '{tool_input:{file_path:$p, content:.}}' 2>/dev/null \
     | bash "$_gr_guard" 2>/dev/null \
     | jq -r '.hookSpecificOutput.permissionDecisionReason // empty' 2>/dev/null)"
   [ -n "$_gr_why" ] && bad="$bad|$f: $_gr_why"
-done
+done <<< "$memfiles"
 if [ -n "$bad" ]; then
   { echo "✖ commit blocked — memory frontmatter issues:"
     printf '%s' "$bad" | tr '|' '\n' | sed '/^$/d; s/^/   /'

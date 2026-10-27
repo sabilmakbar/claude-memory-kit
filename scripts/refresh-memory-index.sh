@@ -37,7 +37,9 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
 STAMPED='^[[:space:]]*(node_type|originSessionId|modified):'
 STAMPED_FILES=""
 find_stamped() { # <dir> — name root-level .md files whose FRONTMATTER carries a stamp
-    for f in $(grep -lE "$STAMPED" "$1"/*.md 2>/dev/null); do
+    # read line by line, not word-split: a name with a space or a glob character in it
+    # would otherwise be reported as pieces, or as other files
+    while IFS= read -r f; do
         case "$(basename "$f")" in MEMORY.md) continue ;; esac
         [ "$(head -1 "$f")" = "---" ] || continue
         end=$(awk 'NR>1 && /^---$/ {print NR; exit}' "$f")
@@ -47,7 +49,7 @@ find_stamped() { # <dir> — name root-level .md files whose FRONTMATTER carries
         # in its text is never named
         sed -n "2,$((end-1))p" "$f" | grep -qE "$STAMPED" || continue
         STAMPED_FILES="$STAMPED_FILES${STAMPED_FILES:+, }$(basename "$f")"
-    done
+    done < <(grep -lE "$STAMPED" "$1"/*.md 2>/dev/null)
 }
 find_stamped "$CENTRAL"
 
@@ -90,7 +92,9 @@ cat > "$CENTRAL_MD" <<'HDR'
 HDR
 
 # user_* first, then feedback_* alphabetically; index line = derived title + the file's description
-for f in $(ls "$CENTRAL"/user_*.md 2>/dev/null) $(ls "$CENTRAL"/feedback_*.md 2>/dev/null | sort); do
+# Globs read line by line rather than $(ls) word-split, so a name with a space stays one
+# entry. A glob that matches nothing arrives as itself and is skipped by the -f test.
+while IFS= read -r f; do
     [ -f "$f" ] || continue
     b=$(basename "$f"); slug=${b%.md}
     desc=$(sed -n 's/^description:[[:space:]]*//p' "$f" | head -1)
@@ -103,7 +107,7 @@ for f in $(ls "$CENTRAL"/user_*.md 2>/dev/null) $(ls "$CENTRAL"/feedback_*.md 2>
            title="$(printf '%s' "${title:0:1}" | tr '[:lower:]' '[:upper:]')${title:1}" ;;
     esac
     printf -- '- [%s](%s) — %s\n' "$title" "$b" "$desc" >> "$CENTRAL_MD"
-done
+done < <(printf '%s\n' "$CENTRAL"/user_*.md; printf '%s\n' "$CENTRAL"/feedback_*.md | sort)
 
 # Surface non-conforming .md files so adopted memories can't silently drop out of recall
 unindexed=""
