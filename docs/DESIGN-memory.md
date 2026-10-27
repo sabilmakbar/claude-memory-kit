@@ -218,8 +218,8 @@ that blocked it would break the most-used skill in the most cautious mode.
 Every skill is available in both modes, since a skill is inert until called. What changes is what
 it may do once called.
 
-`CLAUDE.md` is untouched throughout: it is a different mechanism, user-written and per-project,
-and this setting does not address it.
+`CLAUDE.md` and `AGENTS.md` are untouched throughout: they are a different mechanism, user-written
+and per-project, and this setting does not address them.
 
 **The migration is a toggle, not a one-way door, and that is bought by leaving the old links
 alone.** Removing them would be tidier and would make the change irreversible, because putting a

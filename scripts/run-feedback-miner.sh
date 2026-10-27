@@ -63,10 +63,11 @@ fi
 cd "$PROP" || exit 0
 # one run of log history, bounded: previous run's log -> miner.log.1, fresh log this run
 [ -f "$PROP/miner.log" ] && mv -f "$PROP/miner.log" "$PROP/miner.log.1"
-TIMEOUT=""; command -v timeout >/dev/null 2>&1 && TIMEOUT="timeout 600"  # absent on stock macOS
+# bounded at 10 minutes everywhere, stock macOS included (no `timeout` there; lib.sh
+# falls back to a watchdog)
 # stream-json --verbose = full turn-by-turn trace in the log (plain --verbose adds
 # nothing in text mode); this is what makes the session transcript redundant below
-$TIMEOUT "$CLAUDE_BIN" -p "Read $MINER_DOC and follow it exactly. [feedback-miner]" \
+mk_with_timeout 600 "$CLAUDE_BIN" -p "Read $MINER_DOC and follow it exactly. [feedback-miner]" \
       --model "$MODEL" --allowedTools "Read,Write,Edit" \
       --output-format stream-json --verbose \
       >> "$PROP/miner.log" 2>&1

@@ -34,14 +34,14 @@ mount's entries under `~/.claude/memory-mounts/` if present).
   after adopting pre-kit memories): propose renames to `user_*`/`feedback_*` (move
   project-specific ones to the mount dir) and fill in `name:`/`description:` so they
   (re)enter the index.
-- **CLAUDE.md guideline hygiene** — if the memory repo carries a `CLAUDE.md`, review its
+- **Global guideline hygiene** — if the memory repo carries an `AGENTS.md` or `CLAUDE.md`, review its
   `## Source:` sections too: attribution follows the header's convention (publicly
   available → cite name + URL; otherwise "distilled internally" / "created manually",
   never naming a private origin), and no section carries project- or work-specific
-  content that belongs in the owning repo's own `CLAUDE.md`.
+  content that belongs in the owning repo's own `AGENTS.md` or `CLAUDE.md`.
 - **Stable-fact creep in project memories** — mount project files accumulating durable
   facts (run commands, layout rules, infra details, settled findings): propose
-  graduating those into that project's own repo `CLAUDE.md` and shrinking the memory
+  graduating those into that project's own repo `AGENTS.md` (or its `CLAUDE.md`, if it already has one) and shrinking the memory
   file back to volatile state (current progress, pending decisions) plus a pointer.
 
 ## Check which rules are actually followed
@@ -53,15 +53,20 @@ transcripts, and for those the answer is countable rather than a matter of impre
 Do this for a handful of rules per review, not all of them. Pick the ones naming a concrete
 action, since those are the ones a transcript records.
 
-Extract the tool calls once, then count against them:
+Extract the tool calls once, then count against them. The file holds every command from every
+session, so it goes in a private temp file rather than a fixed, shared path:
 
 ```bash
+cmds=$(mktemp "${TMPDIR:-/tmp}/mk-cmds.XXXXXX") && echo "$cmds"
 find ~/.claude/projects -name '*.jsonl' ! -name 'agent-*' | while IFS= read -r f; do
   jq -c 'select(.message.content? != null) | .message.content[]?
          | select(type=="object" and .type=="tool_use" and .name=="Bash")
          | .input.command // empty' "$f" 2>/dev/null
-done > /tmp/cmds.txt
+done > "$cmds"
 ```
+
+Shell variables do not survive between commands, so count against the printed path, and remove
+it with `rm -f <path>` once the counts are in.
 
 Count the compliant and non-compliant shapes separately, so the result is a rate rather than a raw
 number. A rule broken twice out of three times and a rule broken twice out of two hundred call for

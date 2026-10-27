@@ -21,7 +21,7 @@ one listed with its default, and your edits survive upgrades. `MEMORY_KIT_HEALTH
 the three, if you want a longer fuse on a machine you use rarely.
 
 **What does the daily miner cost?** One Claude call a day, on Sonnet by default. It reads
-what you typed since the last run plus your memory files and global `CLAUDE.md`, which on
+what you typed since the last run plus your memory files and global guidelines (`~/.claude/CLAUDE.md` and what it imports), which on
 a mature setup is roughly 25,000 input tokens and a couple of thousand out. It runs
 through your own Claude account, so on a subscription plan that is a small slice of your
 daily usage rather than a separate bill; on an API key it works out to a few cents a day.

@@ -11,7 +11,19 @@ exec </dev/null
 
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+# The installer runs from this checkout throughout, and --uninstall unsets a checkout's
+# core.hooksPath when it still holds the guardrail install wired. Put back whatever this
+# checkout had, so running the suite never leaves its own commit guard disarmed. Only
+# when KIT has a .git of its own: from the deployed tree, git -C would walk up and write
+# into whatever repo happens to enclose it.
+KIT_HP=""; [ -e "$KIT/.git" ] && KIT_HP=$(git -C "$KIT" config --get core.hooksPath 2>/dev/null || true)
+kit_hp_restore() {
+  [ -e "$KIT/.git" ] || return 0
+  [ "$(git -C "$KIT" config --get core.hooksPath 2>/dev/null)" = "$KIT_HP" ] && return 0
+  if [ -n "$KIT_HP" ]; then git -C "$KIT" config core.hooksPath "$KIT_HP"
+  else git -C "$KIT" config --unset core.hooksPath; fi
+}
+trap 'rm -rf "$TMP"; kit_hp_restore' EXIT
 PASS=0; FAIL=0
 
 ok()   { PASS=$((PASS+1)); echo "  ✓ $1"; }
@@ -632,6 +644,16 @@ git add memory/notes.md
 grun; check "blocks bad file under memory/" 1 $?
 git rm -q --cached memory/notes.md && rm memory/notes.md
 
+# a space in the name: word-split, this reached the lint as two names that do not
+# exist, was judged as nothing, and passed
+printf -- '---\nname: x\n---\nno desc\n' > 'feedback_bad name.md'
+git add 'feedback_bad name.md'
+out=$(HOME="$GHOME" "$GH/pre-commit" 2>&1); rc=$?
+check "blocks a bad file whose name has a space" 1 "$rc"
+echo "$out" | grep -qF 'feedback_bad name.md:' \
+  && ok "…and names it whole" || fail "spaced name not reported whole ($out)"
+git rm -q --cached 'feedback_bad name.md' && rm 'feedback_bad name.md'
+
 # style rule: em-dashes blocked in reader-facing docs only (same rule and scope as
 # claude-session-kit). This suite is outside the scope, so it may hold the literal char.
 mkdir -p docs
@@ -678,6 +700,37 @@ git add feedback_terms.md
 grun
 check "a term after a comment line is still read" 1 $?
 rm -f "$GH/denylist.local"
+
+# Credentials: one hit and one near miss per kind. The near misses matter as much,
+# because a pattern loose enough to catch prose gets the hook bypassed with --no-verify.
+# Every fake is assembled at run time, so no token-shaped literal sits in this file for
+# a secret scanner to flag ($e is empty and only breaks up a literal). Fields:
+# label|hit|near miss.
+r36=$(printf 'a1B2%.0s' 1 2 3 4 5 6 7 8 9); e=""
+while IFS='|' read -r label hit miss; do
+  for v in hit miss; do
+    case "$v" in hit) tok="$hit"; want=1; does=blocks ;; miss) tok="$miss"; want=0; does=passes ;; esac
+    printf -- '---\nname: feedback_cred\ndescription: d\nmetadata:\n  type: feedback\n  source: direct\n---\nuse %s here\n\n**Why:** it matters.\n' "$tok" > feedback_cred.md
+    git add feedback_cred.md
+    out=$(HOME="$GHOME" "$GH/pre-commit" 2>&1); rc=$?
+    check "$label: the $v $does" "$want" "$rc"
+    if [ "$v" = hit ]; then
+      echo "$out" | grep -q "feedback_cred.md: $label" \
+        && ok "…and the message names the kind and the file" || fail "kind not named ($out)"
+      echo "$out" | grep -qF -- "$tok" \
+        && fail "the message echoes the secret" || ok "…without printing the secret"
+    fi
+  done
+done <<EOF
+private key|-----BEGIN RSA PRIVATE${e} KEY-----|-----BEGIN PUBLIC KEY-----
+GitHub token|ghp_$r36|ghp_${r36:0:20}
+GitHub token|github_pat_${r36:0:22}|github_pat_short
+AWS access key id|AKIA${e}ABCDEFGHIJKLMNOP|akia${e}abcdefghijklmnop
+Slack token|xoxb-${e}1234567890-abcdef|xoxb-${e}12345
+Google API key|AIza${r36:0:35}|AIza${r36:0:30}
+JSON web token|eyJ${e}hbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.c2lnbmF0dXJlLXZhbHVl|eyJ${e}hbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0
+EOF
+git rm -q --cached feedback_cred.md && rm feedback_cred.md
 
 # The frontmatter lint is gated on being IN the store; the PII scan is not. Outside
 # the store the lint used to run anyway, which is why an exemption list existed at
@@ -820,9 +873,21 @@ grep -q "Unindexed.*old-note.md" "$FH/.claude/memory/MEMORY.md" && ok "unindexed
 
 printf '# my repo\n' > "$FH/.claude/memory/README.md"
 printf '# guide\n' > "$FH/.claude/memory/CLAUDE.md"
+printf '# guide\n' > "$FH/.claude/memory/AGENTS.md"
 HOME="$FH" CLAUDE_PROJECT_DIR="$FH/proj" bash "$KIT/scripts/refresh-memory-index.sh" >/dev/null 2>&1
-grep "Unindexed" "$FH/.claude/memory/MEMORY.md" | grep -qE "README|CLAUDE" \
-  && fail "known docs wrongly flagged" || ok "README/CLAUDE.md exempt from unindexed warning"
+grep "Unindexed" "$FH/.claude/memory/MEMORY.md" | grep -qE "README|CLAUDE|AGENTS" \
+  && fail "known docs wrongly flagged" || ok "README/CLAUDE.md/AGENTS.md exempt from unindexed warning"
+
+# A name with a space is one file. Both passes used to word-split their file lists, so
+# the index lost the entry and the stamp report named two halves that do not exist.
+printf -- '---\nname: feedback_has space\ndescription: spaced\nmodified: 2026-08-10T08:00:00.000Z\n---\nb\n' \
+  > "$FH/.claude/memory/feedback_has space.md"
+out=$(HOME="$FH" CLAUDE_PROJECT_DIR="$FH/proj" bash "$KIT/scripts/refresh-memory-index.sh" 2>/dev/null)
+grep -qF '(feedback_has space.md) — spaced' "$FH/.claude/memory/MEMORY.md" \
+  && ok "a memory file with a space in its name is indexed" || fail "spaced name missing from the index"
+printf '%s' "$out" | grep -qF 'feedback_has space.md' \
+  && ok "…and a stamp in it is reported under its whole name" || fail "spaced stamped file not named ($out)"
+rm -f "$FH/.claude/memory/feedback_has space.md"
 
 # --- stamped-frontmatter reporting (issue #16, D7) ---
 # The pass used to strip these keys in place. It now names them and changes nothing:
@@ -1131,6 +1196,25 @@ for k in $NOT_KNOBS; do
 done
 [ -z "$declared_internal" ] && ok "internal names stay out of the inventory" \
                             || fail "internal name offered as a knob:$declared_internal"
+
+echo "core/lib.sh mk_with_timeout:"
+# Forced onto the watchdog: a PATH holding only sleep and sh, so neither timeout nor
+# gtimeout can be found. That is stock macOS, the machine the fallback exists for, and
+# CI's ubuntu runner would otherwise only ever exercise GNU timeout.
+WB="$TMP/wdbin"; mkdir -p "$WB"
+ln -s "$(command -v sleep)" "$WB/sleep"; ln -s "$(command -v sh)" "$WB/sh"
+t0=$(date +%s)
+( . "$KIT/core/lib.sh"; PATH="$WB"; mk_with_timeout 1 sleep 30 ) 2>/dev/null; rc=$?
+dt=$(( $(date +%s) - t0 ))
+[ "$dt" -lt 10 ] && ok "watchdog: a command past the limit is stopped (${dt}s)" \
+  || fail "watchdog: a 1s limit took ${dt}s"
+[ "$rc" != 0 ] && ok "…and its status says it did not finish" || fail "a stopped command reported success"
+t0=$(date +%s)
+( . "$KIT/core/lib.sh"; PATH="$WB"; mk_with_timeout 30 sh -c 'exit 3' ); rc=$?
+dt=$(( $(date +%s) - t0 ))
+check "watchdog: a command inside the limit keeps its own status" 3 "$rc"
+[ "$dt" -lt 10 ] && ok "…and returns without waiting out the limit" \
+  || fail "a quick command waited ${dt}s for its watchdog"
 
 # ---------- tunable knobs: env > file > default ----------
 echo "core/lib.sh mk_conf:"
@@ -2072,6 +2156,29 @@ git -C "$UH3/.claude/memory" config core.hooksPath /somewhere/else   # install r
 out=$(HOME="$UH3" bash "$KIT/install.sh" --uninstall 2>&1)
 [ "$(git -C "$UH3/.claude/memory" config --get core.hooksPath)" = "/somewhere/else" ] \
   && ok "a foreign core.hooksPath is reported, not unset" || fail "unset someone else's hooksPath"
+
+# The checkout's own core.hooksPath=guardrail is install's too, so uninstall takes it back,
+# run from the checkout or from the deployed copy, which finds it through .kit-source. A
+# clone stands in for the checkout: run from $KIT, this would unset the real one.
+CK="$TMP/ck"; git clone -q "$KIT" "$CK" 2>/dev/null
+cp "$KIT/install.sh" "$CK/install.sh"
+CKH="$TMP/home-ck"; mkdir -p "$CKH/.claude"
+ck_install() { HOME="$CKH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$CK/install.sh" --mode=advisory >/dev/null 2>&1; }
+ck_hp() { git -C "$CK" config --get core.hooksPath 2>/dev/null || true; }
+ck_install
+[ "$(ck_hp)" = guardrail ] && ok "install: the checkout's own guardrail is wired" || fail "checkout hooksPath is [$(ck_hp)]"
+HOME="$CKH" bash "$CK/install.sh" --uninstall >/dev/null 2>&1
+[ -z "$(ck_hp)" ] && ok "uninstall from the checkout unsets its core.hooksPath" \
+  || fail "the checkout's hooksPath survived uninstall: $(ck_hp)"
+ck_install
+HOME="$CKH" bash "$CKH/.claude/memory-kit/install.sh" --uninstall >/dev/null 2>&1
+[ -z "$(ck_hp)" ] && ok "uninstall from the deployed copy finds the checkout through .kit-source" \
+  || fail "the deployed copy's uninstall left the checkout's hooksPath: $(ck_hp)"
+ck_install
+git -C "$CK" config core.hooksPath .githooks
+HOME="$CKH" bash "$CK/install.sh" --uninstall >/dev/null 2>&1
+[ "$(ck_hp)" = .githooks ] && ok "a checkout hooksPath install did not write stays" \
+  || fail "unset a checkout hooksPath that was not ours"
 
 # --dry-run must change nothing at all
 DH="$TMP/home-dry"; mkdir -p "$DH/.claude"

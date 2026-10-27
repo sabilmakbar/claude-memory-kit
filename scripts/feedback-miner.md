@@ -10,7 +10,8 @@ other file except the tracker. Be terse.
    run, tagged `[project/session timestamp]`. If missing/empty: stop without touching the
    tracker (the runner normally short-circuits before invoking you in that case).
 2. `~/.claude/memory/MEMORY.md` and every `~/.claude/memory/*.md` — current memory.
-3. `~/.claude/CLAUDE.md` — current global guidelines.
+3. `~/.claude/CLAUDE.md` and any file it imports with `@` (typically the memory repo's
+   `AGENTS.md`) — current global guidelines.
 4. `~/.local/share/claude-feedback/proposals.md` — the tracker (create from the template
    below if missing).
 
@@ -32,7 +33,7 @@ task instruction for one session. Signals, strongest first:
 
 Not candidates: one-off task directions, project-specific facts (those belong to
 mount-local memory, not here), anything fully covered by an existing memory file or
-CLAUDE.md section.
+global guidelines section.
 
 ## Phrasing a candidate rule
 
@@ -51,7 +52,7 @@ and leave the final call to the reviewer.
 
 ## Complementarity check (do this per candidate, before scoring)
 
-Compare against memory + CLAUDE.md:
+Compare against memory + global guidelines:
 - **Fully covered** → drop it (novelty 0).
 - **Partially covered** → keep as an *amendment* proposal: name the existing file and
   state exactly the uncovered gap.
@@ -73,7 +74,7 @@ and adjust anything inflated or understated; write a one-line judge note per ent
 ## Updating the tracker
 
 - **Retire solved proposals:** if a **Pending** entry is now fully covered by memory or
-  CLAUDE.md (the user added it manually since the last run), move it to `## Accepted`
+  the global guidelines (the user added it manually since the last run), move it to `## Accepted`
   with the note `covered manually on <date>` — never keep proposing what's already solved.
 - **Match first** against ALL existing entries (Pending, Accepted, Rejected):
   - Matches **Pending** → append new evidence (max 3 quotes kept, ≤140 chars each,

@@ -122,8 +122,9 @@ Copy anything worth keeping out of the backup, then delete it. From then on, pla
 `git pull` and `git push` in `~/.claude/memory` is how your machines share what they
 learn.
 
-Two finishing touches on each machine: link the repo's global `CLAUDE.md` if it ships one
-(`ln -sfn ~/.claude/memory/CLAUDE.md ~/.claude/CLAUDE.md`), and give the repo its own
+Two finishing touches on each machine: if the repo ships global guidelines, import them from
+`~/.claude/CLAUDE.md` (a file holding the line `@~/.claude/memory/AGENTS.md`, or `CLAUDE.md` if
+that is the name the repo uses), and give the repo its own
 commit identity (`git -C ~/.claude/memory config user.name` and `user.email`), so memory
 commits are attributed to you rather than to whatever this machine defaults to. If a push
 is rejected, or commits land under the wrong account, see
@@ -166,8 +167,13 @@ are rewritten with their values kept.
 - The daily miner reads only what you typed. Claude's replies, tool output and your
   editor selection are stripped out before it sees anything, and it is never pointed at
   your repository.
-- Nothing leaves the machine on its own. Syncing is plain git under your control, and
-  the commit guardrail vets every commit for PII before it can enter history.
+- Two things reach the network without you asking, both from the daily miner. It sends
+  what you typed since its last run (size-capped), your memory files and your global
+  guidelines to Claude through your own `claude` CLI, the same path any session takes.
+  And when your memory folder has a git remote, it runs `git pull --ff-only` there
+  first; it never pushes. `MEMORY_KIT_NO_MINER=1` in `~/.claude/memory-kit/config`
+  turns both off. Beyond that, syncing is plain git under your control, and the commit
+  guardrail vets every commit for PII before it can enter history.
 - If any part of the kit stops running, you are told once a day rather than met with
   silence. The suite runs on macOS and Linux in CI, and the smoke suite re-checks the
   kit against your machine's real data after every Claude Code update.

@@ -103,8 +103,10 @@ When `.staged/` is empty, remove it, then stamp the marker:
 
 ```bash
 rmdir ~/.claude/memory/.staged
-jq --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.initialized = $t' \
-   ~/.claude/memory/.memory-kit-marker.json > /tmp/mk.$$ && mv /tmp/mk.$$ ~/.claude/memory/.memory-kit-marker.json
+tmp=$(mktemp "${TMPDIR:-/tmp}/mk-marker.XXXXXX") \
+&& { jq --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.initialized = $t' \
+       ~/.claude/memory/.memory-kit-marker.json > "$tmp" \
+     && mv "$tmp" ~/.claude/memory/.memory-kit-marker.json || rm -f "$tmp"; }
 ```
 
 Then tell the user what to check: the index rebuilds on the next prompt, so a new session should
