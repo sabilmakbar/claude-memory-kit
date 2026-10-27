@@ -5,7 +5,7 @@
 > [FLOWS.md](FLOWS.md). For setup, the README.
 
     Status:            Implemented
-    Last revised:      2026-08-12
+    Last revised:      2026-09-07
     Verified against:  Claude Code 2.1.222
     Supersedes:        docs/DESIGN.md, split by feature 2026-08-12
 
@@ -84,7 +84,9 @@ for the same reason a renamed knob is: nothing is failing, and one command fixes
 three days only delays the fix. It names the direction and the single command, unlike the
 deploy-drift git hook, whose diff is symmetric and which therefore describes the state instead;
 here the newer half is knowable, so telling the reader which command to run costs nothing and
-saves a wrong guess. And it stays silent whenever the deployed label is not an exact release,
+saves a wrong guess. The path in the install.sh command comes from the install source record,
+[DESIGN-install.md](DESIGN-install.md) D13, which also sets its fallback when the recorded
+checkout is gone. And it stays silent whenever the deployed label is not an exact release,
 because a development checkout has no release number for the plugin to match and comparing
 there would report every day.
 
