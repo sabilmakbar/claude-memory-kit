@@ -53,15 +53,20 @@ transcripts, and for those the answer is countable rather than a matter of impre
 Do this for a handful of rules per review, not all of them. Pick the ones naming a concrete
 action, since those are the ones a transcript records.
 
-Extract the tool calls once, then count against them:
+Extract the tool calls once, then count against them. The file holds every command from every
+session, so it goes in a private temp file rather than a fixed, shared path:
 
 ```bash
+cmds=$(mktemp "${TMPDIR:-/tmp}/mk-cmds.XXXXXX") && echo "$cmds"
 find ~/.claude/projects -name '*.jsonl' ! -name 'agent-*' | while IFS= read -r f; do
   jq -c 'select(.message.content? != null) | .message.content[]?
          | select(type=="object" and .type=="tool_use" and .name=="Bash")
          | .input.command // empty' "$f" 2>/dev/null
-done > /tmp/cmds.txt
+done > "$cmds"
 ```
+
+Shell variables do not survive between commands, so count against the printed path, and remove
+it with `rm -f <path>` once the counts are in.
 
 Count the compliant and non-compliant shapes separately, so the result is a rate rather than a raw
 number. A rule broken twice out of three times and a rule broken twice out of two hundred call for
