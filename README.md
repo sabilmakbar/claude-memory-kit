@@ -167,8 +167,13 @@ are rewritten with their values kept.
 - The daily miner reads only what you typed. Claude's replies, tool output and your
   editor selection are stripped out before it sees anything, and it is never pointed at
   your repository.
-- Nothing leaves the machine on its own. Syncing is plain git under your control, and
-  the commit guardrail vets every commit for PII before it can enter history.
+- Two things reach the network without you asking, both from the daily miner. It sends
+  what you typed since its last run (size-capped), your memory files and your global
+  guidelines to Claude through your own `claude` CLI, the same path any session takes.
+  And when your memory folder has a git remote, it runs `git pull --ff-only` there
+  first; it never pushes. `MEMORY_KIT_NO_MINER=1` in `~/.claude/memory-kit/config`
+  turns both off. Beyond that, syncing is plain git under your control, and the commit
+  guardrail vets every commit for PII before it can enter history.
 - If any part of the kit stops running, you are told once a day rather than met with
   silence. The suite runs on macOS and Linux in CI, and the smoke suite re-checks the
   kit against your machine's real data after every Claude Code update.

@@ -49,5 +49,13 @@ without them. The report tells you which features will sit idle.
   hook re-runs the real-data suite after an update and records the result.
 
 ## Never used
-No network calls, no package installs, no daemons, no telemetry. The kit is files reading
-files, plus one local `claude` call a day if you leave the miner on.
+No package installs, no daemons, no telemetry. The kit is files reading files, with two
+exceptions that reach the network, both in the daily miner:
+
+- one headless `claude -p` call a day, which sends Claude what you typed since the last run
+  (capped at about 300 KB, `MAX_BYTES` in `scripts/extract-user-messages.sh`) along with
+  your memory files, your global guidelines and the proposals tracker;
+- before it, a `git pull --ff-only` of the memory folder when it has a remote. Never a push,
+  and never a credential prompt.
+
+`MEMORY_KIT_NO_MINER=1` in `~/.claude/memory-kit/config` turns off both.
