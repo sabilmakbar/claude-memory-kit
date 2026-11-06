@@ -1881,6 +1881,24 @@ HOME="$SH" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
   && ok "uninstall unsets it on the adopted store" \
   || fail "core.hooksPath left pointing into the deleted tree"
 
+echo "the memory repo pushes as its owner when gh holds several accounts:"
+# A fake gh: logged in as alice only. Never a real token, never the real keyring.
+FG=$(mktemp -d); printf '#!/bin/sh\n[ "$1 $2" = "auth status" ] && echo "  Logged in to github.com account alice (keyring)"\nexit 0\n' > "$FG/gh"; chmod +x "$FG/gh"
+cred() { git -C "$1" config --local --get-regexp '^credential\.https://github\.com\.helper$' 2>/dev/null; }
+SH=$(store_home cred-owned); mkdir -p "$SH/.claude/memory"; git init -q "$SH/.claude/memory"
+git -C "$SH/.claude/memory" remote add origin https://github.com/alice/mem.git
+PATH="$FG:$PATH" HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+cred "$SH/.claude/memory" | grep -q 'gh auth token -h github.com -u alice' \
+  && ok "the helper is wired for the remote's owner" || fail "no owner-scoped helper wired"
+PATH="$FG:$PATH" HOME="$SH" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
+[ -z "$(cred "$SH/.claude/memory")" ] && ok "uninstall removes it" || fail "helper left behind"
+SH=$(store_home cred-other); mkdir -p "$SH/.claude/memory"; git init -q "$SH/.claude/memory"
+git -C "$SH/.claude/memory" remote add origin https://github.com/bob/mem.git
+PATH="$FG:$PATH" HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+[ -z "$(cred "$SH/.claude/memory")" ] \
+  && ok "no helper when gh is not logged in as the owner" || fail "helper wired for an account gh lacks"
+rm -rf "$FG"
+
 # The uninstall reads the store BEFORE store_revert deletes the setting. Asked
 # afterwards it would name the default and leave the real store still pointing at
 # a tree that no longer exists, which is the silent-disable case above.
