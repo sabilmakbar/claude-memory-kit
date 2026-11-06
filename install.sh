@@ -726,6 +726,13 @@ if [ "$UNINSTALL" -eq 1 ]; then
       run git -C "$GUARD_STORE" update-index --no-skip-worktree MEMORY.md
       echo "  MEMORY.md is visible to git again (skip-worktree cleared)"
     fi
+    # The push helper install wired, recognised by its gh token call. Install only adds
+    # it where the key was empty, so every entry under the key is ours to remove.
+    if git -C "$GUARD_STORE" config --local --get-all credential.https://github.com.helper 2>/dev/null \
+       | grep -q 'gh auth token -h github.com -u '; then
+      run git -C "$GUARD_STORE" config --local --unset-all credential.https://github.com.helper
+      echo "  removed the gh push helper from $GUARD_STORE"
+    fi
   fi
 
   # A development checkout gets core.hooksPath=guardrail too (see the install step
@@ -1092,6 +1099,23 @@ if [ -d "$GUARD_STORE/.git" ]; then
   run git -C "$GUARD_STORE" config core.hooksPath "$DEST/guardrail"
   [ "$DRY" -eq 1 ] || git -C "$GUARD_STORE" update-index --skip-worktree MEMORY.md 2>/dev/null || true
   echo "→ guardrail wired into the memory repo at $GUARD_STORE"
+fi
+
+# With several gh accounts, an https push authenticates as whichever one is active,
+# often a work account that cannot write to a personal memory repo. Pin this repo's
+# pushes to the remote owner's gh token, fetched per push and never written to disk.
+# Only when gh is logged in as that owner, and never over a helper the user already set.
+CRED_KEY='credential.https://github.com.helper'
+if [ -d "$GUARD_STORE/.git" ] && command -v gh >/dev/null 2>&1 \
+   && ! git -C "$GUARD_STORE" config --local --get-regexp "^${CRED_KEY//./\\.}\$" >/dev/null 2>&1; then
+  owner=$(git -C "$GUARD_STORE" config --get remote.origin.url 2>/dev/null \
+    | sed -n 's#^https://github\.com/\([A-Za-z0-9-]*\)/.*#\1#p' || true)
+  if [ -n "$owner" ] && gh auth status -h github.com 2>&1 | grep -q "account $owner "; then
+    run git -C "$GUARD_STORE" config --local "$CRED_KEY" ""   # drop inherited helpers
+    run git -C "$GUARD_STORE" config --local --add "$CRED_KEY" \
+      "!f() { test \"\$1\" = get && echo username=$owner && echo \"password=\$(gh auth token -h github.com -u $owner)\"; }; f"
+    echo "→ pushes from the memory repo authenticate as $owner (gh)"
+  fi
 fi
 
 # A development checkout gets its own hooksPath, pointed at the TRACKED guardrail/ here
