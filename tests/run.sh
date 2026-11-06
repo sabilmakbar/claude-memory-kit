@@ -1060,6 +1060,8 @@ out=$(guard "$MEMD/MEMORY.md" "no frontmatter at all")
 [ -z "$out" ] && ok "the generated index is out of scope" || fail "MEMORY.md was checked"
 out=$(guard "$WH/somewhere/else/notes.md" "no frontmatter at all")
 [ -z "$out" ] && ok "files outside memory are out of scope" || fail "scope leaked"
+out=$(guard "$MEMD/guidelines/code-style-python.md" "no frontmatter at all")
+[ -z "$out" ] && ok "a subfolder of the store is out of scope" || fail "subfolder doc was checked as a memory"
 out=$(printf 'not json\n' | HOME="$WH" bash "$KIT/hooks/memory-write-guard.sh" 2>/dev/null); rc=$?
 [ -z "$out" ] && [ "$rc" = 0 ] && ok "garbage stdin fails open" || fail "fail-open (rc=$rc)"
 

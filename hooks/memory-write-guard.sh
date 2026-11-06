@@ -49,6 +49,12 @@ fp=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
 # a path where it used to be a printf.
 _mk_store="$(mk_memory_dir)"
 case "$fp" in
+    # case globs let * cross /. Memories sit at the top level, or under memory/ (the
+    # layout the commit guardrail accepts); any other subfolder, such as guidelines/,
+    # holds docs that are not memories
+    "$_mk_store"/memory/*/*) exit 0 ;;
+    "$_mk_store"/memory/*.md) ;;
+    "$_mk_store"/*/*) exit 0 ;;
     "$_mk_store"/*.md|"$(mk_mounts_dir)"/*/*.md) ;;
     *) exit 0 ;;
 esac
