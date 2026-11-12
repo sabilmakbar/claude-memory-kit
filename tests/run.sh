@@ -2384,6 +2384,7 @@ fi
 rm -rf "$TH"
 
 echo "settings.json shapes:"
+SNIPPET_HOOKS=$(jq "[.hooks[][].hooks[]] | length" "$KIT/settings.snippet.json")   # follows the snippet, not a fixed count
 SHAPE_DIR=""   # set by shape_case; the result lines and the path cannot share stdout
 shape_case() { # shape_case <desc> <json> <expect-rc> <expect-our-hooks>
   local d="$1" json="$2" want_rc="$3" want_ours="$4" rc ours
@@ -2408,7 +2409,7 @@ shape_case "an event that is not an array: refuses" '{"hooks":{"SessionStart":"n
 rm -rf "$h"
 # the survive case: odd corners inside a well-shaped file are none of our business
 shape_case "a malformed group survives, and our hooks still wire" \
-      '{"hooks":{"SessionStart":[{"hooks":"nope"}]},"other":"keep me"}' 0 9; h="$SHAPE_DIR"
+      '{"hooks":{"SessionStart":[{"hooks":"nope"}]},"other":"keep me"}' 0 "$SNIPPET_HOOKS"; h="$SHAPE_DIR"
 jq -e '.other == "keep me"' "$h/.claude/settings.json" >/dev/null \
   && ok "an unrelated top-level key survives" || fail "dropped a key that was not ours"
 jq -e '[.hooks.SessionStart[] | select(.hooks == "nope")] | length == 1' "$h/.claude/settings.json" >/dev/null \
@@ -2418,7 +2419,7 @@ rm -rf "$h"
 # about: the merge only reads the keys settings.snippet.json declares, so refusing here
 # would be judging config we did not write.
 shape_case "a wrong-typed event that is not ours: wires normally" \
-      '{"hooks":{"Weird":"a string","SessionStart":[]},"other":"keep me"}' 0 9; h="$SHAPE_DIR"
+      '{"hooks":{"Weird":"a string","SessionStart":[]},"other":"keep me"}' 0 "$SNIPPET_HOOKS"; h="$SHAPE_DIR"
 jq -e '.hooks.Weird == "a string" and .other == "keep me"' "$h/.claude/settings.json" >/dev/null \
   && ok "and the foreign event survives the install untouched" || fail "touched an event we never wire"
 HOME="$h" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
