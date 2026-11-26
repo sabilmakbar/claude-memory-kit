@@ -1846,6 +1846,53 @@ HOME="$SH" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
 [ -z "$(git -C "$IN" config core.hooksPath)" ] && ! git -C "$IN" ls-files -v MEMORY.md | grep -q '^S' \
   && ok "control: and unwired again by uninstall" || fail "control: inside store not unwired"
 
+# Detection: the health hook says so when the guardrail or the push credential on the
+# memory repo has gone missing. System and global git config are off, so only what the
+# test sets can answer a credential request.
+echo "hooks/memory-kit-health.sh guardrail and push credential:"
+gh_home() { # <name> -> a $HOME whose store is a managed git repo with an https remote
+  local h s; h=$(store_home "$1"); s="$h/.claude/memory"; mkdir -p "$s"
+  git init -q "$s"; git -C "$s" remote add origin https://github.com/someone/mem.git
+  jq -n --arg p "$s" '{state:"active",path:$p,reason:"adopted",written:"t"}' > "$s/.memory-kit-marker.json"
+  jq -n --arg d "$s" '{autoMemoryDirectory:$d}' > "$h/.claude/settings.json"
+  printf '%s' "$h"
+}
+gh_run() { # <home> <session-id>
+  echo "{\"session_id\":\"$2\"}" | HOME="$1" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+    bash "$KIT/hooks/memory-kit-health.sh" 2>/dev/null; }
+GHH=$(gh_home gh-unwired); GHS="$GHH/.claude/memory"
+out=$(gh_run "$GHH" gh1)
+echo "$out" | grep -q 'guardrail is not wired' \
+  && ok "an unwired guardrail is reported" || fail "unwired guardrail not reported ($out)"
+echo "$out" | grep -q 'no push credential resolves' \
+  && ok "a missing push credential is reported" || fail "missing credential not reported ($out)"
+git -C "$GHS" config core.hooksPath "$KIT/guardrail"
+git -C "$GHS" config credential.https://github.com.helper '!f() { echo username=u; echo password=p; }; f'
+out=$(gh_run "$GHH" gh2)
+[ -z "$out" ] && ok "control: wired guardrail and a working credential say nothing" || fail "noise when wired ($out)"
+git -C "$GHS" config core.hooksPath "$TMP/no-such-hooks-dir"
+out=$(gh_run "$GHH" gh3)
+echo "$out" | grep -q 'has no pre-commit hook' \
+  && ok "a hook path that points nowhere is reported" || fail "dangling hook path not reported ($out)"
+git -C "$GHS" config core.hooksPath "$KIT/guardrail"
+git -C "$GHS" config credential.https://github.com.helper ''
+git -C "$GHS" config --replace-all credential.helper ''
+git -C "$GHS" config --unset-all credential.https://github.com.helper
+out=$(gh_run "$GHH" gh4)
+echo "$out" | grep -q 'no push credential resolves' && ! echo "$out" | grep -q 'guardrail' \
+  && ok "only the credential is named when only the credential is gone" || fail "wrong clause ($out)"
+git -C "$GHS" remote set-url origin git@github.com:someone/mem.git
+out=$(gh_run "$GHH" gh5)
+[ -z "$out" ] && ok "an ssh remote is not asked for an https credential" || fail "ssh remote flagged ($out)"
+GHH=$(gh_home gh-nomarker); rm -f "$GHH/.claude/memory/.memory-kit-marker.json"
+out=$(gh_run "$GHH" gh6)
+[ -z "$out" ] && ok "a store the kit does not manage is not expected to be wired" || fail "unmanaged store flagged ($out)"
+GHO="$TMP/gh-outside-store"; rm -rf "$GHO"; git init -q "$GHO"
+jq -n --arg p "$GHO" '{state:"active",path:$p,reason:"adopted",written:"t"}' > "$GHO/.memory-kit-marker.json"
+GHH=$(store_home gh-outside); jq -n --arg d "$GHO" '{autoMemoryDirectory:$d}' > "$GHH/.claude/settings.json"
+out=$(gh_run "$GHH" gh7)
+[ -z "$out" ] && ok "a store outside this \$HOME is not expected to be wired" || fail "outside store flagged ($out)"
+
 # the outside-$HOME guard must not shadow the no-marker rule, so prove that one
 # separately with a path that IS inside $HOME
 SH=$(store_home revert-no-marker); mkdir -p "$SH/.claude/elsewhere"

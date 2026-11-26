@@ -48,6 +48,37 @@ EOF
 # because it is the mildest: both halves work, they are just not the same version.
 _mk_halves=$(mk_halves_mismatch) && MSG="$MSG${MSG:+; }$_mk_halves"
 
+# The commit guardrail and the push pin on the memory repo. Both are plain settings in
+# that repo's own git config, and each has gone missing before without a word: git then
+# finds no hook file and runs nothing, so the repo looks guarded while the private-term
+# check is off, and a push dies on a missing password. Reported at once, since the fix
+# is one command. Only a store this kit manages (a marker beside it) and that lies inside
+# this $HOME is expected to carry them: the installer wires nothing else.
+_mk_store="$(mk_memory_dir)"
+case "$_mk_store/" in "$HOME"/*)
+  if [ -d "$_mk_store/.git" ] && [ -f "$_mk_store/.memory-kit-marker.json" ] \
+     && command -v git >/dev/null 2>&1; then
+    _mk_hp=$(git -C "$_mk_store" config --get core.hooksPath 2>/dev/null)
+    case "$_mk_hp" in "") ;; /*) ;; *) _mk_hp="$_mk_store/$_mk_hp" ;; esac
+    if [ -z "$_mk_hp" ]; then
+      MSG="$MSG${MSG:+; }the commit guardrail is not wired on the memory repo (core.hooksPath is unset), so commits there skip the private-term check: re-run install.sh"
+    elif [ ! -x "$_mk_hp/pre-commit" ]; then
+      MSG="$MSG${MSG:+; }core.hooksPath on the memory repo points at $_mk_hp, which has no pre-commit hook, so commits there skip the private-term check: re-run install.sh"
+    fi
+    # Asked of git itself, with the answer discarded: only whether SOME helper supplies a
+    # credential. A repo whose helper list was reset to nothing fails here, which is exactly
+    # the state a lost pin leaves behind.
+    case "$(git -C "$_mk_store" config --get remote.origin.url 2>/dev/null)" in
+      https://github.com/*)
+        _mk_user=$(git -C "$_mk_store" config --get credential.https://github.com.username 2>/dev/null)
+        printf 'protocol=https\nhost=github.com\n%s\n' "${_mk_user:+username=$_mk_user}" \
+          | GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never git -C "$_mk_store" credential fill >/dev/null 2>&1 \
+          || MSG="$MSG${MSG:+; }no push credential resolves for the memory repo's GitHub remote, so a push there will fail: check gh auth status, or re-run install.sh"
+        ;;
+    esac
+  fi ;;
+esac
+
 for f in "$(mk_health_dir)"/*; do
     [ -f "$f" ] || continue                      # unexpanded glob when nothing is recorded
     blocked=$(mk_health_blocked "$(basename "$f")") || continue
