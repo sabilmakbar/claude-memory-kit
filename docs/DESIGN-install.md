@@ -323,8 +323,41 @@ installed the documented way. The staleness a moving tag would solve is already 
 detectively: the suite fails when the README names anything but the newest released changelog
 heading, so a stale README tag cannot survive a release with CI green.
 
+## D15. A store outside this `$HOME` belongs to another installation
+
+`autoMemoryDirectory` is an absolute path, read from a settings file this run did not
+necessarily write, and it is followed wherever it points. Every other part of the kit stays
+inside the `$HOME` it was invoked with, so a harness that seeds a throwaway `$HOME` with a copy
+of the real `settings.json` reached the real store through that one value. It happened twice.
+The first time an uninstall reverted a marker and stripped an exclude line; `store_revert` was
+given an outside-`$HOME` guard for it. The second was quieter: the smoke suite's install,
+install, uninstall round trip rewrote the real repo's `core.hooksPath` to its own tree and then
+unset it, together with the push pin. The commit guardrail went off, pushes failed on a missing
+password, and the run reported success. It recurred about daily, because the version-check hook
+re-runs the suite after each Claude Code update and the suite's real-state checksum did not
+cover the repo's `.git/config`. A watcher on that file caught the removal and the smoke process
+in the same second, and a fake store outside a throwaway `$HOME` reproduced it exactly.
+
+Every step that acts on the memory repo now runs only when the store is inside this `$HOME`:
+the guardrail wiring and its undo, the skip-worktree flag, the push pin, the retired seed
+files, and the marker repair. Otherwise the installer says it kept the store untouched. One
+step still runs on an outside store: undoing a `core.hooksPath` that points into the tree being
+deleted. That value can only have been written by an install of this tree, so the path itself
+is the proof of ownership, and leaving it would switch the guard off silently, the worst
+failure available here.
+
+Two heavier designs were rejected. Recording the owning `$HOME` in the marker would have no
+way to be set, because the kit never writes a marker for a store outside `$HOME`: nothing it
+chooses can be there. A receipt of what install wired would add a state file to answer a
+question the hook path already answers. The cost of the chosen rule is that a store on another
+volume is not wired by the installer, and the README says how to wire it by hand. Detection of
+a lost guardrail is a separate layer: [DESIGN-health.md](DESIGN-health.md) D5.
+
 ## What would reopen this
 
+- **D15, if the kit must wire a store that lives outside `$HOME`.** The marker would then have
+  to record which `$HOME` wired it, and uninstall would need a receipt of what install set,
+  because the path alone stops being proof.
 - **D11, if the installer ever needs to run unattended on a fresh machine.** A required argument
   is fine for a person at a terminal and fatal for provisioning. The answer then is a recorded
   mode shipped with the machine's config, not a default.

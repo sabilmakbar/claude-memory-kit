@@ -85,6 +85,11 @@ snap() {
       find "$HOME/.claude/memory" -maxdepth 1 -type f -exec cksum {} + 2>/dev/null | sort
       [ -f "$HOME/.claude/memory/.git/info/exclude" ] \
         && cat "$HOME/.claude/memory/.git/info/exclude"
+      # The store's own git config holds the guardrail hook path and the push pin. It was
+      # missing here, so a run that reached the real store through the absolute path in
+      # settings.json and stripped both still reported success. The named store, not the
+      # default, because that path is what such a run follows.
+      [ -f "$(mk_memory_dir)/.git/config" ] && cat "$(mk_memory_dir)/.git/config"
     } | cksum
 }
 BEFORE=$(snap)

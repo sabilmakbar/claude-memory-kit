@@ -107,6 +107,13 @@ outcome than the silent rewrite it replaced.
 **The two git settings are undone by `--uninstall`**, meaning the guardrail `hooksPath` and the
 `skip-worktree` flag on the generated index.
 
+**Only a store inside the running `$HOME` is touched.** The repo is the user's, and the path to
+it is an absolute value read from settings. A run in another `$HOME` that follows that path is
+acting on someone else's repo, so install and uninstall leave a store outside their own `$HOME`
+alone. The single exception is a guardrail `hooksPath` that points into the tree being deleted,
+which only an install of that tree can have written. See
+[DESIGN-install.md](DESIGN-install.md) D15.
+
 ## D8. The store is named, not reached: `autoMemoryDirectory` replaces the symlink
 
 The kit made memory global by computing where Claude Code keeps a project's memory and symlinking

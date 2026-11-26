@@ -69,9 +69,13 @@ one store. The installer prints what it found and what it did:
 | What you have | What it does |
 |---|---|
 | `autoMemoryDirectory` already set | Leaves it alone |
+| `autoMemoryDirectory` names a store outside your home folder | Leaves the store and its git settings alone, so wire its guardrail by hand |
 | One memory store | Points the setting at it, nothing moved |
 | Several memory stores | Lists them, never merges, the mode decides who acts |
 | No memory at all | Uses `~/.claude/memory` |
+
+To wire the commit guardrail on a store outside your home folder yourself, point its hook path
+at the deployed tree: `git -C <store> config core.hooksPath ~/.claude/memory-kit/guardrail`.
 
 To undo, delete the `autoMemoryDirectory` key, or run `./install.sh --uninstall`. Your
 memory files are never moved, copied or deleted by any of this.
