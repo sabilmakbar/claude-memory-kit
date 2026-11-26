@@ -1778,6 +1778,74 @@ echo "$out" | grep -q 'outside this \$HOME' \
 [ "$(jq -r '.autoMemoryDirectory' "$SH/.claude/settings.json")" = "$VICTIM" ] \
   && ok "the setting it will not act on is left alone" || fail "setting stripped anyway"
 
+# The same store, now with everything install and uninstall can touch on a memory repo:
+# the guardrail hook path, a push pin, the skip-worktree flag, a retired seed file, and a
+# reverted marker over an empty exclude (what store_repair would rewrite). A smoke run in
+# a throwaway $HOME that names this store by absolute path stripped the real guardrail and
+# pin from the real repo's .git/config, which no checksum covered.
+VICT2="$TMP/victim2-store-outside-home"; rm -rf "$VICT2"; mkdir -p "$VICT2"
+git init -q "$VICT2"
+printf 'idx\n' > "$VICT2/MEMORY.md"; git -C "$VICT2" add MEMORY.md
+git -C "$VICT2" -c user.name=t -c user.email=t@example.invalid commit -qm i
+git -C "$VICT2" config core.hooksPath "$KIT/guardrail"
+git -C "$VICT2" config credential.https://github.com.helper ''
+git -C "$VICT2" config --add credential.https://github.com.helper '!f() { gh auth token -h github.com -u someone; }; f'
+git -C "$VICT2" update-index --skip-worktree MEMORY.md
+SEED=$(ls "$KIT"/guidance/retired-seeds/*.md | head -1); SEEDN=$(basename "$SEED"); cp "$SEED" "$VICT2/$SEEDN"
+jq -n --arg p "$VICT2" '{state:"reverted",path:$p,reason:"adopted",written:"t"}' > "$VICT2/.memory-kit-marker.json"
+: > "$VICT2/.git/info/exclude"
+fp2() { { cat "$VICT2/.git/config" "$VICT2/.git/info/exclude" "$VICT2/.memory-kit-marker.json"
+          ls -a "$VICT2"; git -C "$VICT2" ls-files -v MEMORY.md; } | cksum; }
+V2SUM=$(fp2)
+SH=$(store_home victim-wiring); mkdir -p "$SH/.claude"
+jq -n --arg d "$VICT2" '{autoMemoryDirectory:$d}' > "$SH/.claude/settings.json"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+[ "$(git -C "$VICT2" config core.hooksPath)" = "$KIT/guardrail" ] \
+  && ok "install leaves the hook path of a store outside its \$HOME alone" || fail "install rewired the outside store's core.hooksPath"
+git -C "$VICT2" ls-files -v MEMORY.md | grep -q '^S' \
+  && ok "install leaves its skip-worktree flag alone" || fail "install changed the outside store's skip-worktree flag"
+[ -f "$VICT2/$SEEDN" ] \
+  && ok "install does not retire a seed file there" || fail "install deleted a file from the outside store"
+[ "$(jq -r .state "$VICT2/.memory-kit-marker.json")" = reverted ] && [ ! -s "$VICT2/.git/info/exclude" ] \
+  && ok "install does not repair its marker or exclude" || fail "install repaired the outside store's marker or exclude"
+out=$(HOME="$SH" bash "$KIT/install.sh" --uninstall 2>&1)
+[ "$(git -C "$VICT2" config core.hooksPath)" = "$KIT/guardrail" ] \
+  && ok "uninstall leaves the hook path alone" || fail "uninstall unset the outside store's core.hooksPath"
+[ "$(git -C "$VICT2" config --get-all credential.https://github.com.helper | grep -c 'gh auth token')" = 1 ] \
+  && ok "uninstall leaves the push pin alone" || fail "uninstall removed the outside store's push pin"
+git -C "$VICT2" ls-files -v MEMORY.md | grep -q '^S' \
+  && ok "uninstall leaves the skip-worktree flag alone" || fail "uninstall cleared the outside store's skip-worktree flag"
+[ "$(fp2)" = "$V2SUM" ] \
+  && ok "nothing in that store changed across install x2 and uninstall" || fail "the outside store changed"
+echo "$out" | grep -q 'outside this \$HOME' \
+  && ok "and the uninstall says why it kept its hands off" || fail "silent about the outside store"
+
+# A hook path into the tree being deleted proves this install wired it, wherever the store
+# lives: leaving it would turn the guard off silently. So that one setting is still undone on
+# a store outside $HOME, and nothing else there is.
+git -C "$VICT2" config core.hooksPath "$SH/.claude/memory-kit/guardrail"
+HOME="$SH" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
+[ -z "$(git -C "$VICT2" config core.hooksPath)" ] \
+  && ok "a hook path into this tree is unset even on a store outside \$HOME" || fail "dangling hook path left on an outside store"
+[ "$(git -C "$VICT2" config --get-all credential.https://github.com.helper | grep -c 'gh auth token')" = 1 ] \
+  && git -C "$VICT2" ls-files -v MEMORY.md | grep -q '^S' && [ -f "$VICT2/$SEEDN" ] \
+  && ok "and only that: the pin, the flag and the seed file stay" || fail "uninstall went beyond the hook path on an outside store"
+
+# Control: the same wiring, with the store inside its own $HOME, still happens and is undone.
+SH=$(store_home victim-wiring-inside); IN="$SH/.claude/memory"; mkdir -p "$IN"
+git init -q "$IN"; printf 'idx\n' > "$IN/MEMORY.md"; git -C "$IN" add MEMORY.md
+git -C "$IN" -c user.name=t -c user.email=t@example.invalid commit -qm i
+jq -n --arg d "$IN" '{autoMemoryDirectory:$d}' > "$SH/.claude/settings.json"
+HOME="$SH" CLAUDE_MEMORY_KIT_INSTALL_GATED=1 bash "$KIT/install.sh" --mode=managed >/dev/null 2>&1
+[ "$(git -C "$IN" config core.hooksPath)" = "$SH/.claude/memory-kit/guardrail" ] \
+  && ok "control: a store inside its \$HOME is still wired" || fail "control: inside store not wired"
+git -C "$IN" ls-files -v MEMORY.md | grep -q '^S' \
+  && ok "control: and flagged skip-worktree" || fail "control: inside store not flagged"
+HOME="$SH" bash "$KIT/install.sh" --uninstall >/dev/null 2>&1
+[ -z "$(git -C "$IN" config core.hooksPath)" ] && ! git -C "$IN" ls-files -v MEMORY.md | grep -q '^S' \
+  && ok "control: and unwired again by uninstall" || fail "control: inside store not unwired"
+
 # the outside-$HOME guard must not shadow the no-marker rule, so prove that one
 # separately with a path that IS inside $HOME
 SH=$(store_home revert-no-marker); mkdir -p "$SH/.claude/elsewhere"

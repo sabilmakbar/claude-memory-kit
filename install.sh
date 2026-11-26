@@ -333,6 +333,14 @@ hooks_unwire() {
 MARKER_NAME=".memory-kit-marker.json"
 STORE_RECORD_DIR="$HOME/.local/share/claude-memory-kit"
 
+# Every part of the kit stays inside the $HOME it was invoked with, except a path READ from
+# settings.json: it is absolute and is followed wherever it points. A run in a throwaway
+# $HOME holding a copy of the real settings therefore reached the real store and stripped
+# its guardrail hook path and push pin, and nothing reported it. Nothing the kit chooses can
+# land outside $HOME, so a store outside belongs to another installation: leave it alone.
+store_inside_home() { case "$1/" in "$HOME"/*) return 0 ;; esac; return 1; }
+store_outside_note() { echo "  kept $1 untouched: it is outside this \$HOME ($HOME), so another installation owns it"; }
+
 # A store is a directory that already holds memory files.
 #
 # A symlinked project directory is skipped on purpose. The kit made those and they
@@ -648,7 +656,7 @@ store_setup() {
   # someone's memory without saying so, which is the D4 rule applied to a value.
   if [ -n "$existing" ]; then
     echo "  ✓ autoMemoryDirectory is already $existing — left alone"
-    store_repair "$existing"
+    if store_inside_home "$existing"; then store_repair "$existing"; else store_outside_note "$existing"; fi
     store_scope_note
     return 0
   fi
@@ -699,6 +707,7 @@ if [ "$UNINSTALL" -eq 1 ]; then
   # git then finds no hook file and runs nothing, so the repo still looks guarded
   # while the check that keeps private terms out of a public push is off.
   GUARD_STORE="$(mk_memory_dir)"
+  GUARD_OURS=1; store_inside_home "$GUARD_STORE" || { GUARD_OURS=0; store_outside_note "$GUARD_STORE"; }
   # Unwire BEFORE the tree goes: the snippet naming our hooks may be the deployed copy.
   hooks_unwire
   store_revert
@@ -711,6 +720,10 @@ if [ "$UNINSTALL" -eq 1 ]; then
   # git finds no hook file and runs nothing, so the commit guard stops silently while
   # the repo still looks configured, and that guard is what stands between private
   # terms and a public push. Only ever unset a path that points into OUR tree.
+  # That test is also proof of ownership, so it runs for a store outside this $HOME too: a
+  # hook path into the tree being deleted can only have been written by an install of this
+  # tree, and leaving it would turn the guard off silently. Everything else about a store
+  # outside $HOME stays untouched, since nothing proves who set it.
   if [ -d "$GUARD_STORE/.git" ] && command -v git >/dev/null 2>&1; then
     hp=$(git -C "$GUARD_STORE" config --get core.hooksPath 2>/dev/null || true)
     case "$hp" in
@@ -718,8 +731,10 @@ if [ "$UNINSTALL" -eq 1 ]; then
         run git -C "$GUARD_STORE" config --unset core.hooksPath
         echo "  unset core.hooksPath in $GUARD_STORE (it pointed into the tree being removed)" ;;
       "") ;;
-      *) echo "  ! core.hooksPath in $GUARD_STORE is $hp, which is not ours, so it stays" ;;
+      *) if [ "$GUARD_OURS" = 1 ]; then echo "  ! core.hooksPath in $GUARD_STORE is $hp, which is not ours, so it stays"; fi ;;
     esac
+  fi
+  if [ "$GUARD_OURS" = 1 ] && [ -d "$GUARD_STORE/.git" ] && command -v git >/dev/null 2>&1; then
     # MEMORY.md was marked skip-worktree to keep index churn out of diffs. Undo it, or
     # the file stays invisible to git once the kit is gone.
     if git -C "$GUARD_STORE" ls-files -v MEMORY.md 2>/dev/null | grep -q '^S'; then
@@ -1068,6 +1083,7 @@ store_setup
 # run would then "roll back" to a state that never existed, and say so. Neither block
 # below touches settings.json, so moving them down cannot affect any of that.
 GUARD_STORE="$(mk_memory_dir)"
+GUARD_OURS=1; store_inside_home "$GUARD_STORE" || { GUARD_OURS=0; store_outside_note "$GUARD_STORE"; }
 # The authoring conventions used to be seeded into the memory store as two memory files.
 # They are kit instructions rather than user data: they cost context in every session,
 # could be edited into drift, and nothing verified that a write followed them. They now
@@ -1079,6 +1095,7 @@ GUARD_STORE="$(mk_memory_dir)"
 # removed at all: deleting tracked content would stage a deletion in someone else's
 # history, which is a commit for them to make, not for an installer to make on their behalf.
 for f in "$REPO"/guidance/retired-seeds/*.md; do
+  [ "$GUARD_OURS" = 1 ] || break
   b="$(basename "$f")"; t="$GUARD_STORE/$b"
   [ -f "$t" ] || continue
   if ! cmp -s "$f" "$t"; then
@@ -1095,7 +1112,7 @@ done
 
 # The guardrail points at the DEPLOYED tree: a stable, tested path that survives the
 # checkout moving. --uninstall unsets this and the skip-worktree flag again.
-if [ -d "$GUARD_STORE/.git" ]; then
+if [ "$GUARD_OURS" = 1 ] && [ -d "$GUARD_STORE/.git" ]; then
   run git -C "$GUARD_STORE" config core.hooksPath "$DEST/guardrail"
   [ "$DRY" -eq 1 ] || git -C "$GUARD_STORE" update-index --skip-worktree MEMORY.md 2>/dev/null || true
   echo "→ guardrail wired into the memory repo at $GUARD_STORE"
@@ -1106,7 +1123,7 @@ fi
 # pushes to the remote owner's gh token, fetched per push and never written to disk.
 # Only when gh is logged in as that owner, and never over a helper the user already set.
 CRED_KEY='credential.https://github.com.helper'
-if [ -d "$GUARD_STORE/.git" ] && command -v gh >/dev/null 2>&1 \
+if [ "$GUARD_OURS" = 1 ] && [ -d "$GUARD_STORE/.git" ] && command -v gh >/dev/null 2>&1 \
    && ! git -C "$GUARD_STORE" config --local --get-regexp "^${CRED_KEY//./\\.}\$" >/dev/null 2>&1; then
   owner=$(git -C "$GUARD_STORE" config --get remote.origin.url 2>/dev/null \
     | sed -n 's#^https://github\.com/\([A-Za-z0-9-]*\)/.*#\1#p' || true)
