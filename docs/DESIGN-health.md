@@ -93,6 +93,25 @@ there would report every day.
 It ranks below the dependency faults in this hook's message order. Both halves work in this
 state, so it must never be what a user sees instead of `jq` being gone.
 
+## D5. The guardrail and the push credential are checked, not assumed
+
+The commit guardrail and the push pin are plain settings in the memory repo's own git config,
+and each has gone missing without a word. Git then finds no hook file and runs nothing, so the
+repo looks guarded while the private-term check is off, and a push fails on a missing password.
+Nothing noticed either for days. The cause was a leak in the kit's own test run
+([DESIGN-install.md](DESIGN-install.md) D15), but detection does not depend on the cause, which
+is what makes it worth having: it names the state, whoever or whatever produced it.
+
+This hook reports it at once, with no grace period, because the fix is one command. It says
+which of three states it found: the hook path is unset, the hook path points at a folder with
+no `pre-commit`, or git cannot resolve a credential for the GitHub remote. The credential
+question goes to git itself with the answer discarded, so only whether some helper supplies
+one is learned and no token is printed or logged. An SSH remote is not asked.
+
+It expects these settings only on a store the kit manages (a marker beside it) that lies inside
+this `$HOME`, the same boundary the installer wires within. A store the kit never touched, or
+one on another volume, stays silent rather than being reported for something nobody set up.
+
 ## What would reopen this
 
 - **D1's three-day grace, if it turns out to hide a fault that matters sooner.** It was chosen
